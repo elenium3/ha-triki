@@ -105,6 +105,7 @@ class TrikiDevice:
         self._last_attempt = 0.0
         self._no_connect_until = 0.0
         self._last_drop = 0.0
+        self._last_skip: str | None = None
         self._unsub_adv: CALLBACK_TYPE | None = None
         self._unsub_poll: CALLBACK_TYPE | None = None
         self._unsub_idle: CALLBACK_TYPE | None = None
@@ -208,6 +209,13 @@ class TrikiDevice:
         if service_info.rssi != self.rssi:
             self.rssi = service_info.rssi
             self._notify()
+        _LOGGER.debug(
+            "%s: advert via %s rssi %s age %.1fs",
+            self.name,
+            service_info.source,
+            service_info.rssi,
+            bluetooth.MONOTONIC_TIME() - service_info.time,
+        )
         self._maybe_connect(service_info, _FRESH_ADV_S)
 
     @callback
@@ -216,16 +224,26 @@ class TrikiDevice:
     ) -> None:
         if self._stopping or self.connected or self._lock.locked():
             return
-        if bluetooth.MONOTONIC_TIME() - service_info.time > max_age:
-            return
-        if service_info.time < self._last_drop:
-            # advertisement from before the token fell asleep: it is gone now
-            return
         now = time.monotonic()
-        if now < self._no_connect_until:
+        age = bluetooth.MONOTONIC_TIME() - service_info.time
+        reason = None
+        if age > max_age:
+            reason = f"advert too old ({age:.1f}s > {max_age:.0f}s)"
+        elif service_info.time < self._last_drop:
+            # advertisement from before the token fell asleep: it is gone now
+            reason = "advert older than the last link drop"
+        elif now < self._no_connect_until:
+            reason = "idle cooldown"
+        elif now - self._last_attempt < _RECONNECT_BACKOFF_S:
+            reason = "reconnect backoff"
+        if reason:
+            if reason.split(" (")[0] != self._last_skip:
+                self._last_skip = reason.split(" (")[0]
+                _LOGGER.debug(
+                    "%s: not connecting: %s (source %s)", self.name, reason, service_info.source
+                )
             return
-        if now - self._last_attempt < _RECONNECT_BACKOFF_S:
-            return
+        self._last_skip = None
         self._last_attempt = now
         self.hass.async_create_background_task(
             self._async_connect(service_info.device, service_info.time),
