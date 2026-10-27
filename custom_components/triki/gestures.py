@@ -23,7 +23,7 @@ from .protocol import Sample
 
 # --- button ---
 LONG_PRESS_S = 0.8
-MULTI_PRESS_WINDOW_S = 0.35
+MULTI_PRESS_WINDOW_S = 0.5
 
 # --- motion ---
 STARTUP_DISCARD = 20          # first frames after stream start are noise
@@ -39,6 +39,9 @@ STATIC_GYRO_DPS = 30.0
 KNOB_DEADBAND_DPS = 15.0      # below this the turn accumulator is not fed
 KNOB_RESET_S = 0.6            # idle time after which a partial turn is dropped
 GRAVITY_ALPHA = 0.08          # low-pass for the gravity estimate
+
+KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
+MOTION_EVENTS = frozenset({"rotate_cw", "rotate_ccw", "shake", "tap", "throw", "flip"})
 
 REFRACTORY_S = {
     "tap": 0.3,
@@ -72,11 +75,19 @@ class GestureDetector:
         knob_step_deg: float = 30.0,
         invert_rotation: bool = False,
         startup_discard: int = STARTUP_DISCARD,
+        multi_press_window_s: float = MULTI_PRESS_WINDOW_S,
+        motion_gestures: bool = True,
+        multi_press: bool = True,
+        knob: bool = True,
     ) -> None:
         self.dt = 1.0 / rate_hz
         self.knob_step = knob_step_deg
         self.invert_rotation = invert_rotation
         self._startup_discard = startup_discard
+        self.multi_press_window = multi_press_window_s
+        self.motion_gestures = motion_gestures
+        self.multi_press = multi_press
+        self.knob = knob
         self.reset()
 
     # ------------------------------------------------------------------ state
@@ -133,6 +144,14 @@ class GestureDetector:
         self.t += self.dt
         self._button(s.button, out)
         self._motion(s, out)
+        if out:
+            # all of it is still tracked (idle logic, tilt), only reporting is gated
+            allowed = set()
+            if self.knob:
+                allowed |= KNOB_EVENTS
+            if self.motion_gestures:
+                allowed |= MOTION_EVENTS
+            out[:] = [e for e in out if e.type not in MOTION_EVENTS or e.type in allowed]
         return out
 
     def flush(self) -> list[Event]:
@@ -159,9 +178,12 @@ class GestureDetector:
                 out.append(Event("long_press", {}))
         elif not pressed and self.button:
             if not self._long_fired:
-                self._clicks += 1
-                self._last_release_t = self.t
-        elif self._clicks and self.t - self._last_release_t > MULTI_PRESS_WINDOW_S:
+                if self.multi_press:
+                    self._clicks += 1
+                    self._last_release_t = self.t
+                else:
+                    out.append(Event("press", {"count": 1}))
+        elif self._clicks and self.t - self._last_release_t > self.multi_press_window:
             self._emit_clicks(out)
         self.button = pressed
 

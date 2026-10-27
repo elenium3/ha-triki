@@ -27,12 +27,20 @@
           "knob_step": "Knob step (degrees per rotate event)",
           "invert_rotation": "Invert rotation direction",
           "wake_as_press": "Treat wake-up as a press",
+          "knob": "Knob rotation (rotate_cw / rotate_ccw)",
+          "motion_gestures": "Motion gestures (rotate, shake, tap, throw, flip)",
+          "multi_press": "Double and triple press",
+          "multi_press_window": "Double/triple press window",
           "capture": "Record raw sessions to /config/triki_captures (debug)"
         },
         "data_description": {
           "sample_rate": "Higher = snappier gestures, faster battery drain. Above 104 Hz BLE often cannot keep up.",
           "idle_timeout": "Streaming keeps the token awake. Keep this short to save the battery.",
           "wake_as_press": "The press that wakes the token ends before the link is up, so it is reported as wake. Also emit press on wake (a wake caused by movement then looks like a press too).",
+          "knob": "Off by default. Reports turns around the vertical axis as rotate_cw / rotate_ccw. Turn on to test.",
+          "motion_gestures": "Off by default: thresholds are not calibrated on hardware. Turn on to test.",
+          "multi_press": "Off: press is reported right when the button is released. On: a press is delayed by the window below to tell single, double and triple apart.",
+          "multi_press_window": "Longest pause between releasing the button and pressing it again that still counts as a double or triple press. Single presses are reported this long after release.",
           "capture": "Every connection writes a .jsonl file with raw BLE notifications and detected events. Turn off when done."
         }
       }

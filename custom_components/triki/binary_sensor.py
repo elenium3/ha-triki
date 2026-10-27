@@ -38,6 +38,7 @@ DESCRIPTIONS = (
         key="button",
         translation_key="button",
         value_fn=lambda d: d.button,
+        requires_connection=False,  # not pressed while the token sleeps
     ),
 )
 
