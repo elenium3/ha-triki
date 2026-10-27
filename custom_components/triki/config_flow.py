@@ -21,6 +21,7 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    CONF_CAPTURE,
     CONF_IDLE_TIMEOUT,
     CONF_INVERT_ROTATION,
     CONF_KNOB_STEP,
@@ -146,6 +147,9 @@ class TrikiOptionsFlow(OptionsFlow):
                 vol.Required(
                     CONF_INVERT_ROTATION,
                     default=o.get(CONF_INVERT_ROTATION, DEFAULT_INVERT_ROTATION),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_CAPTURE, default=o.get(CONF_CAPTURE, False)
                 ): selector.BooleanSelector(),
             }
         )

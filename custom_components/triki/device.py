@@ -38,6 +38,7 @@ from .const import (
     DOMAIN,
     TILT_PUBLISH_INTERVAL,
 )
+from .capture import Capture
 from .gestures import GestureDetector
 from .protocol import (
     BATTERY_LEVEL_UUID,
@@ -72,6 +73,7 @@ class TrikiDevice:
         idle_timeout: int,
         knob_step: float,
         invert_rotation: bool,
+        capture: bool = False,
     ) -> None:
         self.hass = hass
         self.address = address
@@ -81,6 +83,7 @@ class TrikiDevice:
 
         self._parser = FrameParser()
         self._detector = GestureDetector(rate, knob_step, invert_rotation)
+        self._capture = Capture(hass, name) if capture else None
 
         self._client: BleakClient | None = None
         self._lock = asyncio.Lock()
@@ -132,6 +135,8 @@ class TrikiDevice:
     def _emit(self, kind: str, data: dict[str, Any] | None = None) -> None:
         data = data or {}
         _LOGGER.debug("%s: event %s %s", self.name, kind, data)
+        if self._capture:
+            self._capture.write({"event": kind, "data": data})
         for cb in list(self._event_listeners):
             cb(kind, data)
         self.hass.bus.async_fire(
@@ -242,6 +247,16 @@ class TrikiDevice:
         except BleakError:
             self.led_on = None
 
+        if self._capture:
+            self._capture.start(
+                {
+                    "name": self.name,
+                    "rate": self.rate,
+                    "platform": "homeassistant",
+                    "firmware": self.firmware,
+                    "battery": self.battery,
+                }
+            )
         self._parser.reset()
         self._detector.reset()
         self._last_motion_t = 0.0
@@ -304,6 +319,11 @@ class TrikiDevice:
         self._unsub_idle = self._unsub_battery = None
         for ev in self._detector.flush():
             self._emit(ev.type, ev.data)
+        if self._capture:
+            self._capture.write(
+                {"disconnected": True, "expected": self._expected_disconnect}
+            )
+            self._capture.stop()
         self.button = False
         if was_connected:
             self._notify()
@@ -311,6 +331,8 @@ class TrikiDevice:
     # ------------------------------------------------------------ streaming
     @callback
     def _on_notify(self, _char: Any, data: bytearray) -> None:
+        if self._capture:
+            self._capture.write({"hex": bytes(data).hex()})
         changed = False
         for frame in self._parser.push(data):
             sample = Sample.from_frame(frame)

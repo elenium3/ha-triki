@@ -10,6 +10,7 @@ CONF_RATE = "sample_rate"
 CONF_IDLE_TIMEOUT = "idle_timeout"
 CONF_KNOB_STEP = "knob_step"
 CONF_INVERT_ROTATION = "invert_rotation"
+CONF_CAPTURE = "capture"
 
 DEFAULT_RATE = 104
 DEFAULT_IDLE_TIMEOUT = 30  # s without motion/button -> disconnect (0 = never)

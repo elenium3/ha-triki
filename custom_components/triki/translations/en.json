@@ -4,7 +4,9 @@
     "step": {
       "user": {
         "description": "Press the green button on the token to wake it, then pick it from the list.",
-        "data": { "address": "Device" }
+        "data": {
+          "address": "Device"
+        }
       },
       "bluetooth_confirm": {
         "description": "Set up {name}?"
@@ -23,11 +25,13 @@
           "sample_rate": "IMU sample rate (Hz)",
           "idle_timeout": "Disconnect after idle (s, 0 = never)",
           "knob_step": "Knob step (degrees per rotate event)",
-          "invert_rotation": "Invert rotation direction"
+          "invert_rotation": "Invert rotation direction",
+          "capture": "Record raw sessions to /config/triki_captures (debug)"
         },
         "data_description": {
           "sample_rate": "Higher = snappier gestures, faster battery drain. Above 104 Hz BLE often cannot keep up.",
-          "idle_timeout": "Streaming keeps the token awake. Keep this short to save the battery."
+          "idle_timeout": "Streaming keeps the token awake. Keep this short to save the battery.",
+          "capture": "Every connection writes a .jsonl file with raw BLE notifications and detected events. Turn off when done."
         }
       }
     }
@@ -56,15 +60,25 @@
       }
     },
     "binary_sensor": {
-      "connected": { "name": "Connected" },
-      "button": { "name": "Button" }
+      "connected": {
+        "name": "Connected"
+      },
+      "button": {
+        "name": "Button"
+      }
     },
     "light": {
-      "led": { "name": "LED" }
+      "led": {
+        "name": "LED"
+      }
     },
     "sensor": {
-      "pitch": { "name": "Pitch" },
-      "roll": { "name": "Roll" }
+      "pitch": {
+        "name": "Pitch"
+      },
+      "roll": {
+        "name": "Roll"
+      }
     }
   }
 }
