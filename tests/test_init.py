@@ -75,8 +75,8 @@ async def connect(hass, entry):
 async def test_asleep_state(hass: HomeAssistant, setup) -> None:
     assert hass.states.get(EVENT).state == STATE_UNKNOWN
     assert hass.states.get(CONNECTED).state == "off"
-    assert hass.states.get(BUTTON).state == STATE_UNAVAILABLE
-    assert hass.states.get(LED).state == STATE_UNAVAILABLE
+    assert hass.states.get(BUTTON).state == "off"  # not pressed while asleep
+    assert hass.states.get(LED).state != STATE_UNAVAILABLE  # last known state kept
     with pytest.raises(HomeAssistantError):
         await setup.runtime_data.async_set_led(True)
 
@@ -125,7 +125,7 @@ async def test_drop_and_idle(hass: HomeAssistant, setup) -> None:
     dev._on_disconnect(client)
     await hass.async_block_till_done()
     assert hass.states.get(CONNECTED).state == "off"
-    assert hass.states.get(BUTTON).state == STATE_UNAVAILABLE
+    assert hass.states.get(BUTTON).state == "off"
     # battery survives sleep
     assert hass.states.get(BATTERY).state == "87"
 

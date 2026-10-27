@@ -58,6 +58,38 @@ def test_double_press():
     assert types(ev) == ["double_press"]
 
 
+def test_slow_double_press_within_default_window():
+    d = det()
+    ev = (
+        feed(d, secs(0.1), button=True)
+        + feed(d, secs(0.45))  # slower than the old 0.35 s window
+        + feed(d, secs(0.1), button=True)
+        + feed(d, secs(0.7))
+    )
+    assert types(ev) == ["double_press"]
+
+
+def test_multi_press_window_is_configurable():
+    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, multi_press_window_s=0.3)
+    feed(d, RATE // 2)
+    ev = (
+        feed(d, secs(0.1), button=True)
+        + feed(d, secs(0.45))
+        + feed(d, secs(0.1), button=True)
+        + feed(d, secs(0.7))
+    )
+    assert types(ev) == ["press", "press"]
+
+
+def test_triple_press():
+    d = det()
+    ev = []
+    for _ in range(3):
+        ev += feed(d, secs(0.1), button=True) + feed(d, secs(0.2))
+    ev += feed(d, secs(0.7))
+    assert types(ev) == ["triple_press"]
+
+
 def test_long_press():
     d = det()
     ev = feed(d, secs(1.2), button=True) + feed(d, secs(0.6))
@@ -119,3 +151,51 @@ def test_pitch_roll_from_gravity():
     pitch, roll = d.pitch_roll
     assert abs(pitch) < 2
     assert abs(roll - 30) < 2
+
+
+def test_motion_events_can_be_switched_off():
+    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False)
+    feed(d, RATE // 2)
+    ev = feed(d, 20, gx=200, ax=3.0)  # hard motion, would be tap/rotate/shake
+    ev += feed(d, 60, az=0.0, ax=0.0)  # free fall
+    assert not [e for e in ev if e.type in ("tap", "throw", "shake", "flip", "rotate_cw", "rotate_ccw")]
+    assert d.last_motion_t > 0  # still tracked for the idle logic
+
+
+def test_single_press_is_immediate_without_multi_press():
+    d = GestureDetector(RATE, startup_discard=0, multi_press=False)
+    feed(d, RATE // 2)
+    assert types(feed(d, secs(0.1), button=True)) == []
+    assert types(feed(d, 1)) == ["press"]  # on release, no waiting window
+    ev = feed(d, secs(0.1), button=True) + feed(d, secs(0.15)) + feed(d, secs(0.1), button=True) + feed(d, secs(0.6))
+    assert types(ev) == ["press", "press"]  # no double_press
+
+
+def test_knob_only_reports_rotation():
+    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=True)
+    feed(d, RATE // 2)
+    ev = feed(d, secs(1.0), gz=185.0)
+    assert set(types(ev)) == {"rotate_ccw"}
+    ev = feed(d, 20, gx=200, ax=3.0) + feed(d, 60, az=0.0, ax=0.0)
+    assert not [e for e in ev if e.type in ("tap", "throw", "shake", "flip")]
+
+
+def test_knob_off_reports_no_rotation():
+    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=False)
+    feed(d, RATE // 2)
+    assert types(feed(d, secs(1.0), gz=185.0)) == []
+
+
+def test_knob_only_reports_rotation():
+    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=True)
+    feed(d, RATE // 2)
+    ev = feed(d, secs(1.0), gz=185.0)
+    assert set(types(ev)) == {"rotate_ccw"}
+    ev = feed(d, 20, gx=200, ax=3.0) + feed(d, 60, az=0.0, ax=0.0)
+    assert not [e for e in ev if e.type in ("tap", "throw", "shake", "flip")]
+
+
+def test_knob_off_reports_no_rotation():
+    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=False)
+    feed(d, RATE // 2)
+    assert types(feed(d, secs(1.0), gz=185.0)) == []

@@ -25,6 +25,9 @@ async def async_setup_entry(
 class TrikiLed(TrikiEntity, LightEntity):
     _attr_color_mode = ColorMode.ONOFF
     _attr_supported_color_modes = {ColorMode.ONOFF}
+    # keep the last known state while the token sleeps instead of flapping
+    # unavailable on every wake/sleep cycle; turning it on while asleep raises
+    _requires_connection = False
 
     @property
     def is_on(self) -> bool | None:

@@ -22,6 +22,10 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_CAPTURE,
+    CONF_KNOB,
+    CONF_MOTION_GESTURES,
+    CONF_MULTI_PRESS,
+    CONF_MULTI_PRESS_WINDOW,
     CONF_WAKE_AS_PRESS,
     CONF_IDLE_TIMEOUT,
     CONF_INVERT_ROTATION,
@@ -29,6 +33,10 @@ from .const import (
     CONF_RATE,
     DEFAULT_IDLE_TIMEOUT,
     DEFAULT_INVERT_ROTATION,
+    DEFAULT_KNOB,
+    DEFAULT_MOTION_GESTURES,
+    DEFAULT_MULTI_PRESS,
+    DEFAULT_MULTI_PRESS_WINDOW,
     DEFAULT_WAKE_AS_PRESS,
     DEFAULT_KNOB_STEP,
     DEFAULT_RATE,
@@ -154,6 +162,25 @@ class TrikiOptionsFlow(OptionsFlow):
                     CONF_WAKE_AS_PRESS,
                     default=o.get(CONF_WAKE_AS_PRESS, DEFAULT_WAKE_AS_PRESS),
                 ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_KNOB, default=o.get(CONF_KNOB, DEFAULT_KNOB)
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_MOTION_GESTURES,
+                    default=o.get(CONF_MOTION_GESTURES, DEFAULT_MOTION_GESTURES),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_MULTI_PRESS, default=o.get(CONF_MULTI_PRESS, DEFAULT_MULTI_PRESS)
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_MULTI_PRESS_WINDOW,
+                    default=o.get(CONF_MULTI_PRESS_WINDOW, DEFAULT_MULTI_PRESS_WINDOW),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.2, max=1.5, step=0.05, unit_of_measurement="s",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
                 vol.Required(
                     CONF_CAPTURE, default=o.get(CONF_CAPTURE, False)
                 ): selector.BooleanSelector(),

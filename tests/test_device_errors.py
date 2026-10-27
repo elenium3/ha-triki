@@ -288,3 +288,112 @@ async def test_no_reconnect_on_advertisement_older_than_drop(
     assert (await poll(hass, setup, old, make_client())).await_count == 0
     dev._last_attempt = 0
     assert (await poll(hass, setup, service_info(), make_client())).await_count == 1
+
+
+async def test_repeated_notifications_are_dropped(hass: HomeAssistant, setup) -> None:
+    """BlueZ delivered every notification N times; the parser must see it once."""
+    from .helpers import frame
+    from .test_init import connect
+
+    client, notify = await connect(hass, setup)
+    dev = setup.runtime_data
+    chunk = bytearray(frame() * 1 + frame()[:6])
+    for _ in range(5):
+        notify(None, chunk)
+    assert dev._dup_notifs == 4
+
+
+async def test_notifications_from_old_client_are_ignored(hass: HomeAssistant, setup) -> None:
+    from .helpers import frame
+    from .test_init import connect
+
+    client, notify = await connect(hass, setup)
+    dev = setup.runtime_data
+    dev._client = make_client()  # the link was replaced; `notify` is the old client's
+    notify(None, bytearray(frame()))
+    assert dev._stale_notifs == 1
+
+
+async def test_late_drop_of_old_client_keeps_current_session(
+    hass: HomeAssistant, setup
+) -> None:
+    dev = setup.runtime_data
+    client = make_client()
+    await advertise(hass, setup, client)
+    assert dev.connected
+    dev._on_disconnect(make_client())  # drop report from some earlier client
+    await hass.async_block_till_done()
+    assert dev.connected
+    assert dev._client is client
+    dev._on_disconnect(client)
+    await hass.async_block_till_done()
+    assert not dev.connected
+
+
+async def test_second_advertisement_while_connecting_queues_nothing(
+    hass: HomeAssistant, setup
+) -> None:
+    dev = setup.runtime_data
+    gate = asyncio.Event()
+
+    async def slow(*args, **kwargs):
+        await gate.wait()
+        return make_client()
+
+    est = AsyncMock(side_effect=slow)
+    with patch(ESTABLISH, est):
+        dev._on_advertisement(service_info(), None)  # task created, lock not taken yet
+        dev._last_attempt = 0
+        dev._on_advertisement(service_info(), None)
+        await asyncio.sleep(0)
+        gate.set()
+        await hass.async_block_till_done()
+    assert est.await_count == 1
+    assert dev._connecting is False
+
+
+async def test_unload_while_connecting_closes_the_link(hass: HomeAssistant, setup) -> None:
+    dev = setup.runtime_data
+    client = make_client()
+    gate = asyncio.Event()
+
+    async def slow(*args, **kwargs):
+        await gate.wait()
+        return client
+
+    with patch(ESTABLISH, AsyncMock(side_effect=slow)):
+        dev._on_advertisement(service_info(), None)
+        await asyncio.sleep(0)
+        dev._stopping = True  # what async_stop does first
+        gate.set()
+        await hass.async_block_till_done()
+    client.disconnect.assert_awaited()
+    assert not dev.connected
+    client.start_notify.assert_not_awaited()
+
+
+async def test_token_that_refuses_to_stream_is_dropped_and_left_alone(
+    hass: HomeAssistant, setup
+) -> None:
+    """Start ack 21 01 and no frames: disconnect and back off, do not loop."""
+    dev = setup.runtime_data
+    client = make_client()
+    await advertise(hass, setup, client)
+    assert dev.connected and not dev._streaming
+    dev._stream_watchdog(None)  # 3 s without a single frame
+    await hass.async_block_till_done()
+    client.disconnect.assert_awaited()
+    assert not dev.connected
+    dev._last_attempt = 0
+    assert (await poll(hass, setup, service_info(), make_client())).await_count == 0
+
+
+async def test_streaming_token_cancels_the_watchdog(hass: HomeAssistant, setup) -> None:
+    from .helpers import frame
+    from .test_init import connect
+
+    client, notify = await connect(hass, setup)
+    dev = setup.runtime_data
+    assert dev._unsub_watchdog is not None
+    notify(None, bytearray(frame()))
+    assert dev._streaming and dev._unsub_watchdog is None
