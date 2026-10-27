@@ -16,6 +16,7 @@ CONF_MULTI_PRESS_WINDOW = "multi_press_window"
 CONF_MOTION_GESTURES = "motion_gestures"
 CONF_MULTI_PRESS = "multi_press"
 CONF_KNOB = "knob"
+CONF_SHAKE = "shake"
 
 DEFAULT_RATE = 104
 DEFAULT_IDLE_TIMEOUT = 30  # s without motion/button -> disconnect (0 = never)
@@ -25,6 +26,7 @@ DEFAULT_WAKE_AS_PRESS = False
 DEFAULT_MOTION_GESTURES = False
 DEFAULT_MULTI_PRESS = False
 DEFAULT_KNOB = False
+DEFAULT_SHAKE = False
 DEFAULT_MULTI_PRESS_WINDOW = 0.5  # s between releasing and pressing again
 
 BUS_EVENT = "triki_event"

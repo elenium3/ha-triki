@@ -30,12 +30,19 @@ STARTUP_DISCARD = 20          # first frames after stream start are noise
 TAP_G = 2.5                   # |a| spike
 THROW_G = 0.35                # |a| below this = free fall
 THROW_MIN_S = 0.06
-SHAKE_DPS = 150.0             # per-axis magnitude counted as a swing
+SHAKE_DPS = 600.0             # per-axis rate counted as a swing (hand motion 160-580, shakes 1000+)
 SHAKE_WINDOW_S = 0.8
 SHAKE_REVERSALS = 4           # sign changes of one axis within the window
+SHAKE_QUIET_S = 1.0           # no strong swing this long ends a shake episode
 FLIP_STABLE_S = 0.3
 STATIC_ACCEL_TOL = 0.15       # g
 STATIC_GYRO_DPS = 30.0
+# A still token streams occasional garbage frames (a lost BLE packet desyncs the
+# parser, which re-syncs on a stray 0x22 and decodes nonsense: |a| far from 1 g or
+# a huge gyro spike). These are almost always single, isolated frames, while real
+# motion lasts many frames. Only count motion that persists this long, so a glitch
+# does not keep resetting the idle timer and hold the link open forever.
+MOTION_CONFIRM_S = 0.1
 KNOB_DEADBAND_DPS = 15.0      # below this the turn accumulator is not fed
 KNOB_RESET_S = 0.6            # idle time after which a partial turn is dropped
 GRAVITY_ALPHA = 0.08          # low-pass for the gravity estimate
@@ -79,6 +86,7 @@ class GestureDetector:
         motion_gestures: bool = True,
         multi_press: bool = True,
         knob: bool = True,
+        shake: bool = True,
     ) -> None:
         self.dt = 1.0 / rate_hz
         self.knob_step = knob_step_deg
@@ -88,6 +96,7 @@ class GestureDetector:
         self.motion_gestures = motion_gestures
         self.multi_press = multi_press
         self.knob = knob
+        self.shake = shake
         self.reset()
 
     # ------------------------------------------------------------------ state
@@ -111,8 +120,11 @@ class GestureDetector:
         self._ff_since: float | None = None
         # shake: per axis list of (t, sign) swings
         self._swings: list[list[tuple[float, int]]] = [[], [], []]
+        self._shake_latched = False
+        self._last_swing_t = 0.0
         self._last: dict[str, float] = {}
         self.last_motion_t = 0.0
+        self._motion_since: float | None = None
 
     def _cooldown_ok(self, kind: str) -> bool:
         last = self._last.get(kind)
@@ -149,6 +161,8 @@ class GestureDetector:
             allowed = set()
             if self.knob:
                 allowed |= KNOB_EVENTS
+            if self.shake:
+                allowed.add("shake")
             if self.motion_gestures:
                 allowed |= MOTION_EVENTS
             out[:] = [e for e in out if e.type not in MOTION_EVENTS or e.type in allowed]
@@ -191,8 +205,14 @@ class GestureDetector:
     def _motion(self, s: Sample, out: list[Event]) -> None:
         a = s.accel_mag
         static = abs(a - 1.0) < STATIC_ACCEL_TOL and s.gyro_mag < STATIC_GYRO_DPS
-        if not static:
-            self.last_motion_t = self.t
+        if static:
+            self._motion_since = None
+        else:
+            # debounce: an isolated glitch frame must not count as motion
+            if self._motion_since is None:
+                self._motion_since = self.t
+            if self.t - self._motion_since >= MOTION_CONFIRM_S:
+                self.last_motion_t = self.t
 
         # gravity estimate: only trust accel when it is close to 1 g
         if abs(a - 1.0) < 0.3:
@@ -224,24 +244,37 @@ class GestureDetector:
 
         # shake: count sign reversals of strong swings per axis
         shaking = False
+        swinging = False
         for i, w in enumerate((s.gx, s.gy, s.gz)):
             swings = self._swings[i]
             while swings and self.t - swings[0][0] > SHAKE_WINDOW_S:
                 swings.pop(0)
             if abs(w) > SHAKE_DPS:
+                swinging = True
                 sign = 1 if w > 0 else -1
                 if not swings or swings[-1][1] != sign:
                     swings.append((self.t, sign))
             if len(swings) > SHAKE_REVERSALS:
                 shaking = True
-        if shaking and self._cooldown_ok("shake"):
+        # back-and-forth swings: a shake in progress, not a knob turn
+        oscillating = any(len(sw) > 2 for sw in self._swings)
+        if swinging:
+            self._last_swing_t = self.t
+        elif self._shake_latched and self.t - self._last_swing_t >= SHAKE_QUIET_S:
+            self._shake_latched = False  # the episode is over, the next one may fire
+        if shaking and not self._shake_latched:
+            # one event per episode: a 2 s shake must not fire two or three times
+            self._shake_latched = True
             self._fire(out, "shake")
             for sw in self._swings:
                 sw.clear()
             self._turn_acc = 0.0
 
-        # knob: rotation rate about the vertical (gravity) axis
-        if self.gravity is not None and not shaking:
+        # knob: rotation rate about the vertical (gravity) axis; shaking swings the
+        # token around every axis, so the knob is muted for the whole episode
+        if oscillating or self._shake_latched:
+            self._turn_acc = 0.0
+        elif self.gravity is not None:
             rate = _dot((s.gx, s.gy, s.gz), self.gravity)
             if self.invert_rotation:
                 rate = -rate

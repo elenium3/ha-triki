@@ -17,6 +17,7 @@ from .const import (
     CONF_MOTION_GESTURES,
     CONF_MULTI_PRESS,
     CONF_MULTI_PRESS_WINDOW,
+    CONF_SHAKE,
     CONF_WAKE_AS_PRESS,
     DEFAULT_IDLE_TIMEOUT,
     DEFAULT_INVERT_ROTATION,
@@ -24,6 +25,7 @@ from .const import (
     DEFAULT_MOTION_GESTURES,
     DEFAULT_MULTI_PRESS,
     DEFAULT_MULTI_PRESS_WINDOW,
+    DEFAULT_SHAKE,
     DEFAULT_WAKE_AS_PRESS,
     DEFAULT_KNOB_STEP,
     DEFAULT_RATE,
@@ -57,6 +59,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> boo
         wake_as_press=bool(opts.get(CONF_WAKE_AS_PRESS, DEFAULT_WAKE_AS_PRESS)),
         motion_gestures=bool(opts.get(CONF_MOTION_GESTURES, DEFAULT_MOTION_GESTURES)),
         knob=bool(opts.get(CONF_KNOB, DEFAULT_KNOB)),
+        shake=bool(opts.get(CONF_SHAKE, DEFAULT_SHAKE)),
         multi_press=bool(opts.get(CONF_MULTI_PRESS, DEFAULT_MULTI_PRESS)),
         multi_press_window=float(
             opts.get(CONF_MULTI_PRESS_WINDOW, DEFAULT_MULTI_PRESS_WINDOW)

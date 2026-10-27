@@ -26,6 +26,7 @@ from .const import (
     CONF_MOTION_GESTURES,
     CONF_MULTI_PRESS,
     CONF_MULTI_PRESS_WINDOW,
+    CONF_SHAKE,
     CONF_WAKE_AS_PRESS,
     CONF_IDLE_TIMEOUT,
     CONF_INVERT_ROTATION,
@@ -37,6 +38,7 @@ from .const import (
     DEFAULT_MOTION_GESTURES,
     DEFAULT_MULTI_PRESS,
     DEFAULT_MULTI_PRESS_WINDOW,
+    DEFAULT_SHAKE,
     DEFAULT_WAKE_AS_PRESS,
     DEFAULT_KNOB_STEP,
     DEFAULT_RATE,
@@ -164,6 +166,9 @@ class TrikiOptionsFlow(OptionsFlow):
                 ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_KNOB, default=o.get(CONF_KNOB, DEFAULT_KNOB)
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_SHAKE, default=o.get(CONF_SHAKE, DEFAULT_SHAKE)
                 ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_MOTION_GESTURES,

@@ -72,9 +72,19 @@ _POLL_FRESH_S = 10.0
 _STREAM_WATCHDOG_S = 3.0
 _NO_STREAM_COOLDOWN_S = 60.0
 _DUP_WINDOW_S = 0.003  # identical chunks closer than this are one notification
-# After we dropped the link on purpose, ignore the still-advertising token for a
-# moment, otherwise it would reconnect immediately and never sleep.
+# After we drop the link on idle, the token keeps advertising for several more
+# seconds. Reconnecting in that window resets its sleep timer, so it never sleeps
+# and we reconnect forever. Instead wait until its advertisements go stale (it
+# slept), then only reconnect on a genuinely fresh wake-up. This is how long with
+# no advertisement counts as "asleep".
 _IDLE_COOLDOWN_S = 10.0
+# A reconnect sooner than this after a drop is a resume of the same awake session
+# (a weak-signal link loss), not a fresh wake-up, so it must not re-emit "wake".
+_WAKE_GAP_S = 5.0
+# How long the token must stop advertising before we treat it as asleep and arm
+# for the next wake-up. Must outlast the few seconds it keeps advertising after we
+# drop the link, or we would reconnect to the same still-awake token.
+_SLEEP_GAP_S = 15.0
 
 
 class TrikiDevice:
@@ -95,6 +105,7 @@ class TrikiDevice:
         motion_gestures: bool = False,
         multi_press: bool = False,
         knob: bool = False,
+        shake: bool = False,
     ) -> None:
         self.hass = hass
         self.address = address
@@ -118,6 +129,7 @@ class TrikiDevice:
             motion_gestures=motion_gestures,
             multi_press=multi_press,
             knob=knob,
+            shake=shake,
         )
         self._capture = Capture(hass, name) if capture else None
 
@@ -128,6 +140,8 @@ class TrikiDevice:
         self._expected_disconnect = False
         self._last_attempt = 0.0
         self._no_connect_until = 0.0
+        self._await_sleep = False
+        self._awake_seen = 0.0
         self._last_drop = 0.0
         self._last_skip: str | None = None
         self._unsub_adv: CALLBACK_TYPE | None = None
@@ -253,7 +267,19 @@ class TrikiDevice:
         now = time.monotonic()
         age = bluetooth.MONOTONIC_TIME() - service_info.time
         reason = None
-        if age > max_age:
+        if self._await_sleep:
+            # The token keeps advertising for a few seconds after we drop the link;
+            # reconnecting then just resets its sleep timer. Only once its
+            # advertisements have stopped for a stretch (it actually slept) do we arm
+            # for the next genuine wake-up. A fresh advert keeps pushing that out.
+            if age < max_age:
+                self._awake_seen = now
+            if now - self._awake_seen >= _SLEEP_GAP_S:
+                self._await_sleep = False
+                reason = "token slept, waiting for a fresh wake-up"
+            else:
+                reason = "waiting for the token to sleep after an idle disconnect"
+        elif age > max_age:
             reason = f"advert too old ({age:.1f}s > {max_age:.0f}s)"
         elif service_info.time < self._last_drop:
             # advertisement from before the token fell asleep: it is gone now
@@ -357,10 +383,15 @@ class TrikiDevice:
                 self.name, self.rate, adv_age, t_link - t0, time.monotonic() - t_link,
                 d_notify, d_write,
             )
-            self._emit("wake")
-            if self.wake_as_press:
-                # the press that woke the token is over before the link is up
-                self._emit("press", {"count": 1, "source": "wake"})
+            # The token drops the link on its own on a weak signal; reconnecting
+            # right away is a resume, not a new wake-up. Only report "wake" if it was
+            # gone long enough to have actually slept (or this is the first link).
+            resumed = self._last_drop and time.monotonic() - self._last_drop < _WAKE_GAP_S
+            if not resumed:
+                self._emit("wake")
+                if self.wake_as_press:
+                    # the press that woke the token is over before the link is up
+                    self._emit("press", {"count": 1, "source": "wake"})
             self._notify()
             self.hass.async_create_background_task(
                 self._async_read_info(client), f"{DOMAIN}_info_{self.address}"
@@ -568,6 +599,8 @@ class TrikiDevice:
             self._schedule_idle_check()
             return
         _LOGGER.debug("%s: idle for %ss, disconnecting", self.name, self.idle_timeout)
+        self._await_sleep = True
+        self._awake_seen = time.monotonic()
         self._no_connect_until = time.monotonic() + _IDLE_COOLDOWN_S
         self.hass.async_create_background_task(
             self.async_disconnect(), f"{DOMAIN}_idle_{self.address}"

@@ -6,10 +6,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from bleak.exc import BleakError
 from bleak_retry_connector import BleakNotFoundError, BleakOutOfConnectionSlotsError
+from pytest_homeassistant_custom_component.common import async_capture_events
 
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 
+from custom_components.triki.const import BUS_EVENT
 from custom_components.triki.protocol import (
     BATTERY_LEVEL_UUID,
     CTRL_UUID,
@@ -180,19 +182,61 @@ async def test_poll_ignores_stale_or_missing_advertisement(
 async def test_no_instant_reconnect_after_idle_disconnect(
     hass: HomeAssistant, setup
 ) -> None:
-    """A token that is still advertising must not be reconnected right away."""
+    """After an idle drop the still-awake token must sleep before we reconnect.
+
+    Reconnecting while it is still advertising resets its sleep timer, so it would
+    never sleep and we would reconnect forever. We wait for its advertisements to
+    go stale (it slept), then reconnect only on a genuinely fresh wake-up.
+    """
     dev = setup.runtime_data
     await advertise(hass, setup, make_client())
     dev._last_activity -= 10_000
     dev._idle_check(None)
     await hass.async_block_till_done()
     assert hass.states.get(CONNECTED).state == "off"
+    assert dev._await_sleep is True
 
+    # the token is still advertising: a fresh wake-up must be ignored, even once
+    # the short cooldown is over, and it keeps pushing the sleep deadline out
     dev._last_attempt = 0
+    dev._no_connect_until = 0
     assert (await poll(hass, setup, service_info(), make_client())).await_count == 0
+    assert dev._await_sleep is True
 
-    dev._no_connect_until = 0  # cooldown over: next wake-up connects again
+    # its advertisements stop for long enough: the token slept. The next poll with
+    # no fresh advert clears the wait (but does not connect on the stale advert).
+    dev._awake_seen -= 30
+    stale = service_info()
+    stale.time -= 30
+    assert (await poll(hass, setup, stale, make_client())).await_count == 0
+    assert dev._await_sleep is False
+
+    # the next genuine wake-up connects again
+    dev._last_attempt = 0
     assert (await poll(hass, setup, service_info(), make_client())).await_count == 1
+
+
+async def test_quick_reconnect_after_drop_is_not_a_new_wake(
+    hass: HomeAssistant, setup
+) -> None:
+    """A weak-signal link loss followed by an immediate reconnect is a resume.
+
+    The token did not sleep, so the reconnect must not emit a second ``wake``.
+    """
+    dev = setup.runtime_data
+    bus = async_capture_events(hass, BUS_EVENT)
+
+    await advertise(hass, setup, make_client())
+    assert [e.data["type"] for e in bus] == ["wake"]
+
+    # the token drops the link on its own, then re-advertises right away
+    dev._handle_disconnected()
+    await hass.async_block_till_done()
+    dev._last_attempt = 0
+    await advertise(hass, setup, make_client())
+
+    assert dev.connected is True
+    assert [e.data["type"] for e in bus] == ["wake"]  # no second wake on resume
 
 
 async def test_advertisement_updates_rssi(hass: HomeAssistant, setup) -> None:
