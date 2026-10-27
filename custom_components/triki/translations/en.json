@@ -1,0 +1,70 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Press the green button on the token to wake it, then pick it from the list.",
+        "data": { "address": "Device" }
+      },
+      "bluetooth_confirm": {
+        "description": "Set up {name}?"
+      }
+    },
+    "abort": {
+      "already_configured": "Device is already configured",
+      "no_devices_found": "No awake Triki found. Press its button and try again.",
+      "not_supported": "Device not supported"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "sample_rate": "IMU sample rate (Hz)",
+          "idle_timeout": "Disconnect after idle (s, 0 = never)",
+          "knob_step": "Knob step (degrees per rotate event)",
+          "invert_rotation": "Invert rotation direction"
+        },
+        "data_description": {
+          "sample_rate": "Higher = snappier gestures, faster battery drain. Above 104 Hz BLE often cannot keep up.",
+          "idle_timeout": "Streaming keeps the token awake. Keep this short to save the battery."
+        }
+      }
+    }
+  },
+  "entity": {
+    "event": {
+      "action": {
+        "name": "Action",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "wake": "Wake",
+              "press": "Press",
+              "double_press": "Double press",
+              "triple_press": "Triple press",
+              "long_press": "Long press",
+              "rotate_cw": "Rotate clockwise",
+              "rotate_ccw": "Rotate counter-clockwise",
+              "shake": "Shake",
+              "tap": "Tap",
+              "throw": "Throw",
+              "flip": "Flip"
+            }
+          }
+        }
+      }
+    },
+    "binary_sensor": {
+      "connected": { "name": "Connected" },
+      "button": { "name": "Button" }
+    },
+    "light": {
+      "led": { "name": "LED" }
+    },
+    "sensor": {
+      "pitch": { "name": "Pitch" },
+      "roll": { "name": "Roll" }
+    }
+  }
+}
