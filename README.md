@@ -81,6 +81,11 @@ automation:
 - The press that wakes the token happens before the link is up, so it shows up as
   `wake`, not `press`.
 - A 104 Hz stream keeps the token awake and costs battery. Keep the idle timeout short.
+- The token advertises for only a few seconds after a press and is easy to miss. On a
+  Raspberry Pi's built-in Bluetooth, connecting took 1.5-10 s and often failed (RSSI
+  around -75 dBm). An ESPHome Bluetooth proxy (ESP32, `bluetooth_proxy: active: true`)
+  placed 20-30 cm from the token connected in about 0.2 s and kept the link for tens of
+  seconds. If presses are missed, put a proxy next to the token.
 - An ESPHome proxy has a limited number of active connection slots (3 by default).
 
 ## Development
