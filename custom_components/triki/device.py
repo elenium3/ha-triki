@@ -14,6 +14,7 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
+from datetime import timedelta
 from typing import Any
 
 from bleak import BleakClient
@@ -30,7 +31,7 @@ from homeassistant.components import bluetooth
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.event import async_call_later, async_track_time_interval
 
 from .const import (
     BATTERY_POLL_INTERVAL,
@@ -59,6 +60,16 @@ _LOGGER = logging.getLogger(__name__)
 _FRESH_ADV_S = 10.0
 _IDLE_CHECK_S = 2.0
 _RECONNECT_BACKOFF_S = 3.0
+# Home Assistant only calls advertisement callbacks when the advertised data
+# changes. Triki always advertises the same payload, so after the first wake-up
+# the callback goes silent for minutes. We therefore also poll the last seen
+# advertisement: if it is this fresh, the token is awake right now.
+_CONNECT_TIMEOUT_S = 12.0
+_POLL_S = 1.0
+_POLL_FRESH_S = 10.0
+# After we dropped the link on purpose, ignore the still-advertising token for a
+# moment, otherwise it would reconnect immediately and never sleep.
+_IDLE_COOLDOWN_S = 10.0
 
 
 class TrikiDevice:
@@ -74,12 +85,14 @@ class TrikiDevice:
         knob_step: float,
         invert_rotation: bool,
         capture: bool = False,
+        wake_as_press: bool = False,
     ) -> None:
         self.hass = hass
         self.address = address
         self.name = name
         self.rate = rate
         self.idle_timeout = idle_timeout
+        self.wake_as_press = wake_as_press
 
         self._parser = FrameParser()
         self._detector = GestureDetector(rate, knob_step, invert_rotation)
@@ -90,7 +103,10 @@ class TrikiDevice:
         self._stopping = False
         self._expected_disconnect = False
         self._last_attempt = 0.0
+        self._no_connect_until = 0.0
+        self._last_drop = 0.0
         self._unsub_adv: CALLBACK_TYPE | None = None
+        self._unsub_poll: CALLBACK_TYPE | None = None
         self._unsub_idle: CALLBACK_TYPE | None = None
         self._unsub_battery: CALLBACK_TYPE | None = None
 
@@ -159,13 +175,29 @@ class TrikiDevice:
             bluetooth.BluetoothCallbackMatcher(address=self.address, connectable=True),
             bluetooth.BluetoothScanningMode.ACTIVE,
         )
+        self._unsub_poll = async_track_time_interval(
+            self.hass, self._poll_awake, timedelta(seconds=_POLL_S)
+        )
 
     async def async_stop(self) -> None:
         self._stopping = True
-        if self._unsub_adv:
-            self._unsub_adv()
-            self._unsub_adv = None
+        for attr in ("_unsub_adv", "_unsub_poll"):
+            unsub = getattr(self, attr)
+            if unsub:
+                unsub()
+                setattr(self, attr, None)
         await self.async_disconnect()
+
+    @callback
+    def _poll_awake(self, _now: Any) -> None:
+        """Catch wake-ups whose advertisement HA did not dispatch (unchanged data)."""
+        if self._stopping or self.connected or self._lock.locked():
+            return
+        info = bluetooth.async_last_service_info(
+            self.hass, self.address, connectable=True
+        )
+        if info is not None:
+            self._maybe_connect(info, _POLL_FRESH_S)
 
     @callback
     def _on_advertisement(
@@ -176,16 +208,27 @@ class TrikiDevice:
         if service_info.rssi != self.rssi:
             self.rssi = service_info.rssi
             self._notify()
+        self._maybe_connect(service_info, _FRESH_ADV_S)
+
+    @callback
+    def _maybe_connect(
+        self, service_info: bluetooth.BluetoothServiceInfoBleak, max_age: float
+    ) -> None:
         if self._stopping or self.connected or self._lock.locked():
             return
-        if bluetooth.MONOTONIC_TIME() - service_info.time > _FRESH_ADV_S:
+        if bluetooth.MONOTONIC_TIME() - service_info.time > max_age:
+            return
+        if service_info.time < self._last_drop:
+            # advertisement from before the token fell asleep: it is gone now
             return
         now = time.monotonic()
+        if now < self._no_connect_until:
+            return
         if now - self._last_attempt < _RECONNECT_BACKOFF_S:
             return
         self._last_attempt = now
         self.hass.async_create_background_task(
-            self._async_connect(service_info.device),
+            self._async_connect(service_info.device, service_info.time),
             f"{DOMAIN}_connect_{self.address}",
         )
 
@@ -197,19 +240,25 @@ class TrikiDevice:
             or fallback
         )
 
-    async def _async_connect(self, ble_device: BLEDevice) -> None:
+    async def _async_connect(self, ble_device: BLEDevice, seen: float | None = None) -> None:
         async with self._lock:
             if self.connected or self._stopping:
                 return
+            t0 = time.monotonic()
+            adv_age = bluetooth.MONOTONIC_TIME() - seen if seen else -1.0
             try:
-                client = await establish_connection(
-                    BleakClientWithServiceCache,
-                    ble_device,
-                    self.name,
-                    disconnected_callback=self._on_disconnect,
-                    max_attempts=2,
-                    ble_device_callback=lambda: self._ble_device(ble_device),
-                )
+                # bleak_retry_connector may retry for a minute (20 s per attempt,
+                # 4 s backoff on "no slot"). The token is awake for seconds only,
+                # and the lock would swallow every wake-up meanwhile.
+                async with asyncio.timeout(_CONNECT_TIMEOUT_S):
+                    client = await establish_connection(
+                        BleakClientWithServiceCache,
+                        ble_device,
+                        self.name,
+                        disconnected_callback=self._on_disconnect,
+                        max_attempts=2,
+                        ble_device_callback=lambda: self._ble_device(ble_device),
+                    )
             except (BleakNotFoundError, BleakOutOfConnectionSlotsError) as err:
                 _LOGGER.debug("%s: cannot connect: %s", self.name, err)
                 return
@@ -217,6 +266,7 @@ class TrikiDevice:
                 _LOGGER.debug("%s: connect failed: %s", self.name, err)
                 return
 
+            t_link = time.monotonic()
             self._client = client
             self._expected_disconnect = False
             try:
@@ -231,22 +281,42 @@ class TrikiDevice:
             self._last_activity = time.monotonic()
             self._schedule_idle_check()
             self._schedule_battery_poll()
-            _LOGGER.debug("%s: connected, streaming at %s Hz", self.name, self.rate)
+            _LOGGER.debug(
+                "%s: connected, streaming at %s Hz (advert age %.1fs, link %.1fs, setup %.1fs)",
+                self.name, self.rate, adv_age, t_link - t0, time.monotonic() - t_link,
+            )
             self._emit("wake")
+            if self.wake_as_press:
+                # the press that woke the token is over before the link is up
+                self._emit("press", {"count": 1, "source": "wake"})
+            self._notify()
+            self.hass.async_create_background_task(
+                self._async_read_info(client), f"{DOMAIN}_info_{self.address}"
+            )
+
+    async def _async_read_info(self, client: BleakClient) -> None:
+        """Read the slow, non-essential characteristics once the stream runs.
+
+        The token goes back to sleep a few seconds after waking up, so nothing
+        that is not needed to start the IMU stream may delay it.
+        """
+        try:
+            if self.firmware is None:
+                self.firmware = await self._read_str(client, FIRMWARE_REV_UUID)
+                self.hardware = await self._read_str(client, HARDWARE_REV_UUID)
+                self._update_device_registry()
+            await self._read_battery(client)
+            try:
+                ctrl = await client.read_gatt_char(CTRL_UUID)
+                self.led_on = bool(ctrl and ctrl[0] & 0x01)
+            except BleakError:
+                self.led_on = None
+        except (BleakError, TimeoutError) as err:
+            _LOGGER.debug("%s: info read failed: %s", self.name, err)
+        if self._client is client:
             self._notify()
 
     async def _async_session_setup(self, client: BleakClient) -> None:
-        if self.firmware is None:
-            self.firmware = await self._read_str(client, FIRMWARE_REV_UUID)
-            self.hardware = await self._read_str(client, HARDWARE_REV_UUID)
-            self._update_device_registry()
-        await self._read_battery(client)
-        try:
-            ctrl = await client.read_gatt_char(CTRL_UUID)
-            self.led_on = bool(ctrl and ctrl[0] & 0x01)
-        except BleakError:
-            self.led_on = None
-
         if self._capture:
             self._capture.start(
                 {
@@ -311,6 +381,7 @@ class TrikiDevice:
         if not self._expected_disconnect:
             _LOGGER.debug("%s: link dropped (token asleep?)", self.name)
         self._client = None
+        self._last_drop = bluetooth.MONOTONIC_TIME()
         was_connected = self.connected
         self.connected = False
         for unsub in (self._unsub_idle, self._unsub_battery):
@@ -375,6 +446,7 @@ class TrikiDevice:
             self._schedule_idle_check()
             return
         _LOGGER.debug("%s: idle for %ss, disconnecting", self.name, self.idle_timeout)
+        self._no_connect_until = time.monotonic() + _IDLE_COOLDOWN_S
         self.hass.async_create_background_task(
             self.async_disconnect(), f"{DOMAIN}_idle_{self.address}"
         )

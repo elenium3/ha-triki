@@ -1,5 +1,6 @@
 """End-to-end: advertisement -> connect -> stream -> HA entities/events."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -163,7 +164,13 @@ async def test_capture_option(hass: HomeAssistant, mock_bluetooth, tmp_path) -> 
     notify(None, bytearray(frame() * 2))
     entry.runtime_data._on_disconnect(client)
     await hass.async_block_till_done()
-    files = list((tmp_path / "triki_captures").glob("*.jsonl"))
+    # the capture file is written from an executor job that block_till_done
+    # does not wait for, so poll for it briefly
+    for _ in range(50):
+        files = list((tmp_path / "triki_captures").glob("*.jsonl"))
+        if files:
+            break
+        await asyncio.sleep(0.02)
     assert len(files) == 1
     recs = [_json.loads(x) for x in files[0].read_text().splitlines()]
     assert recs[0]["meta"]["rate"] == 104

@@ -11,11 +11,13 @@ CONF_IDLE_TIMEOUT = "idle_timeout"
 CONF_KNOB_STEP = "knob_step"
 CONF_INVERT_ROTATION = "invert_rotation"
 CONF_CAPTURE = "capture"
+CONF_WAKE_AS_PRESS = "wake_as_press"
 
 DEFAULT_RATE = 104
 DEFAULT_IDLE_TIMEOUT = 30  # s without motion/button -> disconnect (0 = never)
 DEFAULT_KNOB_STEP = 30
 DEFAULT_INVERT_ROTATION = False
+DEFAULT_WAKE_AS_PRESS = False
 
 BUS_EVENT = "triki_event"
 

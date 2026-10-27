@@ -47,6 +47,7 @@ green button. The token should be discovered. Otherwise use *Add integration →
 - **Idle timeout**: seconds without activity before disconnecting (0 = never).
 - **Knob step**: degrees of rotation around the vertical axis per `rotate_*` event.
 - **Invert rotation**: flip cw/ccw if it is backwards on your unit.
+- **Treat wake-up as a press**: also emit `press` right after `wake` (see Caveats). A wake caused by movement then looks like a press too.
 
 ## Example: knob dimmer + button toggle
 

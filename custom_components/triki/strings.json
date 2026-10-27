@@ -26,11 +26,13 @@
           "idle_timeout": "Disconnect after idle (s, 0 = never)",
           "knob_step": "Knob step (degrees per rotate event)",
           "invert_rotation": "Invert rotation direction",
+          "wake_as_press": "Treat wake-up as a press",
           "capture": "Record raw sessions to /config/triki_captures (debug)"
         },
         "data_description": {
           "sample_rate": "Higher = snappier gestures, faster battery drain. Above 104 Hz BLE often cannot keep up.",
           "idle_timeout": "Streaming keeps the token awake. Keep this short to save the battery.",
+          "wake_as_press": "The press that wakes the token ends before the link is up, so it is reported as wake. Also emit press on wake (a wake caused by movement then looks like a press too).",
           "capture": "Every connection writes a .jsonl file with raw BLE notifications and detected events. Turn off when done."
         }
       }
