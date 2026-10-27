@@ -13,8 +13,10 @@ from .const import (
     CONF_INVERT_ROTATION,
     CONF_KNOB_STEP,
     CONF_RATE,
+    CONF_WAKE_AS_PRESS,
     DEFAULT_IDLE_TIMEOUT,
     DEFAULT_INVERT_ROTATION,
+    DEFAULT_WAKE_AS_PRESS,
     DEFAULT_KNOB_STEP,
     DEFAULT_RATE,
     MANUFACTURER,
@@ -44,6 +46,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> boo
         knob_step=float(opts.get(CONF_KNOB_STEP, DEFAULT_KNOB_STEP)),
         invert_rotation=bool(opts.get(CONF_INVERT_ROTATION, DEFAULT_INVERT_ROTATION)),
         capture=bool(opts.get(CONF_CAPTURE, False)),
+        wake_as_press=bool(opts.get(CONF_WAKE_AS_PRESS, DEFAULT_WAKE_AS_PRESS)),
     )
     dev = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,

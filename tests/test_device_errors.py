@@ -1,0 +1,290 @@
+"""TrikiDevice failure paths: connect errors, setup errors, gating, polling."""
+
+import asyncio
+from unittest.mock import AsyncMock, patch
+
+import pytest
+from bleak.exc import BleakError
+from bleak_retry_connector import BleakNotFoundError, BleakOutOfConnectionSlotsError
+
+from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+
+from custom_components.triki.protocol import (
+    BATTERY_LEVEL_UUID,
+    CTRL_UUID,
+    FIRMWARE_REV_UUID,
+)
+
+from .conftest import service_info
+from .test_init import BATTERY, CONNECTED, make_client, setup  # noqa: F401
+
+ESTABLISH = "custom_components.triki.device.establish_connection"
+
+
+async def advertise(hass: HomeAssistant, entry, client=None, side_effect=None):
+    """Send one fresh advertisement with establish_connection mocked."""
+    mock = AsyncMock(return_value=client, side_effect=side_effect)
+    with patch(ESTABLISH, mock):
+        entry.runtime_data._on_advertisement(service_info(), None)
+        await hass.async_block_till_done()
+    return mock
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        BleakNotFoundError("gone"),
+        BleakOutOfConnectionSlotsError("no slots"),
+        BleakError("boom"),
+        TimeoutError(),
+    ],
+)
+async def test_connect_errors_leave_device_asleep(hass: HomeAssistant, setup, exc) -> None:
+    est = await advertise(hass, setup, side_effect=exc)
+    assert est.await_count == 1
+    assert hass.states.get(CONNECTED).state == "off"
+    assert setup.runtime_data._client is None
+
+
+async def test_session_setup_failure_disconnects(hass: HomeAssistant, setup) -> None:
+    client = make_client()
+    client.start_notify = AsyncMock(side_effect=BleakError("notify failed"))
+    await advertise(hass, setup, client)
+    client.disconnect.assert_awaited()
+    assert hass.states.get(CONNECTED).state == "off"
+    assert setup.runtime_data.connected is False
+
+
+async def test_optional_reads_may_fail(hass: HomeAssistant, setup) -> None:
+    """Firmware, battery and LED reads failing must not abort the session."""
+    client = make_client()
+
+    async def read(uuid):
+        if uuid in (FIRMWARE_REV_UUID, BATTERY_LEVEL_UUID, CTRL_UUID):
+            raise BleakError("not readable")
+        return b""
+
+    client.read_gatt_char = AsyncMock(side_effect=read)
+    await advertise(hass, setup, client)
+    dev = setup.runtime_data
+    assert dev.connected is True
+    assert dev.firmware is None
+    assert dev.battery is None
+    assert dev.led_on is None
+
+
+async def test_hung_connect_does_not_swallow_next_wakeup(
+    hass: HomeAssistant, setup
+) -> None:
+    """A connect that never returns must release the lock so the next wake-up works."""
+    dev = setup.runtime_data
+
+    async def hang(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    with patch("custom_components.triki.device._CONNECT_TIMEOUT_S", 0.05):
+        est = await advertise(hass, setup, side_effect=hang)
+        assert est.await_count == 1
+        # the connect runs as a background task: wait for the timeout for real
+        for _ in range(100):
+            if not dev._lock.locked():
+                break
+            await asyncio.sleep(0.01)
+        assert not dev._lock.locked()
+        assert hass.states.get(CONNECTED).state == "off"
+
+        dev._last_attempt = 0  # backoff over; the token woke up again
+        est = await advertise(hass, setup, make_client())
+    assert est.await_count == 1
+    assert hass.states.get(CONNECTED).state == "on"
+
+
+async def test_stream_starts_before_slow_reads(hass: HomeAssistant, setup) -> None:
+    """The token sleeps seconds after waking: start the stream first, read later."""
+    client = make_client()
+    gate = asyncio.Event()
+
+    async def slow_read(uuid):
+        await gate.wait()  # reads are slow / never come back in time
+        return b""
+
+    client.read_gatt_char = AsyncMock(side_effect=slow_read)
+    est = AsyncMock(return_value=client)
+    with patch(ESTABLISH, est):
+        setup.runtime_data._on_advertisement(service_info(), None)
+        for _ in range(20):  # let the connect task run; reads stay blocked
+            await asyncio.sleep(0)
+    names = [c[0] for c in client.method_calls]
+    assert names.index("start_notify") < names.index("read_gatt_char")
+    assert names.index("write_gatt_char") < names.index("read_gatt_char")
+    assert hass.states.get(CONNECTED).state == "on"  # not held up by the reads
+    gate.set()
+    await hass.async_block_till_done()
+
+
+async def test_advertisement_backoff(hass: HomeAssistant, setup) -> None:
+    """A second advertisement right after a failed attempt is ignored."""
+    est = await advertise(hass, setup, side_effect=BleakError("boom"))
+    assert est.await_count == 1
+    est = await advertise(hass, setup, side_effect=BleakError("boom"))
+    assert est.await_count == 0
+    # once the backoff is over the next advertisement retries
+    setup.runtime_data._last_attempt = 0
+    est = await advertise(hass, setup, side_effect=BleakError("boom"))
+    assert est.await_count == 1
+
+
+async def test_advertisement_ignored_while_connected(hass: HomeAssistant, setup) -> None:
+    await advertise(hass, setup, make_client())
+    assert setup.runtime_data.connected
+    setup.runtime_data._last_attempt = 0
+    est = await advertise(hass, setup, make_client())
+    assert est.await_count == 0
+
+
+LAST_INFO = "custom_components.triki.device.bluetooth.async_last_service_info"
+
+
+async def poll(hass: HomeAssistant, entry, info, client=None):
+    """Poll as the 1 s timer does, with HA's last advertisement set to ``info``."""
+    est = AsyncMock(return_value=client)
+    with patch(LAST_INFO, return_value=info), patch(ESTABLISH, est):
+        entry.runtime_data._poll_awake(None)
+        await hass.async_block_till_done()
+    return est
+
+
+async def test_poll_connects_without_advertisement_callback(
+    hass: HomeAssistant, setup
+) -> None:
+    """HA drops unchanged advertisements, so the callback never fires again.
+
+    The token must still be picked up from the last seen advertisement.
+    """
+    est = await poll(hass, setup, service_info(), make_client())
+    assert est.await_count == 1
+    assert hass.states.get(CONNECTED).state == "on"
+
+
+async def test_poll_ignores_stale_or_missing_advertisement(
+    hass: HomeAssistant, setup
+) -> None:
+    stale = service_info()
+    stale.time -= 30  # token went back to sleep long ago
+    assert (await poll(hass, setup, stale, make_client())).await_count == 0
+    assert (await poll(hass, setup, None, make_client())).await_count == 0
+    assert hass.states.get(CONNECTED).state == "off"
+
+
+async def test_no_instant_reconnect_after_idle_disconnect(
+    hass: HomeAssistant, setup
+) -> None:
+    """A token that is still advertising must not be reconnected right away."""
+    dev = setup.runtime_data
+    await advertise(hass, setup, make_client())
+    dev._last_activity -= 10_000
+    dev._idle_check(None)
+    await hass.async_block_till_done()
+    assert hass.states.get(CONNECTED).state == "off"
+
+    dev._last_attempt = 0
+    assert (await poll(hass, setup, service_info(), make_client())).await_count == 0
+
+    dev._no_connect_until = 0  # cooldown over: next wake-up connects again
+    assert (await poll(hass, setup, service_info(), make_client())).await_count == 1
+
+
+async def test_advertisement_updates_rssi(hass: HomeAssistant, setup) -> None:
+    dev = setup.runtime_data
+    info = service_info()
+    info.time -= 60  # stale: must not trigger a connect, but rssi is still tracked
+    with patch(ESTABLISH, AsyncMock()) as est:
+        dev._on_advertisement(info, None)
+        await hass.async_block_till_done()
+    est.assert_not_awaited()
+    assert dev.rssi == info.rssi
+
+
+async def test_battery_poll_refreshes_and_reschedules(hass: HomeAssistant, setup) -> None:
+    client = make_client()
+    await advertise(hass, setup, client)
+    dev = setup.runtime_data
+    assert hass.states.get(BATTERY).state == "87"
+
+    async def read(uuid):
+        return bytes([55]) if uuid == BATTERY_LEVEL_UUID else b""
+
+    client.read_gatt_char = AsyncMock(side_effect=read)
+    dev._battery_poll(None)
+    await hass.async_block_till_done()
+    assert hass.states.get(BATTERY).state == "55"
+    assert dev._unsub_battery is not None  # next poll scheduled
+
+
+async def test_battery_poll_noop_when_disconnected(hass: HomeAssistant, setup) -> None:
+    dev = setup.runtime_data
+    dev._battery_poll(None)
+    await hass.async_block_till_done()
+    assert dev._unsub_battery is None
+
+
+async def test_led_write_error(hass: HomeAssistant, setup) -> None:
+    client = make_client()
+    await advertise(hass, setup, client)
+    dev = setup.runtime_data
+    client.write_gatt_char = AsyncMock(side_effect=BleakError("write failed"))
+    with pytest.raises(HomeAssistantError):
+        await dev.async_set_led(True)
+    assert dev.led_on is False  # unchanged
+
+
+async def test_idle_check_keeps_link_while_button_held(hass: HomeAssistant, setup) -> None:
+    client = make_client()
+    await advertise(hass, setup, client)
+    dev = setup.runtime_data
+    dev.button = True
+    dev._last_activity -= 10_000
+    dev._idle_check(None)
+    await hass.async_block_till_done()
+    client.disconnect.assert_not_awaited()
+    assert dev.connected
+    assert dev._unsub_idle is not None  # re-armed
+
+
+async def test_wake_as_press_emits_press(hass: HomeAssistant, setup) -> None:
+    from pytest_homeassistant_custom_component.common import async_capture_events
+
+    bus = async_capture_events(hass, "triki_event")
+    setup.runtime_data.wake_as_press = True
+    await advertise(hass, setup, make_client())
+    assert [e.data["type"] for e in bus] == ["wake", "press"]
+    assert bus[1].data["source"] == "wake"
+
+
+async def test_wake_alone_by_default(hass: HomeAssistant, setup) -> None:
+    from pytest_homeassistant_custom_component.common import async_capture_events
+
+    bus = async_capture_events(hass, "triki_event")
+    await advertise(hass, setup, make_client())
+    assert [e.data["type"] for e in bus] == ["wake"]
+
+
+async def test_no_reconnect_on_advertisement_older_than_drop(
+    hass: HomeAssistant, setup
+) -> None:
+    """After the token drops the link, its last advertisement is stale news.
+
+    Connecting to the sleeping token hangs until the timeout and would hold the
+    lock against the next real wake-up.
+    """
+    dev = setup.runtime_data
+    old = service_info()
+    old.time -= 1
+    await advertise(hass, setup, make_client())
+    dev._on_disconnect(None)
+    await hass.async_block_till_done()
+    dev._last_attempt = 0
+    assert (await poll(hass, setup, old, make_client())).await_count == 0
+    dev._last_attempt = 0
+    assert (await poll(hass, setup, service_info(), make_client())).await_count == 1

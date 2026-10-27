@@ -22,12 +22,14 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_CAPTURE,
+    CONF_WAKE_AS_PRESS,
     CONF_IDLE_TIMEOUT,
     CONF_INVERT_ROTATION,
     CONF_KNOB_STEP,
     CONF_RATE,
     DEFAULT_IDLE_TIMEOUT,
     DEFAULT_INVERT_ROTATION,
+    DEFAULT_WAKE_AS_PRESS,
     DEFAULT_KNOB_STEP,
     DEFAULT_RATE,
     DOMAIN,
@@ -147,6 +149,10 @@ class TrikiOptionsFlow(OptionsFlow):
                 vol.Required(
                     CONF_INVERT_ROTATION,
                     default=o.get(CONF_INVERT_ROTATION, DEFAULT_INVERT_ROTATION),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_WAKE_AS_PRESS,
+                    default=o.get(CONF_WAKE_AS_PRESS, DEFAULT_WAKE_AS_PRESS),
                 ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_CAPTURE, default=o.get(CONF_CAPTURE, False)
