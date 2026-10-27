@@ -133,7 +133,7 @@ def test_shake():
     d = det()
     ev = []
     for i in range(8):  # ~6 Hz wrist shake
-        ev += feed(d, secs(0.08), gx=400.0 if i % 2 else -400.0, az=1.0)
+        ev += feed(d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, az=1.0)
     assert "shake" in types(ev)
     assert not any(t.startswith("rotate") for t in types(ev))
 
@@ -199,3 +199,46 @@ def test_knob_off_reports_no_rotation():
     d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=False)
     feed(d, RATE // 2)
     assert types(feed(d, secs(1.0), gz=185.0)) == []
+
+
+def _shake(d, swings):
+    ev = []
+    for i in range(swings):  # ~6 Hz swings, real shakes peak at 1000-2300 dps
+        ev += feed(d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, az=1.0)
+    return ev
+
+
+def test_long_shake_is_one_event_and_next_shake_fires_again():
+    d = det()
+    ev = _shake(d, 26)  # one ~2 s shake
+    assert types(ev).count("shake") == 1
+    assert not any(t.startswith("rotate") for t in types(ev))
+    ev = feed(d, secs(1.5), az=1.0)  # pause
+    ev += _shake(d, 8)
+    assert types(ev).count("shake") == 1
+
+
+def test_hand_motion_is_not_a_shake():
+    d = det()
+    ev = []
+    for i in range(12):  # moving the token around in the hand: 160-580 dps
+        ev += feed(d, secs(0.08), gx=400.0 if i % 2 else -400.0, az=1.0)
+    assert "shake" not in types(ev)
+
+
+def test_shake_option_reports_only_shake():
+    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=False, shake=True)
+    feed(d, RATE // 2)
+    ev = []
+    for i in range(8):
+        ev += feed(d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, az=1.0)
+    assert set(types(ev)) == {"shake"}
+
+
+def test_shake_off_reports_nothing():
+    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=False, shake=False)
+    feed(d, RATE // 2)
+    ev = []
+    for i in range(8):
+        ev += feed(d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, az=1.0)
+    assert types(ev) == []

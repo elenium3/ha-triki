@@ -48,6 +48,7 @@ green button. The token should be discovered. Otherwise use *Add integration →
 - **Knob step**: degrees of rotation around the vertical axis per `rotate_*` event.
 - **Invert rotation**: flip cw/ccw if it is backwards on your unit.
 - **Knob rotation** (default off): `rotate_cw` / `rotate_ccw` only.
+- **Shake** (default off): several quick back-and-forth swings.
 - **Motion gestures** (default off): shake, tap, throw, flip (plus rotate). Thresholds are not calibrated on hardware yet; enable to test.
 - **Double and triple press** (default off): when off, `press` is reported as soon as the button is released; when on, it is delayed by the window below to tell single, double and triple apart.
 - **Double/triple press window**: longest pause (0.2-1.5 s, default 0.5) between releasing and pressing again. A single press is reported this long after release. Multi-presses only work while the link is up; the press that wakes a sleeping token is lost to the wake-up.
