@@ -8,6 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
 from .const import (
+    CONF_CAPTURE,
     CONF_IDLE_TIMEOUT,
     CONF_INVERT_ROTATION,
     CONF_KNOB_STEP,
@@ -42,6 +43,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> boo
         idle_timeout=int(opts.get(CONF_IDLE_TIMEOUT, DEFAULT_IDLE_TIMEOUT)),
         knob_step=float(opts.get(CONF_KNOB_STEP, DEFAULT_KNOB_STEP)),
         invert_rotation=bool(opts.get(CONF_INVERT_ROTATION, DEFAULT_INVERT_ROTATION)),
+        capture=bool(opts.get(CONF_CAPTURE, False)),
     )
     dev = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,

@@ -143,3 +143,30 @@ async def test_unload(hass: HomeAssistant, setup) -> None:
     assert await hass.config_entries.async_unload(setup.entry_id)
     await hass.async_block_till_done()
     client.disconnect.assert_awaited()
+
+
+async def test_capture_option(hass: HomeAssistant, mock_bluetooth, tmp_path) -> None:
+    import json as _json
+
+    hass.config.config_dir = str(tmp_path)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=ADDRESS,
+        title=NAME,
+        data={CONF_ADDRESS: ADDRESS},
+        options={"capture": True},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    client, notify = await connect(hass, entry)
+    notify(None, bytearray(frame() * 2))
+    entry.runtime_data._on_disconnect(client)
+    await hass.async_block_till_done()
+    files = list((tmp_path / "triki_captures").glob("*.jsonl"))
+    assert len(files) == 1
+    recs = [_json.loads(x) for x in files[0].read_text().splitlines()]
+    assert recs[0]["meta"]["rate"] == 104
+    assert any(r.get("event") == "wake" for r in recs)
+    assert any("hex" in r for r in recs)
+    assert recs[-1]["disconnected"] is True
