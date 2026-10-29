@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-29
+
 ### Fixed
 - The battery pause took the first notification after STOP, which can still be
   the loaded figure (27 % at 3 s, the rested 82 % follows at 4–6 s). The pause
@@ -156,7 +158,8 @@ and a Raspberry Pi 5 built-in adapter.
 - Duplicate BlueZ notifications counted as separate frames.
 - Wake reported again on a quick resume after a weak-signal drop.
 
-[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/elenium3/ha-triki/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/elenium3/ha-triki/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/elenium3/ha-triki/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/elenium3/ha-triki/compare/v0.1.0...v0.2.0
