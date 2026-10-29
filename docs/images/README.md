@@ -15,6 +15,14 @@ The Flopsstuff photos are stored in Git LFS upstream, which is why they are
 copied here instead of linked: a raw GitHub link to an LFS file returns the
 pointer text, not the image.
 
+Linked, not copied: the board photo, the chip photo and the reference schematic
+in `hardware.md` come from
+[Piwencjusz/zabka-triki-hardware](https://github.com/Piwencjusz/zabka-triki-hardware),
+which has no license file. Do not copy them here unless the authors grant one.
+The same goes for [DISKIMG/Triki-PCB](https://github.com/DISKIMG/Triki-PCB).
+The cap renders in [koksny/TRIKI-Control](https://github.com/koksny/TRIKI-Control)
+(MIT) are generic bottle caps and were not used.
+
 Still wanted (see the table in the first version of this file for ideas):
 a side view with the LED window, a board photo with the chips readable, an
 ESP32 proxy next to the spot where the token is used, and a screenshot of the

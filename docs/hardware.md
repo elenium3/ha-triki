@@ -45,6 +45,42 @@ The radio is the weak spot: a PCB antenna inside a plastic cap next to a coin
 cell and the button's metal spring. See
 [Radio and placement](radio-and-placement.md) for what that means in practice.
 
+## Board, pinout and schematic
+
+The images in this section are shown from
+[Piwencjusz/zabka-triki-hardware](https://github.com/Piwencjusz/zabka-triki-hardware)
+(Piwencjusz, with tsuki and AND-Y0). That repository has no license file, so
+the pictures are linked, not copied into this one; all rights stay with the
+authors. If they disappear, the originals are in that repository's `photos/`.
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Piwencjusz/zabka-triki-hardware/main/photos/TIKIpinout.jpg" width="420" alt="The board with the 3V3, GND, nRESET, SWCLK and SWDIO pads marked">
+  <br><sub>The board with the cap removed. The yellow part in the middle is the button, the small can next to it is the 32 MHz crystal, the big square chip is the nRF52810, the pads marked SWCLK / SWDIO / nRESET are the debug port. Photo: Piwencjusz.</sub>
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Piwencjusz/zabka-triki-hardware/main/photos/nrf.jpeg" width="300" alt="Microscope photo of the nRF52810 marking N52810 QCAAE0 2232AB">
+  <br><sub>The nRF52810 under a microscope: marking <code>N52810 QCAAE0 2232AB</code>, date code 2022 week 32. Photo: Piwencjusz.</sub>
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Piwencjusz/zabka-triki-hardware/main/photos/schematic.png" width="760" alt="Reference schematic: LSM6DSL on I2C, nRF52810 with crystal, antenna, SWD, LED, button and SPI NOR">
+  <br><sub>Reference schematic reconstructed from PCB tracing by Piwencjusz. Their own caveat is printed on it: it is a reference, not electrically verified, and some GPIO assignments may be wrong.</sub>
+</p>
+
+What the schematic says, in words: the LSM6DSL talks to the nRF52810 over I²C
+(SDA on P0.05, SCL on P0.06, two interrupt lines on P0.09 and P0.10), the
+SPI NOR flash hangs on P0.12 to P0.20, the LED and the button are on P0.28 and
+P0.30, the 32 MHz crystal is on XC1/XC2, and the PCB antenna is on the ANT pin.
+SWD is on the two pads next to the chip; it is useless without erasing the chip
+because readout protection is on.
+
+A KiCad version of the schematic is being drawn in
+[DISKIMG/Triki-PCB](https://github.com/DISKIMG/Triki-PCB) (no license file
+either; link only). Flopsstuff's
+[hardware guide](https://github.com/Flopsstuff/triki/blob/main/docs/guide/hardware.md)
+(MIT) covers the same parts from the firmware's point of view.
+
 ## Behaviour
 
 - **Sleep.** The token sleeps whenever it is still and not connected. It wakes
