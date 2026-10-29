@@ -33,7 +33,13 @@ pytest --cov --cov-fail-under=95
 ```
 
 The ruff rule set is the subset of Home Assistant core's that applies to a custom
-integration; mypy runs strict. Both are configured in `pyproject.toml`.
+integration plus the `S` (bandit) rules; mypy runs strict. Both are configured
+in `pyproject.toml`. The security workflow additionally runs:
+
+```bash
+uvx bandit -r custom_components tools -ll -q      # Python SAST
+uvx zizmor --min-severity medium .github/workflows # GitHub Actions audit
+```
 
 ## Layout
 

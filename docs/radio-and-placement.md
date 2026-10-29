@@ -23,19 +23,24 @@ The *Diagnostics* download also contains the RSSI of the last advertisement.
 
 ## Recommended: an ESPHome Bluetooth proxy at the usage spot
 
-An ESP32 running ESPHome with
+A Bluetooth proxy is a cheap ESP32 board running ESPHome that listens for
+Bluetooth where the token is and forwards it to Home Assistant over Wi‑Fi.
+[Bluetooth proxy for beginners](bluetooth-proxy.md) explains what to buy, how
+to flash it and what the configuration means. The relevant part of its
+configuration is
 
 ```yaml
 esp32_ble_tracker:
   scan_parameters:
-    active: true
+    active: true      # learn device names (that is how "Triki …" is matched)
 bluetooth_proxy:
-  active: true
+  active: true        # let Home Assistant connect through the board, not only listen
 ```
 
-placed where the token is normally used (a desk, a bedside table) connected in
-under a second and held the link for hours at −65 to −70 dBm. Home Assistant
-uses the proxy transparently; nothing in this integration is proxy specific.
+Placed where the token is normally used (a desk, a bedside table) such a board
+connected in under a second and held the link for hours at −65 to −70 dBm.
+Home Assistant uses the proxy transparently; nothing in this integration is
+proxy specific.
 
 Notes:
 

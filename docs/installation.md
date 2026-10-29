@@ -5,10 +5,11 @@
 - Home Assistant 2025.8 or newer with the
   [Bluetooth integration](https://www.home-assistant.io/integrations/bluetooth/)
   set up.
-- A Bluetooth path to the token: an
-  [ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy.html)
-  with `active: true` (recommended, see [Radio and placement](radio-and-placement.md))
-  or a local adapter.
+- A Bluetooth path to the token. Recommended: an ESP32 board flashed as an
+  ESPHome Bluetooth proxy, placed where the token is used. If you have never
+  made one, [Bluetooth proxy for beginners](bluetooth-proxy.md) walks through
+  it. A local adapter in the Home Assistant machine also works if the token is
+  used right next to it; see [Radio and placement](radio-and-placement.md).
 - A Żabka Triki token with a working battery.
 
 ## HACS (recommended)

@@ -50,10 +50,11 @@ Assistant. [More about the device →](docs/hardware.md)
 1. Install through HACS (custom repository `elenium3/ha-triki`, type
    *Integration*) or copy `custom_components/triki` to your config. Restart.
 2. Press the token's button. Home Assistant discovers *Żabka Triki*; confirm.
-3. Put the Bluetooth receiver where the token is used. An ESPHome proxy
-   (`bluetooth_proxy: active: true`) next to the desk or bed connects in under
-   a second; a Raspberry Pi across the room does not. This matters more than
-   any setting. [Why →](docs/radio-and-placement.md)
+3. Put the Bluetooth receiver where the token is used. A five-euro ESP32 board
+   flashed as an ESPHome Bluetooth proxy next to the desk or bed connects in
+   under a second; a Raspberry Pi across the room does not. This matters more
+   than any setting. [How to make a proxy →](docs/bluetooth-proxy.md)
+   · [Why →](docs/radio-and-placement.md)
 4. Automate on `event.<name>_action`:
 
 ```yaml
@@ -92,6 +93,7 @@ Knob dimming, long press, double-press presets and a light-effect toggle are in
 | [Installation](docs/installation.md) | HACS, manual, adding the token |
 | [Configuration](docs/configuration.md) | every option, idle and sleep behaviour, entities |
 | [Events and automations](docs/events-and-automations.md) | event reference, gesture status, worked examples |
+| [Bluetooth proxy for beginners](docs/bluetooth-proxy.md) | what it is, which ESP32 to buy, how to flash it, the full YAML, how to check it works |
 | [Radio and placement](docs/radio-and-placement.md) | measured link behaviour versus signal, proxy versus local adapter |
 | [Troubleshooting](docs/troubleshooting.md) | symptoms, causes, what to attach to a bug report |
 | [Diagnostics](docs/diagnostics.md) | the diagnostics download, debug log, capture format |

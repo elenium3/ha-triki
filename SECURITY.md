@@ -22,6 +22,14 @@ Please do not open a public issue for a vulnerability. Use GitHub's
 [private vulnerability reporting](https://github.com/elenium3/ha-triki/security/advisories/new)
 instead. You will get an acknowledgement within a week.
 
+## Automated checks
+
+Every pull request and a weekly schedule run Bandit and ruff's security rules
+over the Python code, zizmor over the GitHub workflows, Gitleaks over the
+history and pip-audit over the test toolchain (`.github/workflows/security.yml`).
+CodeQL runs once the repository is public. Third-party actions are pinned to
+commit SHAs and updated by Dependabot.
+
 ## Supported versions
 
 Only the latest release is supported. Home Assistant 2025.8 or newer is required

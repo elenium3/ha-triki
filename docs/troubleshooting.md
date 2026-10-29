@@ -26,7 +26,16 @@ Triki 4190656753: not connecting: waiting for the token to sleep after an idle d
 ## Connects slowly or drops within a minute
 
 Radio. See [Radio and placement](radio-and-placement.md). The debug log shows
-the RSSI with every advertisement; below −72 dBm move the receiver.
+the RSSI with every advertisement; below −72 dBm move the receiver, or add a
+[Bluetooth proxy](bluetooth-proxy.md) where the token is used.
+
+## Seen but never connects through a proxy
+
+The proxy is in passive mode. Its ESPHome configuration needs
+`bluetooth_proxy: active: true`; the ready-made firmware from
+<https://esphome.github.io/bluetooth-proxies/> has it. In the Bluetooth
+integration's diagnostics the proxy must show `"connectable": true`. See
+[Bluetooth proxy for beginners](bluetooth-proxy.md#check-that-it-works).
 
 ## Presses ignored after a sleep disconnect
 
