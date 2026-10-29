@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Create .venv with the test toolchain and the Bluetooth component's requirements.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+python3.13 -m venv .venv
+.venv/bin/pip install --quiet --upgrade pip
+.venv/bin/pip install --quiet -r requirements_test.txt
+# the bluetooth component imports usb; both have requirements the test package
+# does not install, so take them from the installed Home Assistant's manifests
+.venv/bin/pip install --quiet $(.venv/bin/python - <<'EOF'
+import json, pathlib, homeassistant
+base = pathlib.Path(homeassistant.__file__).parent / "components"
+print(" ".join(r for c in ("bluetooth", "usb") for r in json.load(open(base / c / "manifest.json"))["requirements"]))
+EOF
+)
+echo "done: . .venv/bin/activate, then scripts/check"

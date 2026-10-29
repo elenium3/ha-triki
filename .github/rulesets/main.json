@@ -31,7 +31,7 @@
           { "context": "test" },
           { "context": "lint" },
           { "context": "hassfest" },
-          { "context": "Bandit (Python SAST)" },
+          { "context": "hacs" },
           { "context": "zizmor (GitHub Actions audit)" },
           { "context": "Gitleaks (secret scan)" }
         ]

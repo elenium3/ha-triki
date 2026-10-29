@@ -16,6 +16,10 @@ All notable changes to this project are documented here. The format follows
 - One info log line after three failed connect attempts in a row for an awake
   token, and one when it links again.
 - `led_write_retries` link statistic in diagnostics.
+- Repository: `requirements_test.txt` (pinned, Dependabot), `pre-commit`
+  config, `scripts/setup` and `scripts/check`, weekly scheduled CI, release
+  notes grouped by label. Bandit and pip-audit jobs dropped (ruff's `S` rules
+  and Dependabot alerts cover them); `hacs` is a required check.
 
 ### Changed
 - A stale BlueZ link left by a previous Home Assistant process is closed when

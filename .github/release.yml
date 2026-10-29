@@ -1,0 +1,17 @@
+# Sections of the auto-generated release notes, by pull request label
+changelog:
+  exclude:
+    labels: [skip-changelog]
+  categories:
+    - title: Fixed
+      labels: [bug]
+    - title: Added
+      labels: [enhancement]
+    - title: Hardware findings
+      labels: [hardware]
+    - title: Documentation
+      labels: [documentation]
+    - title: Dependencies
+      labels: [dependencies, github_actions]
+    - title: Other
+      labels: ["*"]

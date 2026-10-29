@@ -18,6 +18,11 @@ ignore = [
 "tools/*" = ["T201", "PLR0917", "SIM105", "ASYNC109"]  # command line scripts
 "tests/*" = ["PLR0917", "N802", "PLC0415", "RUF059", "S101"]  # local imports, unused unpacks, asserts
 
+[tool.codespell]
+skip = "./.venv,./.git,./captures,*.jsonl,*.svg,*.png,*.jpg"
+# hass: Home Assistant's own name for its core object; the rest are Polish words
+ignore-words-list = "hass,ser,nd,te,ans,retuned"
+
 [tool.mypy]
 python_version = "3.13"
 strict = true

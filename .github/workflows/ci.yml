@@ -7,6 +7,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "41 5 * * 1" # weekly: hassfest and HACS validation track upstream rule changes
+  workflow_dispatch:
 
 jobs:
   hassfest:
@@ -48,7 +51,7 @@ jobs:
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: "3.13"
-      - run: pip install pytest-homeassistant-custom-component pytest-cov mypy
+      - run: pip install -r requirements_test.txt
       # the bluetooth component imports usb; install both components' pinned
       # requirements from the installed Home Assistant's manifests
       - run: |

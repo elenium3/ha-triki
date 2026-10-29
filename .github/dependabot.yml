@@ -10,3 +10,12 @@ updates:
       github-actions:
         patterns:
           - "*"
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      # the test toolchain moves together with the Home Assistant release it pins
+      test-toolchain:
+        patterns:
+          - "*"
