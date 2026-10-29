@@ -24,16 +24,17 @@ instead. You will get an acknowledgement within a week.
 
 ## Automated checks
 
-Every pull request and a weekly schedule run Bandit and ruff's security rules
-over the Python code, zizmor over the GitHub workflows, Gitleaks over the
-history and pip-audit over the test toolchain (`.github/workflows/security.yml`).
-CodeQL runs once the repository is public. Third-party actions are pinned to
-commit SHAs and updated by Dependabot.
+Every pull request and a weekly schedule run ruff's security (`S`, bandit)
+rules over the Python code, zizmor over the GitHub workflows, Gitleaks over the
+history and CodeQL (`.github/workflows/ci.yml`, `security.yml`). Third-party
+actions are pinned to commit SHAs; the test toolchain is pinned in
+`requirements_test.txt`; Dependabot updates both and raises alerts for known
+vulnerabilities.
 
-pip-audit is informational: the integration has no requirements of its own, and
-the packages it audits (aiohttp and friends) are pinned by
+The integration itself has no requirements beyond Home Assistant. The packages
+the tests pull in (aiohttp and friends) are pinned by
 `pytest-homeassistant-custom-component` to whatever the matching Home Assistant
-release ships. Findings there belong to Home Assistant core, not to this
+release ships; findings there belong to Home Assistant core, not to this
 repository.
 
 ## Supported versions

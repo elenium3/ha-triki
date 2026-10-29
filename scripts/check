@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Everything CI runs: lint, format check, types, tests with the coverage gate.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+PY=${PY:-.venv/bin/python}
+
+"$PY" -m ruff check custom_components tests tools
+"$PY" -m ruff format --check custom_components tests
+"$PY" -m mypy
+"$PY" -m pytest --cov --cov-fail-under=95 "$@"

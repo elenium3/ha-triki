@@ -5,41 +5,28 @@
 ```bash
 git clone https://github.com/elenium3/ha-triki
 cd ha-triki
-python3.13 -m venv .venv && . .venv/bin/activate
-pip install pytest-homeassistant-custom-component pytest-cov mypy ruff bleak
+scripts/setup          # .venv with requirements_test.txt and the Bluetooth component's requirements
+. .venv/bin/activate
+pre-commit install     # optional: ruff, whitespace, yaml/json, codespell on every commit
 ```
 
-`pytest-homeassistant-custom-component` pins a Home Assistant version; the
-tests run against that. The Bluetooth component imports `usb`, whose pinned
-requirements are not installed by the test package. CI installs them from the
-installed Home Assistant's manifests; locally:
-
-```bash
-pip install $(python - <<'EOF'
-import json, pathlib, homeassistant
-base = pathlib.Path(homeassistant.__file__).parent / "components"
-print(" ".join(r for c in ("bluetooth", "usb") for r in json.load(open(base / c / "manifest.json"))["requirements"]))
-EOF
-)
-```
+`requirements_test.txt` pins the toolchain; `pytest-homeassistant-custom-component`
+in turn pins the Home Assistant version the tests run against (Dependabot bumps
+both monthly). The Bluetooth component imports `usb`, whose pinned requirements
+are not installed by the test package; `scripts/setup` and CI take them from the
+installed Home Assistant's manifests.
 
 ## Checks
 
 ```bash
-ruff check custom_components tests tools
-ruff format custom_components tests
-mypy
-pytest --cov --cov-fail-under=95
+scripts/check          # what CI runs: ruff check + format, mypy, pytest with the 95 % gate
 ```
 
 The ruff rule set is the subset of Home Assistant core's that applies to a custom
 integration plus the `S` (bandit) rules; mypy runs strict. Both are configured
-in `pyproject.toml`. The security workflow additionally runs:
-
-```bash
-uvx bandit -r custom_components tools -ll -q      # Python SAST
-uvx zizmor --min-severity medium .github/workflows # GitHub Actions audit
-```
+in `pyproject.toml`. The security workflow additionally runs zizmor on the
+workflows, Gitleaks and CodeQL. CI also runs weekly on a schedule so that
+hassfest and HACS validation catch upstream rule changes between releases.
 
 ## Layout
 
@@ -111,18 +98,19 @@ next to the events that were recorded live.
 
 1. Update `CHANGELOG.md`: move *Unreleased* into a new version section.
 2. Tag `vX.Y.Z` and publish a GitHub release. The release workflow stamps the
-   version into `manifest.json` and attaches `triki.zip` for HACS.
+   version into `manifest.json` and attaches `triki.zip` for HACS. GitHub's
+   generated notes are grouped by pull request label (`.github/release.yml`).
 
 ## Branch protection
 
 `.github/rulesets/main.json` is the ruleset for `main`: no deletion or force
 push, changes only through a pull request with resolved threads, required
-checks test, lint, hassfest, Bandit, zizmor and Gitleaks. GitHub offers
-rulesets on private repositories only with a paid plan, so apply it once the
-repository is public (or import it under *Settings → Rules → Rulesets*):
+checks test, lint, hassfest, hacs, zizmor and Gitleaks. Create it once, then
+push changes to the existing one (its id is in `gh api repos/elenium3/ha-triki/rulesets`):
 
 ```bash
 gh api -X POST repos/elenium3/ha-triki/rulesets --input .github/rulesets/main.json
+gh api -X PUT repos/elenium3/ha-triki/rulesets/<id> --input .github/rulesets/main.json
 ```
 
 ## Conventions
