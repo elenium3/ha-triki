@@ -35,6 +35,9 @@ class TrikiEventEntity(TrikiEntity, EventEntity):
     _requires_connection = False
 
     async def async_added_to_hass(self) -> None:
+        # Deliberately not calling TrikiEntity.async_added_to_hass: that
+        # subscribes to state changes (rssi, battery, tilt) which this entity
+        # does not show, and it is always available.
         self.async_on_remove(self.device.async_add_event_listener(self._handle_event))
 
     @callback

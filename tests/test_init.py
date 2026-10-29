@@ -73,7 +73,7 @@ async def test_wake_stream_events(hass: HomeAssistant, setup) -> None:
     client, notify = await connect(hass, setup)
 
     client.write_gatt_char.assert_any_await(NUS_RX_UUID, start_command(DEFAULT_RATE), response=True)
-    assert client.start_notify.await_args.args[0] == NUS_TX_UUID
+    assert any(c.args[0] == NUS_TX_UUID for c in client.start_notify.await_args_list)
     assert hass.states.get(CONNECTED).state == "on"
     assert hass.states.get(BATTERY).state == "87"
     assert hass.states.get(EVENT).attributes["event_type"] == "wake"

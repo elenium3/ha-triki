@@ -13,6 +13,7 @@ from custom_components.triki.protocol import (
     BATTERY_LEVEL_UUID,
     CTRL_UUID,
     FIRMWARE_REV_UUID,
+    NUS_TX_UUID,
 )
 
 ADDRESS = "AA:BB:CC:DD:EE:FF"
@@ -30,6 +31,13 @@ ESTABLISH = "custom_components.triki.device.establish_connection"
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     yield
+
+
+@pytest.fixture(autouse=True)
+def mock_close_stale():
+    """No BlueZ in the test environment: the stale-link sweep at setup is a no-op."""
+    with patch("custom_components.triki.close_stale_connections_by_address", AsyncMock()) as mock:
+        yield mock
 
 
 def service_info(name: str = NAME, address: str = ADDRESS) -> BluetoothServiceInfoBleak:
@@ -88,5 +96,8 @@ async def connect(hass: HomeAssistant, entry):
         entry.runtime_data._on_advertisement(service_info(), None)
         await hass.async_block_till_done()
     assert est.await_count == 1
-    notify_cb = client.start_notify.await_args.args[1]
+    # the stream subscription (the battery characteristic is subscribed too)
+    notify_cb = next(
+        c.args[1] for c in client.start_notify.await_args_list if c.args[0] == NUS_TX_UUID
+    )
     return client, notify_cb
