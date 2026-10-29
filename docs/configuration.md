@@ -15,7 +15,7 @@ Changing any option reloads the entry, which drops and re-establishes the link.
 | Treat wake-up as a press | off | The press that wakes a sleeping token ends before the link is up, so it is reported as `wake`. With this on, a `press` with `source: wake` is emitted after every `wake`, including wakes caused by movement. |
 | Knob rotation | off | Enable `rotate_cw` / `rotate_ccw`. |
 | Shake | off | Enable `shake`. Confirmed through a proxy; see [Events](events-and-automations.md#gesture-status). |
-| Motion gestures | off | Enable `tap`, `throw`, `flip`. Thresholds are not calibrated on hardware. |
+| Motion gestures | off | Enable `tap`, `throw`, `flip`. Tuned on one hardware session; see [Events](events-and-automations.md#gesture-status). |
 | Double and triple press | off | Off: `press` is reported the moment the button is released. On: single presses are delayed by the window below so that `double_press` and `triple_press` can be told apart. |
 | Double/triple press window | 0.5 s | Longest pause between releasing and pressing again that still counts as a multi-press. 0.3 s is a good compromise between a quick single press and a comfortable double press. |
 | Record raw sessions | off | Write every session to `<config>/triki_captures/*.jsonl`: raw notifications, detected events, rate switches. For debugging and for tuning gestures with `tools/replay.py`. Turn it off when done. A file stops at 50 MB; a new link starts a new file. |
@@ -47,6 +47,12 @@ press restarts that period, so presses made in that window are ignored. If you
 want the token to react at any time, set the sleep timeout to 0 and accept the
 battery cost of a permanently held link. See
 [Troubleshooting](troubleshooting.md#presses-ignored-after-a-sleep-disconnect).
+
+**Battery figure on a held link.** The token measures its cell under the load of
+the open link. After a night asleep it reported 82 %; after 17 hours of a held
+link every pause gave 25–27 %, a fresh link included. The low figure is the
+loaded voltage, not a drained cell: judge the battery after the token has been
+asleep for a while, or treat the figure as a trend.
 
 ## Entities
 

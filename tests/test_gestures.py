@@ -136,9 +136,30 @@ def test_throw_and_landing_not_a_tap():
 
 
 def test_tap():
+    """A finger tap on a resting token: a dip and a spike, then still again."""
     d = det()
-    ev = feed(d, 2, az=3.5) + feed(d, secs(0.5))
+    ev = feed(d, 1, az=0.7) + feed(d, 1, az=1.5) + feed(d, secs(0.5))
     assert types(ev) == ["tap"]
+
+
+def test_tap_is_reported_once_the_token_is_still_again():
+    d = det()
+    assert types(feed(d, 1, az=0.7) + feed(d, 1, az=1.5)) == []  # not yet
+    assert types(feed(d, secs(0.15))) == ["tap"]
+
+
+def test_jolt_that_starts_a_move_is_not_a_tap():
+    """Picking the token up can start with a jerk; it does not come to rest after."""
+    d = det()
+    ev = feed(d, 1, az=1.8) + feed(d, secs(0.6), gx=120.0, az=1.1) + feed(d, secs(0.5))
+    assert "tap" not in types(ev)
+
+
+def test_jolt_while_moving_is_not_a_tap():
+    """Knocking the token on the table while waving it in the hand: no rest before."""
+    d = det()
+    ev = feed(d, secs(0.5), gx=200.0, az=1.1) + feed(d, 1, az=2.5) + feed(d, secs(0.5))
+    assert "tap" not in types(ev)
 
 
 def test_shake():
@@ -351,10 +372,46 @@ def test_motion_gestures_option_does_not_enable_knob_or_shake():
     for i in range(8):
         ev += feed(d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, az=1.0)
     assert "shake" not in types(ev)
-    assert "tap" in types(feed(d, 3, az=4.0) + feed(d, 30))  # the experimental ones do work
+    feed(d, secs(0.4))  # at rest, as a tap needs
+    assert "tap" in types(feed(d, 2, az=3.0) + feed(d, secs(0.3)))  # the experimental ones do work
 
 
-def test_knob_ignores_the_twist_of_picking_the_token_up():
+def test_knob_counts_a_fast_spin_despite_its_centripetal_acceleration():
+    """The IMU sits off the axis: a brisk spin reads 1.3-1.6 g while perfectly flat."""
     d = det()
-    assert types(feed(d, secs(1.0), gz=185.0, az=1.4)) == []  # lifted: |a| far from 1 g
-    assert "rotate_ccw" in types(feed(d, secs(1.0), gz=185.0))  # flat again: turns count
+    assert types(feed(d, secs(0.5), gz=720.0, az=1.5)) == ["rotate_ccw"] * 12
+
+
+def test_knob_skips_swung_frames_but_keeps_the_partial_turn():
+    d = det()
+    assert types(feed(d, secs(0.1), gz=200.0)) == []  # 20° of a 30° step
+    assert types(feed(d, 5, gz=200.0, az=2.3)) == []  # swung: these frames say nothing
+    assert types(feed(d, secs(0.06), gz=200.0)) == ["rotate_ccw"]  # 20° + 12°: one step
+
+
+def test_single_garbage_frame_is_not_a_turn():
+    """At the 26 Hz idle rate one garbage frame of 2000 °/s would be 77°."""
+    d = GestureDetector(26, knob_step_deg=30, startup_discard=0)
+    feed(d, 13)
+    assert types(feed(d, 1, gz=2000.0) + feed(d, 13)) == []
+    # the real thing is confirmed by its second frame and loses nothing
+    assert types(feed(d, 2, gz=500.0) + feed(d, 13)) == ["rotate_ccw"]  # 2 x 19°
+
+
+def test_knob_is_muted_by_free_fall_and_a_hard_jolt():
+    d = det()
+    feed(d, secs(0.1), gz=200.0)  # 20° pending
+    ev = feed(d, secs(0.1), gz=200.0, az=0.1)  # free fall: the partial turn is dropped
+    ev += feed(d, secs(0.3), gz=200.0)  # and the knob stays muted for 0.5 s
+    assert "rotate_ccw" not in types(ev)
+    assert "rotate_ccw" in types(feed(d, secs(0.5), gz=200.0))
+    feed(d, secs(1.0))
+    feed(d, 1, az=4.0)  # a jolt
+    assert "rotate_ccw" not in types(feed(d, secs(0.3), gz=200.0))
+
+
+def test_knob_ignores_turns_with_the_token_edge_on():
+    """Knocking the token edge-on against the table swings it about the vertical."""
+    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0)
+    feed(d, secs(2.0), ax=1.0, az=0.0)  # cap sideways: gravity along x
+    assert types(feed(d, secs(1.0), gx=185.0, ax=1.0, az=0.0)) == []

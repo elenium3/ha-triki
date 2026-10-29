@@ -29,7 +29,17 @@ MULTI_PRESS_WINDOW_S = 0.5
 
 # --- motion ---
 STARTUP_DISCARD = 20  # first frames after stream start are noise
-TAP_G = 2.5  # |a| spike
+# Tap: a jolt on a token that is otherwise at rest. At 52 Hz a finger tap on a
+# token lying on a table is two frames, a dip and a spike of 1.1-1.5 g: an
+# absolute threshold never sees it, the jump between consecutive frames does
+# (0.8-1.6 g on hardware; picking the token up peaks at 0.65). The token must
+# have been still before the jolt and be still again shortly after, which keeps
+# shakes, throws, lifts and knocks made while waving the token in the hand out.
+TAP_JERK_G = 0.7
+TAP_REST_BEFORE_S = 0.25
+TAP_JOLT_S = 0.1  # the jolt may take a few frames: the big jump is often the second
+TAP_REST_AFTER_S = 0.1
+TAP_CONFIRM_S = 0.4  # not still again within this long: it was not a tap
 THROW_G = 0.35  # |a| below this = free fall
 THROW_MIN_S = 0.06
 # Shake: in the last SHAKE_WINDOW_S of wall time, enough of the frames show hard
@@ -58,7 +68,24 @@ KNOB_RESET_S = 0.6  # idle time after which a partial turn is dropped
 # with 3-5 spurious rotate events within ~0.7 s. The knob is muted while the button
 # is down and for this long after it is released.
 KNOB_BUTTON_GUARD_S = 0.8
-KNOB_LIFT_G = 0.25  # |a| this far from 1 g means the token is being moved, not turned
+# A frame whose |a| is this far from 1 g is skipped: the token is being swung,
+# or the frame is parser garbage. The partial turn is kept (KNOB_RESET_S drops
+# it if the swinging goes on). The old 0.25 g reset also caught the centripetal
+# acceleration of a fast spin (the IMU sits ~15 mm off the axis: 0.6 g at
+# 1100 °/s) and lost half the steps of a brisk turn on hardware.
+KNOB_LIFT_G = 1.0
+# A single frame above the deadband is not a turn (a garbage frame decodes as a
+# huge rate): its angle counts once the next frame confirms the motion.
+KNOB_CONFIRM_FRAMES = 2
+# A knob is turned flat. Frames with the cap tilted more than 60° from level
+# (|gravity.z| below this) are skipped: on hardware knocking the token edge-on
+# against the table swung it about the vertical and made 9 steps, while a turn
+# between the fingers keeps the cap within 60° of level for 85 % of the angle.
+KNOB_LEVEL_COS = 0.5
+# A jolt this hard (a shake swing reaches 5-17 g, a hard spin at most 2 g) is not a
+# turn: the partial turn is dropped and the knob is muted for a moment.
+KNOB_SHOCK_G = 1.5
+KNOB_SHOCK_GUARD_S = 0.5
 GRAVITY_ALPHA = 0.08  # low-pass for the gravity estimate
 
 KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
@@ -142,6 +169,14 @@ class GestureDetector:
         # knob
         self._turn_acc = 0.0
         self._turn_idle_since = 0.0
+        self._knob_mute_until = 0.0
+        self._turn_run = 0  # consecutive frames above the deadband
+        self._turn_held = 0.0  # their angle, counted once the run is confirmed
+        # tap
+        self._prev_accel: tuple[float, float, float] | None = None
+        self._rest_since: float | None = None
+        self._rest_end: float | None = None  # when the last long enough rest ended
+        self._tap_pending: float | None = None
         # free fall
         self._ff_since: float | None = None
         # shake: (t, active, sign of the dominant gyro axis) per frame in the window
@@ -276,9 +311,31 @@ class GestureDetector:
         else:
             self._ff_since = None
 
-        # tap / impact
-        if a > TAP_G and self._cooldown_ok("tap") and self._cooldown_ok("throw"):
-            self._fire(out, "tap", g=round(a, 2))
+        # tap: a jolt between two frames, at rest before and soon after
+        accel = (s.ax, s.ay, s.az)
+        prev = self._prev_accel
+        self._prev_accel = accel
+        if static:
+            if self._rest_since is None:
+                self._rest_since = self.t
+        elif self._rest_since is not None:
+            if self.t - self._rest_since >= TAP_REST_BEFORE_S:
+                self._rest_end = self.t
+            self._rest_since = None
+        rested = self._rest_end is not None and self.t - self._rest_end <= TAP_JOLT_S
+        if self._tap_pending is not None:
+            if self.t - self._tap_pending > TAP_CONFIRM_S or a < THROW_G:
+                self._tap_pending = None
+            elif self._rest_since is not None and self.t - self._rest_since >= TAP_REST_AFTER_S:
+                self._tap_pending = None
+                if self._cooldown_ok("tap") and self._cooldown_ok("throw"):
+                    self._fire(out, "tap")
+        elif prev is not None and rested and not static:
+            jerk = math.sqrt(
+                (accel[0] - prev[0]) ** 2 + (accel[1] - prev[1]) ** 2 + (accel[2] - prev[2]) ** 2
+            )
+            if jerk >= TAP_JERK_G:
+                self._tap_pending = self.t
 
         # shake: share of hard-motion frames and reversals of the dominant gyro
         # axis within a wall-clock window
@@ -321,15 +378,21 @@ class GestureDetector:
             frames.clear()
             self._turn_acc = 0.0
 
-        # knob: rotation rate about the vertical (gravity) axis; shaking swings the
-        # token around every axis, so the knob is muted for the whole episode and
-        # as soon as the swings start reversing
-        if reversals >= 1 or self._shake_latched:
+        # knob: rotation rate about the vertical (gravity) axis. Shaking swings the
+        # token around every axis: a hard jolt or a latched shake drops the partial
+        # turn and mutes the knob for a moment.
+        if self._shake_latched or abs(a - 1.0) > KNOB_SHOCK_G or a < THROW_G:
+            # a shake, a jolt or free fall: whatever turned was not a knob
             self._turn_acc = 0.0
+            self._knob_mute_until = self.t + KNOB_SHOCK_GUARD_S
         elif self.button or self.t - self._release_t < KNOB_BUTTON_GUARD_S:
             self._turn_acc = 0.0  # a press twists the token: not a turn
+        elif self.t < self._knob_mute_until:
+            self._turn_acc = 0.0
         elif abs(a - 1.0) > KNOB_LIFT_G:
-            self._turn_acc = 0.0  # being picked up or put down: the twist is not a turn
+            pass  # being swung: this frame says nothing about turning, keep the rest
+        elif self.gravity is not None and abs(self.gravity[2]) < KNOB_LEVEL_COS:
+            pass  # held edge-on: handled, not turned
         elif self.gravity is not None:
             rate = _dot((s.gx, s.gy, s.gz), self.gravity)
             if self.invert_rotation:
@@ -337,10 +400,17 @@ class GestureDetector:
             if abs(rate) >= KNOB_DEADBAND_DPS:
                 if rate * self._turn_acc < 0:  # direction reversed: drop remainder
                     self._turn_acc = 0.0
-                self._turn_acc += rate * self.dt
+                self._turn_run += 1
+                self._turn_held += rate * self.dt
+                if self._turn_run >= KNOB_CONFIRM_FRAMES:
+                    self._turn_acc += self._turn_held
+                    self._turn_held = 0.0
                 self._turn_idle_since = self.t
-            elif self.t - self._turn_idle_since > KNOB_RESET_S:
-                self._turn_acc = 0.0
+            else:
+                self._turn_run = 0
+                self._turn_held = 0.0
+                if self.t - self._turn_idle_since > KNOB_RESET_S:
+                    self._turn_acc = 0.0
             steps = int(abs(self._turn_acc) // self.knob_step)
             if steps:
                 # gravity unit points "up" (accel reads +1 g when flat), so a

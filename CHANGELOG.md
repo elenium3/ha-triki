@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Knob: a brisk turn lost half its steps. The IMU sits off the axis, so a fast
+  spin reads up to 2 g and the lift filter reset the partial turn on every such
+  frame; those frames are now skipped and the turn kept. The mute on every
+  reversal within the shake window is gone. On the 29 Oct 2026 session the
+  reported angle went from 65 % to 85 % on the table and from 45 % to 65–70 %
+  between the fingers.
+- Knob: a knock or a toss no longer makes rotation steps. A hard jolt, free
+  fall or a shake drops the partial turn and mutes the knob for 0.5 s, a turn
+  needs two frames (a garbage frame is not a step), and frames with the cap
+  tilted past 60° are skipped.
+- Tap: the 2.5 g threshold never saw a finger tap at 52 Hz and fired on every
+  shake swing and catch instead. A tap is now a 0.7 g jump between frames on a
+  token at rest, reported once it is still again.
+
+### Added
+- A trimmed capture of the hardware session as a test fixture; the replay test
+  scores every rule against it.
+
 ### Changed
 - The config flow builds its forms with probatio, the schema library of the
   2026 cores, and falls back to voluptuous on the 2025 ones. No change in
