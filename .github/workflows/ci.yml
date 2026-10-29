@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  hassfest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  hacs:
+    # the HACS action refuses private repositories
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hacs/action@main
+        with:
+          category: integration
+          # drop once brands/triki is merged into home-assistant/brands
+          ignore: brands
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uvx ruff check custom_components tests tools
+      - run: uvx ruff format --check custom_components tests
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install pytest-homeassistant-custom-component pytest-cov mypy
+      # the bluetooth component imports usb; install both components' pinned
+      # requirements from the installed Home Assistant's manifests
+      - run: |
+          pip install $(python - <<'EOF'
+          import json, pathlib, homeassistant
+          base = pathlib.Path(homeassistant.__file__).parent / "components"
+          reqs = []
+          for component in ("bluetooth", "usb"):
+              reqs += json.load(open(base / component / "manifest.json"))["requirements"]
+          print(" ".join(reqs))
+          EOF
+          )
+      - run: mypy
+      - run: pytest --cov --cov-fail-under=95

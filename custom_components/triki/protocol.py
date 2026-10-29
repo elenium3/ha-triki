@@ -21,9 +21,10 @@ Motion frame (14 bytes, after the 8-byte start command):
 
 from __future__ import annotations
 
+import math
 import struct
-from dataclasses import dataclass
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 NUS_SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
 NUS_RX_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
@@ -44,9 +45,17 @@ ACCEL_LSB_PER_G = 2048.0
 
 # Rates accepted by the firmware (LSM6DSL ODR steps). 12.5 Hz is rejected.
 SUPPORTED_RATES = (26, 52, 104, 208)
-DEFAULT_RATE = 104
+DEFAULT_RATE = 52  # what the Żappka app asks for (HCI snoop, TrikiEmu project)
 
 _START_BASE = bytes([0x20, 0x10, 0x00, 0xD0, 0x07, 0x68, 0x00, 0x03])
+# The Żappka app ends a round with this before it disconnects (seen in an HCI
+# snoop by the TrikiEmu project); same 0x20 opcode, mode 0x00.
+_STOP = bytes([0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
+
+
+def stop_command() -> bytes:
+    """7-byte IMU stop command."""
+    return _STOP
 
 
 def start_command(rate_hz: int = DEFAULT_RATE) -> bytes:
@@ -91,11 +100,11 @@ class Sample:
 
     @property
     def accel_mag(self) -> float:
-        return (self.ax * self.ax + self.ay * self.ay + self.az * self.az) ** 0.5
+        return math.sqrt(self.ax * self.ax + self.ay * self.ay + self.az * self.az)
 
     @property
     def gyro_mag(self) -> float:
-        return (self.gx * self.gx + self.gy * self.gy + self.gz * self.gz) ** 0.5
+        return math.sqrt(self.gx * self.gx + self.gy * self.gy + self.gz * self.gz)
 
 
 class FrameParser:

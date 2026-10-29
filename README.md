@@ -17,8 +17,12 @@ The token sleeps a few seconds after it goes still and only advertises while awa
 The integration listens for its advertisements. When the token shows up (button
 press or movement), it connects, reads battery/firmware, sends the IMU start command
 (`20 10 00 D0 07 <rate LE16> 03`) and turns the 14-byte frames into events. After
-`idle_timeout` seconds without motion or button activity it drops the link so the
-token can sleep again.
+`idle_timeout` seconds without motion or button activity the link stays up but the
+stream is restarted at 26 Hz (a quarter of the radio traffic); the next press or
+movement brings the configured rate back within a frame or two. Only after
+`sleep_timeout` seconds of inactivity is the link dropped so the token can sleep.
+A fresh link is slow and lossy for the first 10-20 s and the token then advertises
+at full tilt for minutes, so keeping the link is the cheaper path.
 
 ## Entities
 
@@ -43,8 +47,12 @@ green button. The token should be discovered. Otherwise use *Add integration →
 
 ## Options
 
-- **Sample rate**: 26 / 52 / 104 / 208 Hz. 104 is what the Żappka app uses.
-- **Idle timeout**: seconds without activity before disconnecting (0 = never).
+- **Sample rate**: 26 / 52 / 104 / 208 Hz (default 52). 104 is what the Żappka app
+  uses; 52 is enough for the button and the knob and loses fewer frames on a weak link.
+- **Idle timeout**: seconds without activity before the stream drops to 26 Hz over the
+  live link (default 30, 0 = never).
+- **Sleep timeout**: seconds without activity before the link is dropped and the token
+  is let sleep (default 300, 0 = keep the link as long as the token holds it).
 - **Knob step**: degrees of rotation around the vertical axis per `rotate_*` event.
 - **Invert rotation**: flip cw/ccw if it is backwards on your unit.
 - **Knob rotation** (default off): `rotate_cw` / `rotate_ccw` only.
@@ -86,13 +94,22 @@ automation:
   not tuned on hardware yet. Constants are at the top of `gestures.py`.
 - The press that wakes the token happens before the link is up, so it shows up as
   `wake`, not `press`.
-- A 104 Hz stream keeps the token awake and costs battery. Keep the idle timeout short.
-- The token advertises for only a few seconds after a press and is easy to miss. On a
-  Raspberry Pi's built-in Bluetooth, connecting took 1.5-10 s and often failed (RSSI
-  around -75 dBm). An ESPHome Bluetooth proxy (ESP32, `bluetooth_proxy: active: true`)
-  placed 20-30 cm from the token connected in about 0.2 s and kept the link for tens of
-  seconds. If presses are missed, put a proxy next to the token.
-- On a weak link (built-in adapter, token in hand) the stream arrives with gaps of 0.3-3 s and 104 Hz delivered only 7-18% of the frames. 26 Hz delivered about 78%, 52 Hz 20-74%. For the button and the knob 26 Hz is enough; lost frames make rotation read a little short. Presses made during a gap show up late.
+- The stream keeps the token awake and costs battery; the idle rate switch and the
+  sleep timeout limit that. A held link also keeps the token from advertising, so the
+  Żappka app cannot see it meanwhile.
+- **Radio budget decides everything.** The token's antenna sits inside a bottle cap and
+  is weak. Links were stable (hours) at an RSSI of about -65 dBm or better and lasted
+  only seconds to a minute at -75 dBm, whatever the sample rate, connection interval or
+  software did. Place the receiver where the token is used:
+  - An ESPHome Bluetooth proxy (ESP32, `bluetooth_proxy: active: true`) at the usage
+    spot connected in under a second and held the link for hours. This is the
+    recommended setup.
+  - A Raspberry Pi's built-in Bluetooth (Pi 5 tested) only works with the token right
+    next to the Pi; across a room it connected in 1.5-10 s, often failed and lost the
+    link within a minute.
+- On a weak link the stream arrives with gaps of 0.3-3 s and 104 Hz delivered only
+  7-18% of the frames; 26 Hz delivered about 78%, 52 Hz 20-74%. Lost frames make
+  rotation read a little short; presses made during a gap show up late.
 - An ESPHome proxy has a limited number of active connection slots (3 by default).
 
 ## Development

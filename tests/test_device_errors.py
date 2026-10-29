@@ -1,15 +1,15 @@
 """TrikiDevice failure paths: connect errors, setup errors, gating, polling."""
 
 import asyncio
+from dataclasses import replace
 from unittest.mock import AsyncMock, patch
 
 import pytest
 from bleak.exc import BleakError
 from bleak_retry_connector import BleakNotFoundError, BleakOutOfConnectionSlotsError
-from pytest_homeassistant_custom_component.common import async_capture_events
-
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from pytest_homeassistant_custom_component.common import async_capture_events
 
 from custom_components.triki.const import BUS_EVENT
 from custom_components.triki.protocol import (
@@ -18,10 +18,7 @@ from custom_components.triki.protocol import (
     FIRMWARE_REV_UUID,
 )
 
-from .conftest import service_info
-from .test_init import BATTERY, CONNECTED, make_client, setup  # noqa: F401
-
-ESTABLISH = "custom_components.triki.device.establish_connection"
+from .conftest import BATTERY, CONNECTED, ESTABLISH, make_client, service_info
 
 
 async def advertise(hass: HomeAssistant, entry, client=None, side_effect=None):
@@ -76,9 +73,7 @@ async def test_optional_reads_may_fail(hass: HomeAssistant, setup) -> None:
     assert dev.led_on is None
 
 
-async def test_hung_connect_does_not_swallow_next_wakeup(
-    hass: HomeAssistant, setup
-) -> None:
+async def test_hung_connect_does_not_swallow_next_wakeup(hass: HomeAssistant, setup) -> None:
     """A connect that never returns must release the lock so the next wake-up works."""
     dev = setup.runtime_data
 
@@ -157,9 +152,7 @@ async def poll(hass: HomeAssistant, entry, info, client=None):
     return est
 
 
-async def test_poll_connects_without_advertisement_callback(
-    hass: HomeAssistant, setup
-) -> None:
+async def test_poll_connects_without_advertisement_callback(hass: HomeAssistant, setup) -> None:
     """HA drops unchanged advertisements, so the callback never fires again.
 
     The token must still be picked up from the last seen advertisement.
@@ -169,9 +162,7 @@ async def test_poll_connects_without_advertisement_callback(
     assert hass.states.get(CONNECTED).state == "on"
 
 
-async def test_poll_ignores_stale_or_missing_advertisement(
-    hass: HomeAssistant, setup
-) -> None:
+async def test_poll_ignores_stale_or_missing_advertisement(hass: HomeAssistant, setup) -> None:
     stale = service_info()
     stale.time -= 30  # token went back to sleep long ago
     assert (await poll(hass, setup, stale, make_client())).await_count == 0
@@ -179,9 +170,7 @@ async def test_poll_ignores_stale_or_missing_advertisement(
     assert hass.states.get(CONNECTED).state == "off"
 
 
-async def test_no_instant_reconnect_after_idle_disconnect(
-    hass: HomeAssistant, setup
-) -> None:
+async def test_no_instant_reconnect_after_idle_disconnect(hass: HomeAssistant, setup) -> None:
     """After an idle drop the still-awake token must sleep before we reconnect.
 
     Reconnecting while it is still advertising resets its sleep timer, so it would
@@ -216,9 +205,7 @@ async def test_no_instant_reconnect_after_idle_disconnect(
     assert (await poll(hass, setup, service_info(), make_client())).await_count == 1
 
 
-async def test_quick_reconnect_after_drop_is_not_a_new_wake(
-    hass: HomeAssistant, setup
-) -> None:
+async def test_quick_reconnect_after_drop_is_not_a_new_wake(hass: HomeAssistant, setup) -> None:
     """A weak-signal link loss followed by an immediate reconnect is a resume.
 
     The token did not sleep, so the reconnect must not emit a second ``wake``.
@@ -300,7 +287,8 @@ async def test_wake_as_press_emits_press(hass: HomeAssistant, setup) -> None:
     from pytest_homeassistant_custom_component.common import async_capture_events
 
     bus = async_capture_events(hass, "triki_event")
-    setup.runtime_data.wake_as_press = True
+    dev = setup.runtime_data
+    dev.options = replace(dev.options, wake_as_press=True)
     await advertise(hass, setup, make_client())
     assert [e.data["type"] for e in bus] == ["wake", "press"]
     assert bus[1].data["source"] == "wake"
@@ -314,9 +302,7 @@ async def test_wake_alone_by_default(hass: HomeAssistant, setup) -> None:
     assert [e.data["type"] for e in bus] == ["wake"]
 
 
-async def test_no_reconnect_on_advertisement_older_than_drop(
-    hass: HomeAssistant, setup
-) -> None:
+async def test_no_reconnect_on_advertisement_older_than_drop(hass: HomeAssistant, setup) -> None:
     """After the token drops the link, its last advertisement is stale news.
 
     Connecting to the sleeping token hangs until the timeout and would hold the
@@ -358,9 +344,7 @@ async def test_notifications_from_old_client_are_ignored(hass: HomeAssistant, se
     assert dev._stale_notifs == 1
 
 
-async def test_late_drop_of_old_client_keeps_current_session(
-    hass: HomeAssistant, setup
-) -> None:
+async def test_late_drop_of_old_client_keeps_current_session(hass: HomeAssistant, setup) -> None:
     dev = setup.runtime_data
     client = make_client()
     await advertise(hass, setup, client)
@@ -441,3 +425,23 @@ async def test_streaming_token_cancels_the_watchdog(hass: HomeAssistant, setup) 
     assert dev._unsub_watchdog is not None
     notify(None, bytearray(frame()))
     assert dev._streaming and dev._unsub_watchdog is None
+
+
+async def test_unload_cancels_hung_connect(hass: HomeAssistant, setup) -> None:
+    """A connect still in flight is tied to the entry and dies with it."""
+    cancelled = asyncio.Event()
+
+    async def hang(*_args, **_kwargs):
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    with patch(ESTABLISH, hang):
+        setup.runtime_data._on_advertisement(service_info(), None)
+        await asyncio.sleep(0)
+        assert setup.runtime_data._connecting
+        assert await hass.config_entries.async_unload(setup.entry_id)
+        await hass.async_block_till_done()
+    assert cancelled.is_set()

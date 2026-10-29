@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 import voluptuous as vol
-
 from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_discovered_service_info,
@@ -15,6 +14,7 @@ from homeassistant.config_entries import (
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
+    OptionsFlowWithReload,
 )
 from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import callback
@@ -22,29 +22,30 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_CAPTURE,
+    CONF_IDLE_TIMEOUT,
+    CONF_INVERT_ROTATION,
     CONF_KNOB,
+    CONF_KNOB_STEP,
     CONF_MOTION_GESTURES,
     CONF_MULTI_PRESS,
     CONF_MULTI_PRESS_WINDOW,
-    CONF_SHAKE,
-    CONF_WAKE_AS_PRESS,
-    CONF_IDLE_TIMEOUT,
-    CONF_INVERT_ROTATION,
-    CONF_KNOB_STEP,
     CONF_RATE,
+    CONF_SHAKE,
+    CONF_SLEEP_TIMEOUT,
+    CONF_WAKE_AS_PRESS,
     DEFAULT_IDLE_TIMEOUT,
     DEFAULT_INVERT_ROTATION,
     DEFAULT_KNOB,
+    DEFAULT_KNOB_STEP,
     DEFAULT_MOTION_GESTURES,
     DEFAULT_MULTI_PRESS,
     DEFAULT_MULTI_PRESS_WINDOW,
     DEFAULT_SHAKE,
+    DEFAULT_SLEEP_TIMEOUT,
     DEFAULT_WAKE_AS_PRESS,
-    DEFAULT_KNOB_STEP,
-    DEFAULT_RATE,
     DOMAIN,
 )
-from .protocol import SUPPORTED_RATES
+from .protocol import DEFAULT_RATE, SUPPORTED_RATES
 
 
 def _is_triki(info: BluetoothServiceInfoBleak) -> bool:
@@ -52,7 +53,8 @@ def _is_triki(info: BluetoothServiceInfoBleak) -> bool:
 
 
 class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
-    VERSION = 1
+    # 2: idle_timeout no longer drops the link (sleep_timeout does), see async_migrate_entry
+    VERSION = 2
 
     def __init__(self) -> None:
         self._discovery: BluetoothServiceInfoBleak | None = None
@@ -84,9 +86,7 @@ class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"name": self._discovery.name},
         )
 
-    async def async_step_user(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             address = user_input[CONF_ADDRESS]
             await self.async_set_unique_id(address, raise_on_progress=False)
@@ -120,10 +120,10 @@ class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
         return TrikiOptionsFlow()
 
 
-class TrikiOptionsFlow(OptionsFlow):
-    async def async_step_init(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
+class TrikiOptionsFlow(OptionsFlowWithReload):
+    """Every option feeds the BLE session, so a change reloads the entry."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             user_input[CONF_RATE] = int(user_input[CONF_RATE])
             return self.async_create_entry(data=user_input)
@@ -144,7 +144,22 @@ class TrikiOptionsFlow(OptionsFlow):
                     default=o.get(CONF_IDLE_TIMEOUT, DEFAULT_IDLE_TIMEOUT),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=0, max=600, step=5, unit_of_measurement="s",
+                        min=0,
+                        max=600,
+                        step=5,
+                        unit_of_measurement="s",
+                        mode=selector.NumberSelectorMode.BOX,
+                    )
+                ),
+                vol.Required(
+                    CONF_SLEEP_TIMEOUT,
+                    default=o.get(CONF_SLEEP_TIMEOUT, DEFAULT_SLEEP_TIMEOUT),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0,
+                        max=3600,
+                        step=30,
+                        unit_of_measurement="s",
                         mode=selector.NumberSelectorMode.BOX,
                     )
                 ),
@@ -152,7 +167,10 @@ class TrikiOptionsFlow(OptionsFlow):
                     CONF_KNOB_STEP, default=o.get(CONF_KNOB_STEP, DEFAULT_KNOB_STEP)
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=5, max=180, step=5, unit_of_measurement="°",
+                        min=5,
+                        max=180,
+                        step=5,
+                        unit_of_measurement="°",
                         mode=selector.NumberSelectorMode.SLIDER,
                     )
                 ),
@@ -182,7 +200,10 @@ class TrikiOptionsFlow(OptionsFlow):
                     default=o.get(CONF_MULTI_PRESS_WINDOW, DEFAULT_MULTI_PRESS_WINDOW),
                 ): selector.NumberSelector(
                     selector.NumberSelectorConfig(
-                        min=0.2, max=1.5, step=0.05, unit_of_measurement="s",
+                        min=0.2,
+                        max=1.5,
+                        step=0.05,
+                        unit_of_measurement="s",
                         mode=selector.NumberSelectorMode.SLIDER,
                     )
                 ),

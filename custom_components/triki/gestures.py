@@ -26,16 +26,16 @@ LONG_PRESS_S = 0.8
 MULTI_PRESS_WINDOW_S = 0.5
 
 # --- motion ---
-STARTUP_DISCARD = 20          # first frames after stream start are noise
-TAP_G = 2.5                   # |a| spike
-THROW_G = 0.35                # |a| below this = free fall
+STARTUP_DISCARD = 20  # first frames after stream start are noise
+TAP_G = 2.5  # |a| spike
+THROW_G = 0.35  # |a| below this = free fall
 THROW_MIN_S = 0.06
-SHAKE_DPS = 600.0             # per-axis rate counted as a swing (hand motion 160-580, shakes 1000+)
+SHAKE_DPS = 600.0  # per-axis rate counted as a swing (hand motion 160-580, shakes 1000+)
 SHAKE_WINDOW_S = 0.8
-SHAKE_REVERSALS = 4           # sign changes of one axis within the window
-SHAKE_QUIET_S = 1.0           # no strong swing this long ends a shake episode
+SHAKE_REVERSALS = 4  # sign changes of one axis within the window
+SHAKE_QUIET_S = 1.0  # no strong swing this long ends a shake episode
 FLIP_STABLE_S = 0.3
-STATIC_ACCEL_TOL = 0.15       # g
+STATIC_ACCEL_TOL = 0.15  # g
 STATIC_GYRO_DPS = 30.0
 # A still token streams occasional garbage frames (a lost BLE packet desyncs the
 # parser, which re-syncs on a stray 0x22 and decodes nonsense: |a| far from 1 g or
@@ -43,9 +43,9 @@ STATIC_GYRO_DPS = 30.0
 # motion lasts many frames. Only count motion that persists this long, so a glitch
 # does not keep resetting the idle timer and hold the link open forever.
 MOTION_CONFIRM_S = 0.1
-KNOB_DEADBAND_DPS = 15.0      # below this the turn accumulator is not fed
-KNOB_RESET_S = 0.6            # idle time after which a partial turn is dropped
-GRAVITY_ALPHA = 0.08          # low-pass for the gravity estimate
+KNOB_DEADBAND_DPS = 15.0  # below this the turn accumulator is not fed
+KNOB_RESET_S = 0.6  # idle time after which a partial turn is dropped
+GRAVITY_ALPHA = 0.08  # low-pass for the gravity estimate
 
 KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
 MOTION_EVENTS = frozenset({"rotate_cw", "rotate_ccw", "shake", "tap", "throw", "flip"})
@@ -79,6 +79,7 @@ class GestureDetector:
     def __init__(
         self,
         rate_hz: int,
+        *,
         knob_step_deg: float = 30.0,
         invert_rotation: bool = False,
         startup_discard: int = STARTUP_DISCARD,
@@ -100,6 +101,14 @@ class GestureDetector:
         self.reset()
 
     # ------------------------------------------------------------------ state
+    def set_rate(self, rate_hz: int) -> None:
+        """The stream was restarted at another rate over the live link: only retime.
+
+        The start-up discard is not re-armed: the IMU keeps running, and a press
+        made right after the switch must not be lost in a skip window.
+        """
+        self.dt = 1.0 / rate_hz
+
     def reset(self) -> None:
         self.t = 0.0
         self._skip = self._startup_discard
@@ -158,7 +167,7 @@ class GestureDetector:
         self._motion(s, out)
         if out:
             # all of it is still tracked (idle logic, tilt), only reporting is gated
-            allowed = set()
+            allowed: set[str] = set()
             if self.knob:
                 allowed |= KNOB_EVENTS
             if self.shake:
@@ -222,11 +231,14 @@ class GestureDetector:
                     self.gravity = u
                 else:
                     k = GRAVITY_ALPHA
-                    self.gravity = _unit(
-                        self.gravity[0] + k * (u[0] - self.gravity[0]),
-                        self.gravity[1] + k * (u[1] - self.gravity[1]),
-                        self.gravity[2] + k * (u[2] - self.gravity[2]),
-                    ) or self.gravity
+                    self.gravity = (
+                        _unit(
+                            self.gravity[0] + k * (u[0] - self.gravity[0]),
+                            self.gravity[1] + k * (u[1] - self.gravity[1]),
+                            self.gravity[2] + k * (u[2] - self.gravity[2]),
+                        )
+                        or self.gravity
+                    )
 
         # throw / free fall
         if a < THROW_G:
