@@ -1,0 +1,112 @@
+{
+  "config": {
+    "flow_title": "{name}",
+    "step": {
+      "user": {
+        "description": "Naciśnij zielony przycisk na Triki, aby go obudzić, i wybierz go z listy.",
+        "data": {
+          "address": "Urządzenie"
+        },
+        "data_description": {
+          "address": "Tokeny, które rozgłaszały się w ostatnich sekundach. Nazwa kończy się numerem widocznym w aplikacji Żappka."
+        }
+      },
+      "bluetooth_confirm": {
+        "description": "Skonfigurować {name}?"
+      }
+    },
+    "abort": {
+      "already_configured": "Urządzenie jest już skonfigurowane",
+      "already_in_progress": "Konfiguracja jest już w toku",
+      "no_devices_found": "Nie znaleziono obudzonego Triki. Naciśnij jego przycisk i spróbuj ponownie.",
+      "not_supported": "Urządzenie nie jest obsługiwane"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "data": {
+          "sample_rate": "Częstotliwość próbkowania IMU (Hz)",
+          "idle_timeout": "Tryb oszczędny po bezczynności (s, 0 = nigdy)",
+          "sleep_timeout": "Rozłączenie po bezczynności (s, 0 = nigdy)",
+          "knob_step": "Krok pokrętła (stopnie na jedno zdarzenie)",
+          "invert_rotation": "Odwróć kierunek obrotu",
+          "wake_as_press": "Traktuj wybudzenie jak naciśnięcie",
+          "knob": "Obrót pokrętła (rotate_cw / rotate_ccw)",
+          "shake": "Potrząśnięcie",
+          "motion_gestures": "Gesty ruchowe (obrót, potrząśnięcie, stuknięcie, rzut, odwrócenie)",
+          "multi_press": "Podwójne i potrójne naciśnięcie",
+          "multi_press_window": "Okno podwójnego/potrójnego naciśnięcia",
+          "capture": "Zapisuj surowe sesje do /config/triki_captures (debugowanie)"
+        },
+        "data_description": {
+          "sample_rate": "Wyżej = szybsze gesty, szybsze zużycie baterii. Powyżej 104 Hz BLE często nie nadąża.",
+          "idle_timeout": "Po tym czasie bez ruchu i przycisku strumień spada do 26 Hz, ale połączenie zostaje, więc przycisk dalej działa. Każda aktywność przywraca ustawioną częstotliwość.",
+          "sleep_timeout": "Po tym czasie bez aktywności połączenie jest zrywane. Token rozgłasza się potem około 3 minut, zanim zaśnie, a przycisk nie jest widoczny, dopóki nie zaśnie.",
+          "knob_step": "O ile token musi się obrócić na stole, aby powstało jedno zdarzenie. 30° daje 12 zdarzeń na pełny obrót; mniejsze kroki zalewają wolne lampy.",
+          "invert_rotation": "Zamień rotate_cw i rotate_ccw, gdy token leży do góry nogami albo ściemniacz działa odwrotnie.",
+          "wake_as_press": "Naciśnięcie, które budzi token, kończy się zanim powstanie połączenie, więc jest zgłaszane jako wake. Zgłaszaj też press przy wybudzeniu (wybudzenie ruchem też wygląda wtedy jak naciśnięcie).",
+          "shake": "Domyślnie wyłączone. Kilka szybkich ruchów nadgarstkiem tam i z powrotem. Włącz, aby przetestować.",
+          "knob": "Domyślnie wyłączone. Zgłasza obroty wokół osi pionowej jako rotate_cw / rotate_ccw. Włącz, aby przetestować.",
+          "motion_gestures": "Domyślnie wyłączone: progi nie są skalibrowane na sprzęcie. Włącz, aby przetestować.",
+          "multi_press": "Wyłączone: press jest zgłaszany od razu po puszczeniu przycisku. Włączone: naciśnięcie jest opóźniane o poniższe okno, aby odróżnić pojedyncze, podwójne i potrójne.",
+          "multi_press_window": "Najdłuższa przerwa między puszczeniem przycisku a kolejnym naciśnięciem, która nadal liczy się jako podwójne lub potrójne. Pojedyncze naciśnięcia są zgłaszane po tym czasie od puszczenia.",
+          "capture": "Każde połączenie zapisuje plik .jsonl z surowymi powiadomieniami BLE i wykrytymi zdarzeniami. Wyłącz po zakończeniu."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "asleep": {
+      "message": "{name} śpi; najpierw naciśnij jego przycisk, aby go obudzić."
+    },
+    "led_write_failed": {
+      "message": "Zapis stanu diody nie powiódł się: {error}"
+    }
+  },
+  "entity": {
+    "event": {
+      "action": {
+        "name": "Akcja",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "wake": "Wybudzenie",
+              "press": "Naciśnięcie",
+              "double_press": "Podwójne naciśnięcie",
+              "triple_press": "Potrójne naciśnięcie",
+              "long_press": "Długie naciśnięcie",
+              "rotate_cw": "Obrót w prawo",
+              "rotate_ccw": "Obrót w lewo",
+              "shake": "Potrząśnięcie",
+              "tap": "Stuknięcie",
+              "throw": "Rzut",
+              "flip": "Odwrócenie"
+            }
+          }
+        }
+      }
+    },
+    "binary_sensor": {
+      "connected": {
+        "name": "Połączony"
+      },
+      "button": {
+        "name": "Przycisk"
+      }
+    },
+    "light": {
+      "led": {
+        "name": "Dioda"
+      }
+    },
+    "sensor": {
+      "pitch": {
+        "name": "Pochylenie"
+      },
+      "roll": {
+        "name": "Przechył"
+      }
+    }
+  }
+}

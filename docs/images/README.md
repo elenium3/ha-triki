@@ -6,7 +6,7 @@ message.
 
 | File | Used in | What it shows | Source |
 |---|---|---|---|
-| `icon.png` | README | The integration icon (copy of `brands/triki/icon.png`). | this project |
+| `icon.png` | README | The integration icon (copy of `custom_components/triki/brand/icon.png`). | this project |
 | `triki-front.jpg` | README, hardware.md | The token from above: silver cap, black T. | [Flopsstuff/triki](https://github.com/Flopsstuff/triki) `assets/1.jpg`, © 2026 Flopsstuff, MIT |
 | `triki-back.jpg` | README, hardware.md | The underside: green board with the Ż logo. | Flopsstuff/triki `assets/2.jpg`, MIT |
 | `triki-axes.jpg` | README, hardware.md | The token with the sensor's X, Y, Z axes drawn in. | Flopsstuff/triki `assets/axes.jpg`, MIT |

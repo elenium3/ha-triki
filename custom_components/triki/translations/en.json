@@ -6,6 +6,9 @@
         "description": "Press the green button on the token to wake it, then pick it from the list.",
         "data": {
           "address": "Device"
+        },
+        "data_description": {
+          "address": "Tokens that advertised in the last few seconds. The name ends with the number printed in the Żappka app."
         }
       },
       "bluetooth_confirm": {
@@ -14,6 +17,7 @@
     },
     "abort": {
       "already_configured": "Device is already configured",
+      "already_in_progress": "Configuration flow is already in progress",
       "no_devices_found": "No awake Triki found. Press its button and try again.",
       "not_supported": "Device not supported"
     }
@@ -39,6 +43,8 @@
           "sample_rate": "Higher = snappier gestures, faster battery drain. Above 104 Hz BLE often cannot keep up.",
           "idle_timeout": "After this long without motion or button activity the stream drops to 26 Hz but the link stays up, so the button keeps working. Any activity restores the configured rate.",
           "sleep_timeout": "After this long without activity the link is dropped. The token then advertises for about 3 minutes before it sleeps, and the button is not seen until it has slept.",
+          "knob_step": "How far the token has to turn on the table for one rotate event. 30° gives 12 events per full turn; smaller steps flood slow lights.",
+          "invert_rotation": "Swap rotate_cw and rotate_ccw, for a token used upside down or a dimmer that feels backwards.",
           "wake_as_press": "The press that wakes the token ends before the link is up, so it is reported as wake. Also emit press on wake (a wake caused by movement then looks like a press too).",
           "shake": "Off by default. Several quick back-and-forth swings of the wrist. Turn on to test.",
           "knob": "Off by default. Reports turns around the vertical axis as rotate_cw / rotate_ccw. Turn on to test.",
