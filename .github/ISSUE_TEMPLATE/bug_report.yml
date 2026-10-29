@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in the integration does not behave as documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Missed presses and short links are almost always radio placement, not code.
+        Please read [docs/troubleshooting.md](https://github.com/elenium3/ha-triki/blob/main/docs/troubleshooting.md) first.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: ha
+    attributes:
+      label: Home Assistant version
+      placeholder: 2026.10.1
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Integration version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: path
+    attributes:
+      label: Bluetooth path
+      options:
+        - ESPHome Bluetooth proxy
+        - Local adapter (built-in or USB)
+        - Both at the same time
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: Settings → Devices → Żabka Triki → ⋮ → Download diagnostics. Paste the JSON or attach the file. Addresses are redacted automatically.
+      render: json
+  - type: textarea
+    id: log
+    attributes:
+      label: Debug log
+      description: |
+        Enable debug logging for `custom_components.triki` (Settings → Devices → Żabka Triki → Enable debug logging), reproduce, disable, and attach the log.
+      render: text

@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Troubleshooting guide
+    url: https://github.com/elenium3/ha-triki/blob/main/docs/troubleshooting.md
+    about: Connection problems, missed presses and weak links are usually radio placement. Read this first.
