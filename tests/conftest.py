@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -14,6 +15,7 @@ from custom_components.triki.protocol import (
     CTRL_UUID,
     FIRMWARE_REV_UUID,
     NUS_TX_UUID,
+    stop_command,
 )
 
 ADDRESS = "AA:BB:CC:DD:EE:FF"
@@ -71,10 +73,41 @@ def make_client():
         return reads.get(uuid, b"")
 
     client.read_gatt_char = AsyncMock(side_effect=read)
-    client.write_gatt_char = AsyncMock()
+
+    async def write(uuid, data, response=False):
+        await _token_write(client, uuid, data)
+
+    client.write_gatt_char = AsyncMock(side_effect=write)
     client.start_notify = AsyncMock()
     client.disconnect = AsyncMock()
     return client
+
+
+MEASURED_BATTERY = 82  # what the token pushes after a stream pause
+
+
+async def _token_write(client, uuid, data):
+    """What the token does on a write: a STOP is followed by a battery notification."""
+    if data == stop_command():
+        cb = next(
+            (
+                c.args[1]
+                for c in client.start_notify.await_args_list
+                if c.args[0] == BATTERY_LEVEL_UUID
+            ),
+            None,
+        )
+        if cb is not None:
+            asyncio.get_running_loop().call_soon(cb, None, bytearray([MEASURED_BATTERY]))
+
+
+async def settle(hass: HomeAssistant, dev) -> None:
+    """Wait for a rate switch / stream pause task to finish (they span loop turns)."""
+    for _ in range(400):
+        if not dev._rate_write_pending:
+            break
+        await asyncio.sleep(0.005)
+    await hass.async_block_till_done()
 
 
 @pytest.fixture

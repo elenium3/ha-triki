@@ -9,7 +9,7 @@ from pytest_homeassistant_custom_component.common import async_capture_events
 from custom_components.triki.const import BUS_EVENT, IDLE_RATE
 from custom_components.triki.protocol import DEFAULT_RATE, NUS_RX_UUID, start_command
 
-from .conftest import connect
+from .conftest import MEASURED_BATTERY, connect, settle
 from .helpers import frame
 
 
@@ -20,8 +20,9 @@ async def test_idle_drops_to_low_rate_and_activity_restores_it(hass: HomeAssista
 
     dev._last_activity -= 100  # past idle_timeout (30 s), not past sleep_timeout (300 s)
     dev._idle_check(None)
-    await hass.async_block_till_done()
+    await settle(hass, dev)  # the first idle switch includes the battery pause
     client.write_gatt_char.assert_awaited_with(NUS_RX_UUID, start_command(IDLE_RATE), response=True)
+    assert dev.battery == MEASURED_BATTERY
     client.disconnect.assert_not_awaited()
     assert dev.connected and dev.stream_rate == IDLE_RATE
     assert dev.stats.rate_switches == 1
@@ -49,7 +50,7 @@ async def test_button_press_restores_full_rate(hass: HomeAssistant, setup) -> No
     bus = async_capture_events(hass, BUS_EVENT)
     dev._last_activity -= 100
     dev._idle_check(None)
-    await hass.async_block_till_done()
+    await settle(hass, dev)
     assert dev.stream_rate == IDLE_RATE
     # a press right after the switch must still be reported: the rate change
     # does not re-arm the start-up discard
@@ -76,6 +77,7 @@ async def test_activity_during_idle_write_restores_full_rate(hass: HomeAssistant
             await gate.wait()
 
     client.write_gatt_char = AsyncMock(side_effect=slow_write)
+    dev._battery_refreshed = dev._last_activity  # no battery pause in this test
     dev._last_activity -= 100
     dev._idle_check(None)
     await asyncio.sleep(0)  # the idle write is now in flight

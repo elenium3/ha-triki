@@ -40,7 +40,7 @@ from homeassistant.helpers.typing import UNDEFINED
 
 from .capture import Capture
 from .const import (
-    BATTERY_POLL_INTERVAL,
+    BATTERY_REFRESH_INTERVAL,
     BUS_EVENT,
     DOMAIN,
     IDLE_RATE,
@@ -102,6 +102,13 @@ _LED_WRITE_RETRY_DELAY_S = 0.3
 # This many connect failures in a row for an awake token is worth one line at
 # info level (the entities only show "asleep", which looks normal).
 _UNREACHABLE_AFTER = 3
+# Battery: the token re-measures only while the stream is stopped and then pushes
+# the value by notification (6 s after STOP on the test unit). The value read
+# right after a connect is taken under load (27 % against 82 % at rest on the
+# same cell) and never changes while the stream runs.
+_BATTERY_REFRESH_WAIT_S = 10.0  # how long the stream may stay stopped for a measurement
+_BATTERY_CHECK_S = 60.0  # how often to look for an idle moment once a refresh is due
+_BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before pausing
 
 
 @dataclass(slots=True)
@@ -176,6 +183,8 @@ class TrikiDevice:
         self._last_skip: str | None = None
         self._fail_streak = 0
         self._unreachable_logged = False
+        self._battery_refreshed = 0.0  # monotonic time of the last stream pause for it
+        self._battery_event = asyncio.Event()  # set by a battery notification
         self._unsub_adv: CALLBACK_TYPE | None = None
         self._unsub_poll: CALLBACK_TYPE | None = None
         self._unsub_idle: CALLBACK_TYPE | None = None
@@ -408,7 +417,7 @@ class TrikiDevice:
                 self.hass, _STREAM_WATCHDOG_S, self._stream_watchdog
             )
             self._schedule_idle_check()
-            self._schedule_battery_poll()
+            self._schedule_battery_check()
             _LOGGER.debug(
                 "%s: connected, streaming at %s Hz (advert age %.1fs, link %.1fs, setup %.1fs: notify %.1fs, write %.1fs)",
                 self.name,
@@ -461,14 +470,16 @@ class TrikiDevice:
                 if self.hardware is None:
                     self.hardware = await self._read_str(client, HARDWARE_REV_UUID)
                 self._update_device_registry()
-            await self._read_battery(client)
+            if self.battery is None:
+                # taken under load right after the connect, so a low number; the
+                # first stream pause replaces it. Better than nothing until then.
+                await self._read_battery(client)
             try:
                 ctrl = await client.read_gatt_char(CTRL_UUID)
                 self.led_on = bool(ctrl and ctrl[0] & 0x01)
             except BleakError:
                 self.led_on = None
-            # the token pushes battery updates on its own (the characteristic
-            # has notify); the value it settles on arrives seconds after a connect
+            # the measured value arrives by notification after a stream pause
             try:
                 await client.start_notify(
                     BATTERY_LEVEL_UUID,
@@ -493,6 +504,7 @@ class TrikiDevice:
             time.monotonic() - self._session_t0,
             self.stream_rate,
         )
+        self._battery_event.set()
         if level != self.battery:
             self.battery = level
             self._notify()
@@ -607,6 +619,7 @@ class TrikiDevice:
             )
         self._client = None
         self._last_drop = bluetooth.MONOTONIC_TIME()
+        self._battery_event.set()  # do not keep a stream pause waiting on a dead link
         was_connected = self.connected
         self.connected = False
         for unsub in (self._unsub_idle, self._unsub_battery, self._unsub_watchdog):
@@ -723,17 +736,53 @@ class TrikiDevice:
             and not self._rate_write_pending
         ):
             # keep the link (a fresh one is slow for 10-20 s and the token would
-            # advertise for minutes), just stop asking for a fast stream
-            self._create_task(self._async_set_rate(IDLE_RATE), "lowrate")
+            # advertise for minutes), just stop asking for a fast stream. The
+            # token is idle anyway, so this is the moment for a battery refresh.
+            self._create_task(
+                self._async_set_rate(IDLE_RATE, refresh=self._battery_refresh_due()), "lowrate"
+            )
         self._schedule_idle_check()
 
-    async def _async_set_rate(self, rate: int) -> None:
+    def _battery_refresh_due(self) -> bool:
+        return time.monotonic() - self._battery_refreshed >= BATTERY_REFRESH_INTERVAL
+
+    async def _async_pause_for_battery(self, client: BleakClient) -> None:
+        """Stop the stream until the token reports a fresh battery level.
+
+        Presses and motion during the pause are not seen, which is why this only
+        runs while the token has been idle for a while and rarely.
+        """
+        self._battery_event.clear()
+        async with asyncio.timeout(_STOP_TIMEOUT_S):
+            await client.write_gatt_char(NUS_RX_UUID, stop_command(), response=True)
+        t = time.monotonic()
+        try:
+            async with asyncio.timeout(_BATTERY_REFRESH_WAIT_S):
+                await self._battery_event.wait()
+        except TimeoutError:
+            _LOGGER.debug(
+                "%s: no battery update within %.0fs of the stream pause",
+                self.name,
+                _BATTERY_REFRESH_WAIT_S,
+            )
+        else:
+            _LOGGER.debug(
+                "%s: battery %s%% after a %.1fs stream pause",
+                self.name,
+                self.battery,
+                time.monotonic() - t,
+            )
+        self._battery_refreshed = time.monotonic()
+
+    async def _async_set_rate(self, rate: int, *, refresh: bool = False) -> None:
         """Re-send START at another rate over the live link (no reconnect needed).
 
         Activity that arrives while the write is in flight cannot queue a second
         write (``_rate_write_pending`` gates the callers), so after a switch to
         the idle rate we re-check: if the token was used meanwhile, go straight
         back to the configured rate instead of waiting for the next frame.
+
+        With ``refresh`` the stream is first stopped for a battery measurement.
         """
         if self._rate_write_pending:
             return
@@ -745,6 +794,11 @@ class TrikiDevice:
                     return
                 activity_before = self._last_activity
                 try:
+                    if refresh:
+                        refresh = False
+                        await self._async_pause_for_battery(client)
+                        if self._client is not client:
+                            return
                     async with asyncio.timeout(_STOP_TIMEOUT_S):
                         await client.write_gatt_char(
                             NUS_RX_UUID, start_command(rate), response=True
@@ -772,23 +826,28 @@ class TrikiDevice:
             self._rate_write_pending = False
 
     @callback
-    def _schedule_battery_poll(self) -> None:
-        self._unsub_battery = async_call_later(self.hass, BATTERY_POLL_INTERVAL, self._battery_poll)
+    def _schedule_battery_check(self) -> None:
+        self._unsub_battery = async_call_later(self.hass, _BATTERY_CHECK_S, self._battery_check)
 
     @callback
-    def _battery_poll(self, _now: Any) -> None:
+    def _battery_check(self, _now: Any) -> None:
+        """On a long link, refresh the battery at the next idle moment once due.
+
+        The idle-rate switch already refreshes when it happens; this covers links
+        that stay idle for hours and setups with the idle timeout off.
+        """
         self._unsub_battery = None
         if not self.connected or self._client is None:
             return
-        client = self._client
-
-        async def _run() -> None:
-            await self._read_battery(client)
-            self._notify()
-            if self.connected:
-                self._schedule_battery_poll()
-
-        self._create_task(_run(), "battery")
+        idle = time.monotonic() - self._last_activity
+        if (
+            self._battery_refresh_due()
+            and not self.button
+            and idle >= _BATTERY_IDLE_FOR_REFRESH_S
+            and not self._rate_write_pending
+        ):
+            self._create_task(self._async_set_rate(self.stream_rate, refresh=True), "battery")
+        self._schedule_battery_check()
 
     # ------------------------------------------------------------ commands
     async def async_set_led(self, on: bool) -> None:

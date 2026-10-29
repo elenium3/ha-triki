@@ -54,4 +54,7 @@ EVENT_TYPES = [
 
 # Tilt sensors are throttled to keep the recorder sane.
 TILT_PUBLISH_INTERVAL = 1.0
-BATTERY_POLL_INTERVAL = 600.0
+# The token measures its battery only while it is not streaming, so a refresh
+# means a short stream pause (see TrikiDevice._async_pause_for_battery). Do it
+# at most this often, and only while the token has been idle for a while.
+BATTERY_REFRESH_INTERVAL = 1800.0

@@ -101,7 +101,7 @@ automation:
 | `binary_sensor.<name>_button` | live button state, off while asleep |
 | `binary_sensor.<name>_connected` | diagnostic |
 | `light.<name>_led` | the green LED; changeable only while connected |
-| `sensor.<name>_battery` | read on connect and every 10 min |
+| `sensor.<name>_battery` | measured by the token during a short stream pause while it is idle, at most every 30 min |
 | `sensor.<name>_rssi`, `_pitch`, `_roll` | disabled by default |
 
 Every gesture is also fired on the bus as `triki_event` with `device_id`,

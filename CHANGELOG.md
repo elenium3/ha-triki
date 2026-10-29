@@ -25,6 +25,13 @@ All notable changes to this project are documented here. The format follows
   `HomeAssistantError` (a device state, not invalid input).
 
 ### Fixed
+- Battery level stuck at a low value (17–27 %) for whole sessions while the
+  resting level was 82–100 %. The token measures its battery only while it is
+  not streaming; the integration read it right after the connect, under load,
+  and the 10-minute re-reads returned the same stale number. Now the value
+  comes from the token's own notification after a short stream pause while it
+  is idle (at the idle-rate switch, then at most every 30 min); the connect
+  read is only used while no value is known.
 - A slow reconnect right after a weak-signal drop was reported as a new `wake`
   (the gap was measured at the end of the connect, not at its start).
 - A failed firmware or hardware revision read was never retried and could wipe

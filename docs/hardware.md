@@ -85,9 +85,14 @@ Also: a KiCad schematic in [DISKIMG/Triki-PCB](https://github.com/DISKIMG/Triki-
   connected, Home Assistant cannot see it, and vice versa.
 - **After a link is dropped** it advertises for about three minutes before
   sleeping.
-- **Battery.** On the development unit the level went from 84 % to 82 % over a
-  night of continuous testing with the link held most of the time. No long-term
-  figures yet.
+- **Battery level.** The token measures it only while it is not streaming and
+  pushes the result by notification (the Battery Level characteristic has
+  `notify`); after a STOP the update came 6 s later. A read right after a
+  connect returns a value taken under load: 27 % against 82 % at rest on the
+  same cell, within seconds, and that low value does not change while the
+  stream runs. On the development unit the resting level went from 84 % to
+  82 % over a night with the link held most of the time. No long-term figures
+  yet.
 - **Axes.** The sensor's +Z points out of the top (the Ż logo side), so a token
   lying flat reads +1 g on Z. Rotation around Z is what the knob gesture uses.
 
