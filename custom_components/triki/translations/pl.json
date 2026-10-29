@@ -95,7 +95,7 @@
         "name": "Przycisk"
       }
     },
-    "light": {
+    "switch": {
       "led": {
         "name": "Dioda"
       }

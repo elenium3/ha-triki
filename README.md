@@ -100,7 +100,7 @@ automation:
 | `event.<name>_action` | `wake`, `press`, `double_press`, `triple_press` (`count`), `long_press`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`), `shake`, `tap`, `throw`, `flip` |
 | `binary_sensor.<name>_button` | live button state, off while asleep |
 | `binary_sensor.<name>_connected` | diagnostic |
-| `light.<name>_led` | the green LED; changeable only while connected |
+| `switch.<name>_led` | the green LED (configuration switch); changeable only while connected |
 | `sensor.<name>_battery` | measured by the token during a short stream pause while it is idle, at most every 30 min |
 | `sensor.<name>_rssi`, `_pitch`, `_roll` | disabled by default |
 

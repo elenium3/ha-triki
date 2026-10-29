@@ -24,7 +24,7 @@ NAME = "Triki 0000"
 EVENT = "event.triki_0000_action"
 BUTTON = "binary_sensor.triki_0000_button"
 CONNECTED = "binary_sensor.triki_0000_connected"
-LED = "light.triki_0000_led"
+LED = "switch.triki_0000_led"
 BATTERY = "sensor.triki_0000_battery"
 
 ESTABLISH = "custom_components.triki.device.establish_connection"
