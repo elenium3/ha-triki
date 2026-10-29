@@ -1,0 +1,24 @@
+name: Hardware finding
+description: Something you measured or observed about the token itself
+labels: [hardware]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Timings, advertising behaviour, battery life, firmware differences, new commands. Observations with numbers and a capture are the most useful.
+  - type: textarea
+    id: finding
+    attributes:
+      label: Finding
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Token firmware / hardware revision
+      description: Shown on the device page (e.g. 3.2.1-A).
+  - type: textarea
+    id: how
+    attributes:
+      label: How it was measured
+      description: Adapter or proxy, distance, tools (btmon, triki_probe.py, HCI snoop).

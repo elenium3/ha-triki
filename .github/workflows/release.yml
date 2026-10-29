@@ -1,0 +1,29 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stamp the manifest with the release tag
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          python - "$tag" <<'EOF'
+          import json, pathlib, sys
+          p = pathlib.Path("custom_components/triki/manifest.json")
+          m = json.loads(p.read_text())
+          m["version"] = sys.argv[1]
+          p.write_text(json.dumps(m, indent=2, ensure_ascii=False) + "\n")
+          EOF
+      - name: Build the HACS zip
+        run: cd custom_components/triki && zip -r ../../triki.zip . -x '__pycache__/*'
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: triki.zip
