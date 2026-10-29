@@ -16,6 +16,10 @@ All notable changes to this project are documented here. The format follows
 - One info log line after three failed connect attempts in a row for an awake
   token, and one when it links again.
 - `led_write_retries` link statistic in diagnostics.
+- On Home Assistant 2026.10+ every advertisement of the token is delivered to
+  the integration (`async_register_advertisement_callback`); the 1 s poll of
+  the last advertisement remains for older cores. Diagnostics gain an `adverts`
+  counter and an `advertisements` block with the cadence of the last 32 packets.
 - Repository: `requirements_test.txt` (pinned, Dependabot), `pre-commit`
   config, `scripts/setup` and `scripts/check`, weekly scheduled CI, release
   notes grouped by label. Bandit and pip-audit jobs dropped (ruff's `S` rules
@@ -27,6 +31,14 @@ All notable changes to this project are documented here. The format follows
 - The LED write has a 5 s timeout and is retried up to three times on a GATT
   error. Turning the LED on while the token sleeps now raises
   `HomeAssistantError` (a device state, not invalid input).
+
+- Gestures are timed on the frames' arrival clock instead of counting frames,
+  so a lossy proxy link or the 26 Hz idle rate no longer stretches the
+  multi-press, long-press and motion windows.
+- Shake detector rewritten: share of hard-motion frames and gyro reversals
+  within 0.8 s of wall time, one event per episode, knob muted while swinging.
+  Tested at 104/52/26 Hz with 50–70 % synthetic frame loss; not yet confirmed
+  on hardware.
 
 ### Fixed
 - Battery level stuck at a low value (17–27 %) for whole sessions while the

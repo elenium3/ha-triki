@@ -8,7 +8,8 @@ produces a JSON like this (addresses redacted):
   "entry": {"title": "Triki 4190656753", "data": {"address": "**REDACTED**"}, "options": {"sample_rate": 52, "knob_step": 30}},
   "options": {"rate": 52, "idle_timeout": 30, "sleep_timeout": 0, "knob_step": 30.0, "invert_rotation": false, "wake_as_press": false, "knob": true, "shake": false, "motion_gestures": false, "multi_press": true, "multi_press_window": 0.3, "capture": false},
   "device": {"connected": true, "stream_rate": 26, "firmware": "3.2.1-A", "hardware": null, "battery": 82, "rssi": -71, "led_on": false, "button": false, "pitch": 1.6, "roll": -1.6},
-  "link": {"connects": 1, "connect_failures": 0, "drops": 0, "stream_refusals": 0, "notifications": 30111, "frames": 30106, "rate_switches": 3, "parser_dropped_bytes": 25, "last_source": "**REDACTED**", "last_link_s": 0.11, "last_session_s": 1064.6},
+  "link": {"adverts": 412, "connects": 1, "connect_failures": 0, "drops": 0, "stream_refusals": 0, "notifications": 30111, "frames": 30106, "rate_switches": 3, "led_write_retries": 0, "parser_dropped_bytes": 25, "last_source": "**REDACTED**", "last_link_s": 0.11, "last_session_s": 1064.6},
+  "advertisements": {"every": true, "recent": 32, "last_age_s": 5.1, "median_interval_s": 0.152, "min_interval_s": 0.021},
   "last_advertisement": {"source": "**REDACTED**", "rssi": -79, "age_s": 5.1, "connectable": true}
 }
 ```
@@ -28,6 +29,7 @@ produces a JSON like this (addresses redacted):
 
 | Field | Meaning |
 |---|---|
+| `adverts` | Advertisements delivered to the integration (every one on Home Assistant 2026.10+, only changed ones before). |
 | `connects`, `connect_failures` | Attempts that succeeded or failed. |
 | `drops` | The token or the radio closed the link (not an idle disconnect). |
 | `stream_refusals` | Connected, start acknowledged, no frames within 3 s. |
@@ -38,6 +40,12 @@ produces a JSON like this (addresses redacted):
 | `last_source` | Scanner the last link went through (redacted: it is the adapter's or proxy's MAC). |
 | `last_link_s` | Time from the connect request to the stream running. 0.1–0.3 s through a proxy, 1.5–10 s on a distant local adapter. |
 | `last_session_s` | How long the last link lasted. |
+
+**advertisements**: timing of the last 32 advertisements the integration
+received. `every` is true when the per-advertisement callback of Home
+Assistant 2026.10+ is in use (otherwise the 1 s poll is). The intervals show how
+often the awake token is heard: through a proxy, a scanner forwards every
+packet; an unchanged advertisement reaches older cores only once.
 
 **last_advertisement**: what Home Assistant's Bluetooth stack last saw from the
 token, from any scanner.

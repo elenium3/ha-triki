@@ -16,9 +16,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from collections import deque
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from datetime import timedelta
+from itertools import pairwise
 from typing import Any
 
 from bleak import BleakClient
@@ -75,6 +77,8 @@ _RECONNECT_BACKOFF_S = 3.0
 _CONNECT_TIMEOUT_S = 12.0
 _POLL_S = 1.0
 _POLL_FRESH_S = 10.0
+_ADVERT_HISTORY = 32  # advertisement timestamps kept for the cadence figures
+_ADVERT_NOTIFY_S = 1.0  # rssi state writes and advert log lines at most this often
 # The token can accept the connection but refuse to stream (start ack 21 01, no
 # frames). Do not keep waking it in a loop.
 _STREAM_WATCHDOG_S = 3.0
@@ -115,6 +119,7 @@ _BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before 
 class LinkStats:
     """Counters since setup, exposed through diagnostics."""
 
+    adverts: int = 0  # advertisements seen (every one on HA 2026.10+, changed ones before)
     connects: int = 0
     connect_failures: int = 0
     drops: int = 0  # the token (or the radio) closed the link, not us
@@ -181,6 +186,9 @@ class TrikiDevice:
         self._awake_seen = 0.0
         self._last_drop = 0.0
         self._last_skip: str | None = None
+        self.every_advertisement = False  # the HA 2026.10 per-advertisement callback is in use
+        self._advert_times: deque[float] = deque(maxlen=_ADVERT_HISTORY)
+        self._last_advert_notify = 0.0
         self._fail_streak = 0
         self._unreachable_logged = False
         # monotonic time of the last stream pause for it; -inf so the first idle
@@ -257,6 +265,14 @@ class TrikiDevice:
     @callback
     def async_start(self) -> None:
         self._stopping = False
+        # Home Assistant 2026.10 delivers every advertisement of an address;
+        # older versions only changed ones (the token's payload never changes),
+        # which is why they also need the 1 s poll of the last advertisement.
+        register_every = getattr(bluetooth, "async_register_advertisement_callback", None)
+        if register_every is not None:
+            self.every_advertisement = True
+            self._unsub_adv = register_every(self.hass, self._on_every_advertisement, self.address)
+            return
         self._unsub_adv = bluetooth.async_register_callback(
             self.hass,
             self._on_advertisement,
@@ -286,22 +302,47 @@ class TrikiDevice:
             self._maybe_connect(info, _POLL_FRESH_S)
 
     @callback
+    def _on_every_advertisement(self, service_info: bluetooth.BluetoothServiceInfoBleak) -> None:
+        if not service_info.connectable:
+            return
+        self._on_advertisement(service_info, None)
+
+    @callback
     def _on_advertisement(
         self,
         service_info: bluetooth.BluetoothServiceInfoBleak,
-        change: bluetooth.BluetoothChange,
+        change: bluetooth.BluetoothChange | None,
     ) -> None:
-        if service_info.rssi != self.rssi:
-            self.rssi = service_info.rssi
+        now = time.monotonic()
+        self.stats.adverts += 1
+        self._advert_times.append(service_info.time)
+        self.rssi = service_info.rssi
+        # an awake token advertises several times a second: one state write and
+        # one log line per second is plenty
+        if now - self._last_advert_notify >= _ADVERT_NOTIFY_S:
+            self._last_advert_notify = now
             self._notify()
-        _LOGGER.debug(
-            "%s: advert via %s rssi %s age %.1fs",
-            self.name,
-            service_info.source,
-            service_info.rssi,
-            bluetooth.MONOTONIC_TIME() - service_info.time,
-        )
+            _LOGGER.debug(
+                "%s: advert via %s rssi %s age %.1fs",
+                self.name,
+                service_info.source,
+                service_info.rssi,
+                bluetooth.MONOTONIC_TIME() - service_info.time,
+            )
         self._maybe_connect(service_info, _FRESH_ADV_S)
+
+    @property
+    def advertisement_cadence(self) -> dict[str, Any]:
+        """Recent advertisement timing for diagnostics (seconds)."""
+        times = list(self._advert_times)
+        gaps = sorted(b - a for a, b in pairwise(times))
+        return {
+            "every": self.every_advertisement,
+            "recent": len(times),
+            "last_age_s": round(bluetooth.MONOTONIC_TIME() - times[-1], 1) if times else None,
+            "median_interval_s": round(gaps[len(gaps) // 2], 3) if gaps else None,
+            "min_interval_s": round(gaps[0], 3) if gaps else None,
+        }
 
     @callback
     def _maybe_connect(
@@ -665,7 +706,10 @@ class TrikiDevice:
         changed = False
         active = False
         self.stats.notifications += 1
-        for frame in self._parser.push(data):
+        frames = list(self._parser.push(data))
+        now = time.monotonic()
+        dt = self._detector.dt
+        for i, frame in enumerate(frames):
             self.stats.frames += 1
             if not self._streaming:
                 self._streaming = True
@@ -673,7 +717,9 @@ class TrikiDevice:
                     self._unsub_watchdog()
                     self._unsub_watchdog = None
             sample = Sample.from_frame(frame)
-            for ev in self._detector.update(sample):
+            # frames of one notification arrived together: spread them one
+            # sample period apart, ending at the arrival time
+            for ev in self._detector.update(sample, now - (len(frames) - 1 - i) * dt):
                 active = True
                 self._emit(ev.type, ev.data)
             if sample.button != self.button:

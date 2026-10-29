@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from dataclasses import replace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from bleak.exc import BleakError
@@ -687,3 +687,89 @@ async def test_unload_cancels_hung_connect(hass: HomeAssistant, setup) -> None:
         assert await hass.config_entries.async_unload(setup.entry_id)
         await hass.async_block_till_done()
     assert cancelled.is_set()
+
+
+# --- advertisement delivery ---
+
+EVERY = "homeassistant.components.bluetooth.async_register_advertisement_callback"
+
+
+async def test_every_advertisement_callback_replaces_the_poll(
+    hass: HomeAssistant, mock_bluetooth
+) -> None:
+    """HA 2026.10+: every advertisement is delivered, so there is no 1 s poll."""
+    from homeassistant.components import bluetooth
+    from homeassistant.const import CONF_ADDRESS
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.triki.const import DOMAIN
+
+    from .conftest import ADDRESS, NAME
+
+    unsub = MagicMock()
+    register = MagicMock(return_value=unsub)
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=ADDRESS, title=NAME, data={CONF_ADDRESS: ADDRESS}
+    )
+    entry.add_to_hass(hass)
+    with patch.object(bluetooth, "async_register_advertisement_callback", register, create=True):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    dev = entry.runtime_data
+    register.assert_called_once_with(hass, dev._on_every_advertisement, ADDRESS)
+    assert dev.every_advertisement
+    assert dev._unsub_poll is None
+
+    client = make_client()
+    with patch(ESTABLISH, AsyncMock(return_value=client)) as est:
+        info = service_info()
+        info.connectable = False  # a non-connectable scanner saw it: cannot connect through it
+        dev._on_every_advertisement(info)
+        await hass.async_block_till_done()
+        est.assert_not_awaited()
+        dev._on_every_advertisement(service_info())
+        await hass.async_block_till_done()
+    assert est.await_count == 1
+    assert dev.stats.adverts == 1
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    unsub.assert_called_once()
+
+
+async def test_old_core_keeps_the_poll(hass: HomeAssistant, setup) -> None:
+    dev = setup.runtime_data
+    assert not dev.every_advertisement
+    assert dev._unsub_poll is not None
+
+
+async def test_advertisement_cadence_and_state_writes(hass: HomeAssistant, setup) -> None:
+    dev = setup.runtime_data
+    assert dev.advertisement_cadence == {
+        "every": False,
+        "recent": 0,
+        "last_age_s": None,
+        "median_interval_s": None,
+        "min_interval_s": None,
+    }
+    notifies = 0
+
+    def count():
+        nonlocal notifies
+        notifies += 1
+
+    dev.async_add_listener(count)
+    with patch(ESTABLISH, AsyncMock()):
+        for i in range(5):
+            info = service_info()
+            info.time -= 60 - 0.1 * i  # stale: no connect, but 100 ms apart
+            info.rssi = -60 - i
+            dev._on_advertisement(info, None)
+        await hass.async_block_till_done()
+    assert dev.rssi == -64  # the latest value is always kept
+    assert notifies == 1  # but written at most once a second
+    assert dev.stats.adverts == 5
+    cadence = dev.advertisement_cadence
+    assert cadence["recent"] == 5
+    assert cadence["median_interval_s"] == pytest.approx(0.1, abs=0.001)
+    assert cadence["min_interval_s"] == pytest.approx(0.1, abs=0.001)
+    assert 59 < cadence["last_age_s"] < 61
