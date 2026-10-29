@@ -3,9 +3,12 @@
 Lifecycle: the token sleeps a few seconds after it stops moving and only
 advertises while awake (button press / motion). We listen for its
 advertisements through Home Assistant's Bluetooth stack (local adapter or
-ESPHome proxy), connect as soon as it shows up, start the IMU stream, turn
-samples into events, and drop the link after ``idle_timeout`` seconds without
-activity so the coin cell is not drained by a 104 Hz stream.
+ESPHome proxy), connect as soon as it shows up, start the IMU stream and turn
+samples into events. After ``idle_timeout`` seconds without activity the link
+stays up but the stream is re-started at ``IDLE_RATE`` (a fresh link is slow
+and lossy for 10-20 s, so dropping it is the expensive path); the first motion
+or press brings the configured rate back. Only after ``sleep_timeout`` seconds
+is the link dropped so the token can sleep.
 """
 
 from __future__ import annotations
@@ -117,20 +120,15 @@ class TrikiDevice:
         hass: HomeAssistant,
         address: str,
         name: str,
-        options: TrikiOptions | None = None,
+        options: TrikiOptions,
         *,
-        entry: ConfigEntry | None = None,
+        entry: ConfigEntry,
     ) -> None:
-        options = options or TrikiOptions()
         self.hass = hass
         self.entry = entry
         self.address = address
         self.name = name
         self.options = options
-        self.rate = options.rate
-        self.idle_timeout = options.idle_timeout
-        self.sleep_timeout = options.sleep_timeout
-        self.wake_as_press = options.wake_as_press
         self.stream_rate = options.rate  # what the token was last told to stream at
         self._rate_write_pending = False
         # BlueZ/bleak may deliver one notification several times (the count grew by
@@ -211,11 +209,7 @@ class TrikiDevice:
     @callback
     def _create_task(self, coro: Coroutine[Any, Any, Any], name: str) -> None:
         """Run a background task that dies with the config entry (unload cancels it)."""
-        name = f"{DOMAIN}_{name}_{self.address}"
-        if self.entry is not None:
-            self.entry.async_create_background_task(self.hass, coro, name)
-        else:
-            self.hass.async_create_background_task(coro, name)
+        self.entry.async_create_background_task(self.hass, coro, f"{DOMAIN}_{name}_{self.address}")
 
     @callback
     def _emit(self, kind: str, data: dict[str, Any] | None = None) -> None:
@@ -404,7 +398,7 @@ class TrikiDevice:
             _LOGGER.debug(
                 "%s: connected, streaming at %s Hz (advert age %.1fs, link %.1fs, setup %.1fs: notify %.1fs, write %.1fs)",
                 self.name,
-                self.rate,
+                self.options.rate,
                 adv_age,
                 t_link - t0,
                 time.monotonic() - t_link,
@@ -417,7 +411,7 @@ class TrikiDevice:
             resumed = self._last_drop and time.monotonic() - self._last_drop < _WAKE_GAP_S
             if not resumed:
                 self._emit("wake")
-                if self.wake_as_press:
+                if self.options.wake_as_press:
                     # the press that woke the token is over before the link is up
                     self._emit("press", {"count": 1, "source": "wake"})
             self._notify()
@@ -450,7 +444,7 @@ class TrikiDevice:
             self._capture.start(
                 {
                     "name": self.name,
-                    "rate": self.rate,
+                    "rate": self.options.rate,
                     "platform": "homeassistant",
                     "firmware": self.firmware,
                     "battery": self.battery,
@@ -463,12 +457,12 @@ class TrikiDevice:
         self._stale_notifs = self._dup_notifs = 0
         self._last_chunk = None
         self._streaming = False
-        self.stream_rate = self.rate
+        self.stream_rate = self.options.rate
         await client.start_notify(
             NUS_TX_UUID, lambda char, data: self._on_notify_from(client, char, data)
         )
         t_notify = time.monotonic()
-        await client.write_gatt_char(NUS_RX_UUID, start_command(self.rate), response=True)
+        await client.write_gatt_char(NUS_RX_UUID, start_command(self.options.rate), response=True)
         return t_notify - t, time.monotonic() - t_notify
 
     @staticmethod
@@ -603,9 +597,10 @@ class TrikiDevice:
         now = time.monotonic()
         if active:
             self._last_activity = now
-            if self.stream_rate != self.rate:
-                # the token is being used again: back to the configured rate
-                self._create_task(self._async_set_rate(self.rate), "fullrate")
+            if self.stream_rate != self.options.rate and not self._rate_write_pending:
+                # the token is being used again: back to the configured rate (a
+                # write in flight re-checks activity itself when it completes)
+                self._create_task(self._async_set_rate(self.options.rate), "fullrate")
         if now - self._last_tilt_pub >= TILT_PUBLISH_INTERVAL:
             pr = self._detector.pitch_roll
             if pr is not None:
@@ -636,7 +631,7 @@ class TrikiDevice:
 
     @callback
     def _schedule_idle_check(self) -> None:
-        if self.idle_timeout <= 0 and self.sleep_timeout <= 0:
+        if self.options.idle_timeout <= 0 and self.options.sleep_timeout <= 0:
             return
         self._unsub_idle = async_call_later(self.hass, _IDLE_CHECK_S, self._idle_check)
 
@@ -646,43 +641,67 @@ class TrikiDevice:
         if not self.connected:
             return
         idle = 0.0 if self.button else time.monotonic() - self._last_activity
-        if 0 < self.sleep_timeout <= idle:
-            _LOGGER.debug("%s: idle for %ss, disconnecting", self.name, self.sleep_timeout)
+        sleep_timeout, idle_timeout = self.options.sleep_timeout, self.options.idle_timeout
+        if 0 < sleep_timeout <= idle:
+            _LOGGER.debug("%s: idle for %ss, disconnecting", self.name, sleep_timeout)
             self._await_sleep = True
             self._awake_seen = time.monotonic()
             self._no_connect_until = time.monotonic() + _IDLE_COOLDOWN_S
             self._create_task(self.async_disconnect(), "idle")
             return
-        if 0 < self.idle_timeout <= idle and self.stream_rate != IDLE_RATE:
+        if (
+            0 < idle_timeout <= idle
+            and self.stream_rate != IDLE_RATE
+            and not self._rate_write_pending
+        ):
             # keep the link (a fresh one is slow for 10-20 s and the token would
             # advertise for minutes), just stop asking for a fast stream
             self._create_task(self._async_set_rate(IDLE_RATE), "lowrate")
         self._schedule_idle_check()
 
     async def _async_set_rate(self, rate: int) -> None:
-        """Re-send START at another rate over the live link (no reconnect needed)."""
-        client = self._client
-        if client is None or not self.connected or self._rate_write_pending:
+        """Re-send START at another rate over the live link (no reconnect needed).
+
+        Activity that arrives while the write is in flight cannot queue a second
+        write (``_rate_write_pending`` gates the callers), so after a switch to
+        the idle rate we re-check: if the token was used meanwhile, go straight
+        back to the configured rate instead of waiting for the next frame.
+        """
+        if self._rate_write_pending:
             return
         self._rate_write_pending = True
         try:
-            async with asyncio.timeout(_STOP_TIMEOUT_S):
-                await client.write_gatt_char(NUS_RX_UUID, start_command(rate), response=True)
-        except (BleakError, TimeoutError) as err:
-            _LOGGER.debug("%s: rate change to %s Hz failed: %s", self.name, rate, err)
-            return
+            while True:
+                client = self._client
+                if client is None or not self.connected:
+                    return
+                activity_before = self._last_activity
+                try:
+                    async with asyncio.timeout(_STOP_TIMEOUT_S):
+                        await client.write_gatt_char(
+                            NUS_RX_UUID, start_command(rate), response=True
+                        )
+                except (BleakError, TimeoutError) as err:
+                    _LOGGER.debug("%s: rate change to %s Hz failed: %s", self.name, rate, err)
+                    return
+                if self._client is not client:
+                    return  # the link went away meanwhile
+                self.stream_rate = rate
+                self.stats.rate_switches += 1
+                self._detector.set_rate(rate)
+                if self._capture:
+                    self._capture.write({"rate": rate})
+                _LOGGER.debug(
+                    "%s: stream now %s Hz (%s)",
+                    self.name,
+                    rate,
+                    "idle" if rate != self.options.rate else "active",
+                )
+                if rate == self.options.rate or self._last_activity == activity_before:
+                    return
+                rate = self.options.rate  # used during the write: back to full rate
         finally:
             self._rate_write_pending = False
-        if self._client is not client:
-            return  # the link went away meanwhile
-        self.stream_rate = rate
-        self.stats.rate_switches += 1
-        self._detector.set_rate(rate)
-        if self._capture:
-            self._capture.write({"rate": rate})
-        _LOGGER.debug(
-            "%s: stream now %s Hz (%s)", self.name, rate, "idle" if rate != self.rate else "active"
-        )
 
     @callback
     def _schedule_battery_poll(self) -> None:

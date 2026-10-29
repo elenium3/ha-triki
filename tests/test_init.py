@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from bleak.exc import BleakError
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import (
     CONF_ADDRESS,
     EVENT_HOMEASSISTANT_STOP,
@@ -18,7 +19,15 @@ from pytest_homeassistant_custom_component.common import (
     async_capture_events,
 )
 
-from custom_components.triki.const import BUS_EVENT, DOMAIN
+from custom_components.triki.const import (
+    BUS_EVENT,
+    CONF_IDLE_TIMEOUT,
+    CONF_RATE,
+    CONF_SLEEP_TIMEOUT,
+    DEFAULT_IDLE_TIMEOUT,
+    DEFAULT_SLEEP_TIMEOUT,
+    DOMAIN,
+)
 from custom_components.triki.protocol import (
     CTRL_UUID,
     DEFAULT_RATE,
@@ -194,3 +203,43 @@ async def test_own_disconnect_sends_stop_first(hass: HomeAssistant, setup) -> No
     await dev.async_disconnect()
     client.disconnect.assert_awaited()
     assert dev.connected is False
+
+
+async def _setup_entry(hass: HomeAssistant, **kwargs) -> MockConfigEntry:
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=ADDRESS, title=NAME, data={CONF_ADDRESS: ADDRESS}, **kwargs
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    return entry
+
+
+async def test_migrate_v1_idle_timeout_becomes_sleep_timeout(
+    hass: HomeAssistant, mock_bluetooth
+) -> None:
+    """In v1 idle_timeout dropped the link; that value now belongs to sleep_timeout."""
+    entry = await _setup_entry(hass, version=1, options={CONF_IDLE_TIMEOUT: 45, CONF_RATE: 26})
+    assert entry.version == 2
+    assert entry.options[CONF_SLEEP_TIMEOUT] == 45
+    assert entry.options[CONF_IDLE_TIMEOUT] == DEFAULT_IDLE_TIMEOUT
+    assert entry.options[CONF_RATE] == 26
+    assert entry.runtime_data.options.sleep_timeout == 45
+
+
+async def test_migrate_v1_without_idle_timeout_keeps_defaults(
+    hass: HomeAssistant, mock_bluetooth
+) -> None:
+    entry = await _setup_entry(hass, version=1)
+    assert entry.version == 2
+    assert CONF_SLEEP_TIMEOUT not in entry.options
+    assert entry.runtime_data.options.sleep_timeout == DEFAULT_SLEEP_TIMEOUT
+
+
+async def test_migrate_refuses_newer_entry(hass: HomeAssistant, mock_bluetooth) -> None:
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=ADDRESS, title=NAME, data={CONF_ADDRESS: ADDRESS}, version=3
+    )
+    entry.add_to_hass(hass)
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.state is ConfigEntryState.MIGRATION_ERROR

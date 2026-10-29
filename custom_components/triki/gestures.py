@@ -102,9 +102,12 @@ class GestureDetector:
 
     # ------------------------------------------------------------------ state
     def set_rate(self, rate_hz: int) -> None:
-        """The stream was restarted at another rate: retime, skip the start-up noise."""
+        """The stream was restarted at another rate over the live link: only retime.
+
+        The start-up discard is not re-armed: the IMU keeps running, and a press
+        made right after the switch must not be lost in a skip window.
+        """
         self.dt = 1.0 / rate_hz
-        self._skip = self._startup_discard
 
     def reset(self) -> None:
         self.t = 0.0

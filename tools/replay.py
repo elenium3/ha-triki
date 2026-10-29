@@ -34,7 +34,7 @@ def main():
 
     recs = load(args.capture)
     meta = next((r["meta"] for r in recs if "meta" in r), {})
-    rate = args.rate or meta.get("rate", 104)
+    rate = args.rate or meta.get("rate", P.DEFAULT_RATE)
     print("meta:", meta)
 
     parser = P.FrameParser()
@@ -73,6 +73,10 @@ def main():
                     )
                 for ev in det.update(s):
                     now_ev[seg][ev.type] += 1
+        elif "rate" in r and "meta" not in r:
+            # the live link switched between the idle and the configured rate
+            det.set_rate(r["rate"])
+            print(f"stream rate {r['rate']} Hz at t={r['t']}")
         elif r.get("disconnected"):
             print(f"disconnected at t={r['t']}")
 

@@ -1,6 +1,7 @@
 """TrikiDevice failure paths: connect errors, setup errors, gating, polling."""
 
 import asyncio
+from dataclasses import replace
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -286,7 +287,8 @@ async def test_wake_as_press_emits_press(hass: HomeAssistant, setup) -> None:
     from pytest_homeassistant_custom_component.common import async_capture_events
 
     bus = async_capture_events(hass, "triki_event")
-    setup.runtime_data.wake_as_press = True
+    dev = setup.runtime_data
+    dev.options = replace(dev.options, wake_as_press=True)
     await advertise(hass, setup, make_client())
     assert [e.data["type"] for e in bus] == ["wake", "press"]
     assert bus[1].data["source"] == "wake"
