@@ -28,6 +28,8 @@ All notable changes to this project are documented here. The format follows
 - `docs/hardware.md`: "Opening it and the battery": CR2032, how the cap is
   built, when a power cycle helps and what it does not fix. The opening
   technique itself is marked as not yet documented.
+- README reordered: what it is, quick install, full installation with links,
+  entities, docs index. Ruleset for `main` in `.github/rulesets/main.json`.
 
 ### Fixed
 - Security workflow: Gitleaks needs `pull-requests: read` on pull requests;
