@@ -49,10 +49,6 @@ jobs:
   pip-audit:
     name: pip-audit (known vulnerabilities in the test toolchain)
     runs-on: ubuntu-latest
-    # Informational: the versions are pinned by pytest-homeassistant-custom-component
-    # to match a Home Assistant release and cannot be bumped here. The integration
-    # itself has no requirements. Read the job log, do not block on it.
-    continue-on-error: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -62,7 +58,11 @@ jobs:
           python-version: "3.13"
       # the integration has no requirements of its own; audit what the tests pull in
       - run: pip install pytest-homeassistant-custom-component bleak pip-audit
+      # Informational: the versions are pinned by pytest-homeassistant-custom-component
+      # to match a Home Assistant release and cannot be bumped here. The step is
+      # allowed to fail so that the job stays green; read its log for the list.
       - run: pip-audit --progress-spinner off
+        continue-on-error: true
 
   codeql:
     name: CodeQL

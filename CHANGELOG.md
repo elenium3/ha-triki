@@ -22,6 +22,9 @@ All notable changes to this project are documented here. The format follows
 - README: a plain-language "What is Triki" section with photos and use cases.
   The photos (Flopsstuff/triki, MIT) are now stored in `docs/images/` because
   upstream keeps them in Git LFS and raw links returned pointer text.
+- `docs/hardware.md`: board photo, chip photo and the community reference
+  schematic (linked from Piwencjusz/zabka-triki-hardware, which has no license
+  file), with the pin assignments explained in words.
 
 ### Fixed
 - Security workflow: Gitleaks needs `pull-requests: read` on pull requests;
