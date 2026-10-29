@@ -6,42 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Added
-- Project documentation under `docs/`: hardware, protocol, installation,
-  configuration, events and automations, radio placement, troubleshooting,
-  diagnostics, development.
-- Repository hygiene: MIT license, contributing guide, code of conduct, security
-  policy, issue and pull request templates, Dependabot, release workflow that
-  publishes a HACS zip.
-- Security workflow: Bandit, ruff security rules, zizmor for the workflows,
-  Gitleaks, pip-audit, CodeQL (once the repository is public). All actions
-  pinned to commit SHAs, checkouts do not persist credentials, CI runs with
-  read-only permissions.
-- A beginner's guide to building an ESPHome Bluetooth proxy
-  (`docs/bluetooth-proxy.md`).
-- README: a plain-language "What is Triki" section with photos and use cases.
-  The photos (Flopsstuff/triki, MIT) are now stored in `docs/images/` because
-  upstream keeps them in Git LFS and raw links returned pointer text.
-- `docs/hardware.md`: board photo, chip photo and the community reference
-  schematic (linked from Piwencjusz/zabka-triki-hardware, which has no license
-  file), with the pin assignments explained in words.
-- `docs/hardware.md`: "Opening it and the battery": CR2032, how the cap is
-  built, when a power cycle helps and what it does not fix. The opening
-  technique itself is marked as not yet documented.
-- README reordered: what it is, quick install, full installation with links,
-  entities, docs index. Ruleset for `main` in `.github/rulesets/main.json`.
-
-### Fixed
-- Security workflow: Gitleaks needs `pull-requests: read` on pull requests;
-  pip-audit is informational (`continue-on-error`) because the audited versions
-  are pinned by the Home Assistant test package.
-
 ## [0.1.0] - 2026-10-29
 
 First usable version, tested on a real token through an ESPHome Bluetooth proxy
 and a Raspberry Pi 5 built-in adapter.
 
 ### Added
+- Documentation under `docs/`: the token (hardware, board and schematic,
+  battery), protocol, installation, configuration, events and automations with
+  worked examples, a beginner's guide to an ESPHome Bluetooth proxy, radio and
+  placement, troubleshooting, diagnostics, architecture, development. README
+  with photos (Flopsstuff/triki, MIT, stored in `docs/images/`).
+- Repository: MIT license, contributing guide, code of conduct, security
+  policy, issue and pull request templates, Dependabot, CODEOWNERS, a ruleset
+  for `main`, release workflow that publishes `triki.zip` for HACS.
+- Security workflow: Bandit, ruff security rules, zizmor, Gitleaks, pip-audit
+  (informational), CodeQL. Actions pinned to commit SHAs, checkouts without
+  persisted credentials, read-only CI permissions.
 - Config flow with Bluetooth discovery (`Triki*` local name) and manual pick.
 - Entities: `event` (wake, press, double/triple/long press, rotate, shake, tap,
   throw, flip), `binary_sensor` button and connected, `light` for the green LED,
