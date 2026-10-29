@@ -1,8 +1,8 @@
 # The token
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Flopsstuff/triki/main/assets/1.jpg" width="360" alt="Żabka Triki: the cap with the green button">
-  <img src="https://raw.githubusercontent.com/Flopsstuff/triki/main/assets/2.jpg" width="360" alt="Żabka Triki board">
+  <img src="images/triki-front.jpg" width="360" alt="Żabka Triki: the silver cap with the black T">
+  <img src="images/triki-back.jpg" width="360" alt="Żabka Triki: the green board seen from below">
   <br>
   <sub>Photos: <a href="https://github.com/Flopsstuff/triki">Flopsstuff/triki</a>, MIT.</sub>
 </p>
@@ -59,6 +59,11 @@ cell and the button's metal spring. See
   figures yet.
 - **Axes.** The sensor's +Z points out of the top (the Ż logo side), so a token
   lying flat reads +1 g on Z. Rotation around Z is what the knob gesture uses.
+
+<p align="center">
+  <img src="images/triki-axes.jpg" width="420" alt="The token with its X, Y and Z axes drawn in">
+  <br><sub>Axes as the firmware reports them. Photo: <a href="https://github.com/Flopsstuff/triki">Flopsstuff/triki</a>, MIT.</sub>
+</p>
 
 ## Identification
 

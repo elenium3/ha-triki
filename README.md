@@ -19,17 +19,49 @@
 
 ---
 
+## What is Triki, in plain words
+
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Flopsstuff/triki/main/assets/1.jpg" width="300" alt="The Triki token">
-  <br><sub>The token. Photo: <a href="https://github.com/Flopsstuff/triki">Flopsstuff/triki</a>, MIT.</sub>
+  <img src="docs/images/triki-front.jpg" width="280" alt="The Triki token: a silver bottle cap with a black T">
+  &nbsp;&nbsp;
+  <img src="docs/images/triki-back.jpg" width="280" alt="The underside: a green translucent board with the Ż logo">
+  <br><sub>The token from above and from below. Photos by <a href="https://github.com/Flopsstuff/triki">Flopsstuff</a>, MIT.</sub>
 </p>
 
-**Triki** is a bottle-cap sized motion controller that Żabka, the Polish
-convenience chain, sells for games inside its Żappka app. Inside: an nRF52810
-Bluetooth chip, an LSM6DSL accelerometer/gyroscope, one button, one green LED
-and a coin cell. The app only needs a stream of motion frames and the button
-state, so the token works just as well as a tiny, cheap remote for Home
-Assistant. [More about the device →](docs/hardware.md)
+Triki is a **bottle cap with a computer inside**. Żabka, the Polish convenience
+store chain, sells it for about 70 zł (and for a few złoty with app coupons) as
+"the smallest game controller in the world": you pair it with the Żappka
+loyalty app and play little games by pressing, tilting and shaking it. The
+whole cap is one big button, there is a green LED under the Ż logo, and a
+motion sensor feels how the cap is turned, tilted or thrown. It runs on a coin
+cell and talks over Bluetooth Low Energy, the same radio as a fitness band.
+
+The games are not the interesting part. The token sends its motion and button
+state to whoever connects, with no account or password. Point it at Home
+Assistant instead of the app and you have a **tiny wireless remote** that you
+can leave on a desk, a nightstand or a kitchen counter:
+
+- **Press** the cap to toggle a lamp. Press twice for a preset, three times for
+  a party, hold it for full brightness.
+- **Turn it like a knob** on the table to dim the light or change the volume.
+- **Shake it** to trigger a scene (experimental; see the limitations below).
+- Any gesture is just an event in Home Assistant, so it can start a timer, pause
+  the TV, open the blinds, or send a notification.
+
+It is not a replacement for a wall switch: the token sleeps when it is not
+moved and needs a second to wake, and a coin cell is a coin cell. It is a
+cheap, pocket-sized, rechargeable-free gadget that already exists in millions of
+Polish homes and happens to speak a very simple protocol.
+
+<p align="center">
+  <img src="docs/images/triki-axes.jpg" width="420" alt="The token with its X, Y and Z axes drawn in">
+  <br><sub>The sensor's axes. Z points out of the top; turning around Z is the knob gesture. Photo by <a href="https://github.com/Flopsstuff/triki">Flopsstuff</a>, MIT.</sub>
+</p>
+
+Inside the cap: an nRF52810 Bluetooth chip, an LSM6DSL
+accelerometer/gyroscope, the button, the LED and a CR2032 cell. The protocol
+was reverse engineered by the community (see [Credits](#credits)).
+[More about the device →](docs/hardware.md)
 
 ## Features
 

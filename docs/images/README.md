@@ -1,16 +1,22 @@
 # Images
 
-Photos used by the documentation. Everything here is published under the
-repository's MIT license; only add images you took yourself or that carry a
-compatible license, and name the source in the commit message.
+Photos used by the documentation. Only add images you took yourself or that
+carry a license compatible with MIT, and name the source here and in the commit
+message.
 
-| File | Used in | What it should show |
-|---|---|---|
-| `icon.png` | README | The integration icon (copy of `brands/triki/icon.png`). |
-| `token-front.jpg` | README, hardware.md | The token from above: cap with the green button. |
-| `token-side.jpg` | hardware.md | Side view with the ring and the LED window. |
-| `token-open.jpg` | hardware.md | Board with the nRF52810, LSM6DSL and the coin cell, if you open yours. |
-| `proxy-placement.jpg` | radio-and-placement.md | An ESP32 proxy next to the spot where the token is used. |
-| `ha-device-page.png` | README | The device page with entities, after the first connection. |
+| File | Used in | What it shows | Source |
+|---|---|---|---|
+| `icon.png` | README | The integration icon (copy of `brands/triki/icon.png`). | this project |
+| `triki-front.jpg` | README, hardware.md | The token from above: silver cap, black T. | [Flopsstuff/triki](https://github.com/Flopsstuff/triki) `assets/1.jpg`, © 2026 Flopsstuff, MIT |
+| `triki-back.jpg` | README, hardware.md | The underside: green board with the Ż logo. | Flopsstuff/triki `assets/2.jpg`, MIT |
+| `triki-axes.jpg` | README, hardware.md | The token with the sensor's X, Y, Z axes drawn in. | Flopsstuff/triki `assets/axes.jpg`, MIT |
 
-Keep photos under 500 kB (`convert in.jpg -resize 1600x -quality 82 out.jpg`).
+The Flopsstuff photos are stored in Git LFS upstream, which is why they are
+copied here instead of linked: a raw GitHub link to an LFS file returns the
+pointer text, not the image.
+
+Still wanted (see the table in the first version of this file for ideas):
+a side view with the LED window, a board photo with the chips readable, an
+ESP32 proxy next to the spot where the token is used, and a screenshot of the
+device page in Home Assistant after the first connection. Keep photos under
+500 kB (`convert in.jpg -resize 1600x -quality 82 out.jpg`).
