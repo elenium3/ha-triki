@@ -25,6 +25,9 @@ The cap renders in [koksny/TRIKI-Control](https://github.com/koksny/TRIKI-Contro
 
 Still wanted (see the table in the first version of this file for ideas):
 a side view with the LED window, a board photo with the chips readable, an
-ESP32 proxy next to the spot where the token is used, and a screenshot of the
-device page in Home Assistant after the first connection. Keep photos under
+ESP32 proxy next to the spot where the token is used, a screenshot of the
+device page in Home Assistant after the first connection, and a short photo
+series of opening the cap and lifting out the CR2032 (which tool, where to
+start, which way the cell faces) for
+[hardware.md](../hardware.md#opening-it-and-the-battery). Keep photos under
 500 kB (`convert in.jpg -resize 1600x -quality 82 out.jpg`).

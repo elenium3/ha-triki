@@ -76,7 +76,15 @@ its own automation in `restart` mode and keep the knob step at 30° or more. See
 
 Seen once: start acknowledged with `21 01`, no frames. The integration drops the
 link and leaves the token alone for 60 s instead of reconnecting in a loop. It
-recovered on its own.
+recovered on its own. If it does not, pull the battery for a few seconds; see
+[Opening it and the battery](hardware.md#opening-it-and-the-battery).
+
+## The token never advertises
+
+Something else holds the link, usually a phone with the Żappka app that is
+still in range: the token accepts one connection at a time and does not
+advertise while connected. Turn Bluetooth off on the phone or close the app.
+A battery pull also drops that link.
 
 ## Duplicate notifications on a local adapter
 
