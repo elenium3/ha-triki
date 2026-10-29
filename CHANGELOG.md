@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- The battery pause took the first notification after STOP, which can still be
+  the loaded figure (27 % at 3 s, the rested 82 % follows at 4–6 s). The pause
+  now stays open for 3 s of quiet after a value and keeps the last one.
+
 ### Changed
 - A restart or reload no longer shows the under-load battery figure (17–27 %)
   for the first minute: the sensor's last value seeds the device and the

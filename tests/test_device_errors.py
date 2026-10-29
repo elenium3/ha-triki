@@ -908,3 +908,29 @@ async def test_restored_battery_skips_the_under_load_read(
     read_uuids = [c.args[0] for c in client.read_gatt_char.await_args_list]
     assert BATTERY_LEVEL_UUID not in read_uuids  # no 27 % flash after a restart
     assert hass.states.get(BATTERY).state == "77"
+
+
+async def test_battery_pause_keeps_the_last_value_of_a_quiet_spell(
+    hass: HomeAssistant, setup
+) -> None:
+    """The first notification after STOP can still be the loaded figure; the rested
+    one follows a few seconds later and must win."""
+    from custom_components.triki.protocol import stop_command
+
+    client = make_client()
+    await advertise(hass, setup, client)
+    dev = setup.runtime_data
+
+    async def write(uuid, data, response=False):
+        if data == stop_command():
+            cb = battery_callback(client)
+            hass.loop.call_soon(cb, None, bytearray([27]))
+            hass.loop.call_later(0.1, cb, None, bytearray([82]))
+
+    client.write_gatt_char = AsyncMock(side_effect=write)
+    with patch("custom_components.triki.device._BATTERY_SETTLE_S", 0.3):
+        dev._last_activity -= 100
+        dev._idle_check(None)
+        await settle(hass, dev)
+    assert hass.states.get(BATTERY).state == "82"
+    assert not dev._battery_pause

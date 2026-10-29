@@ -112,6 +112,10 @@ _UNREACHABLE_AFTER = 3
 # right after a connect is taken under load (27 % against 82 % at rest on the
 # same cell) and never changes while the stream runs.
 _BATTERY_REFRESH_WAIT_S = 10.0  # how long the stream may stay stopped for a measurement
+# The first notification after STOP can still carry the loaded figure (27 % at
+# 3.0 s, then 82 % at 4-6 s on the test unit): after a value, keep the pause
+# open for a quiet spell this long and take the last one.
+_BATTERY_SETTLE_S = 3.0
 _BATTERY_CHECK_S = 60.0  # how often to look for an idle moment once a refresh is due
 _BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before pausing
 
@@ -849,21 +853,35 @@ class TrikiDevice:
             async with asyncio.timeout(_STOP_TIMEOUT_S):
                 await client.write_gatt_char(NUS_RX_UUID, stop_command(), response=True)
             t = time.monotonic()
-            try:
-                async with asyncio.timeout(_BATTERY_REFRESH_WAIT_S):
-                    await self._battery_event.wait()
-            except TimeoutError:
+            deadline = t + _BATTERY_REFRESH_WAIT_S
+            values = 0
+            while self._client is client:
+                remaining = deadline - time.monotonic()
+                if values:
+                    remaining = min(remaining, _BATTERY_SETTLE_S)
+                if remaining <= 0:
+                    break
+                try:
+                    async with asyncio.timeout(remaining):
+                        await self._battery_event.wait()
+                except TimeoutError:
+                    break
+                self._battery_event.clear()
+                values += 1
+            if values:
+                _LOGGER.debug(
+                    "%s: battery %s%% after a %.1fs stream pause (%d value%s)",
+                    self.name,
+                    self.battery,
+                    time.monotonic() - t,
+                    values,
+                    "" if values == 1 else "s",
+                )
+            else:
                 _LOGGER.debug(
                     "%s: no battery update within %.0fs of the stream pause",
                     self.name,
                     _BATTERY_REFRESH_WAIT_S,
-                )
-            else:
-                _LOGGER.debug(
-                    "%s: battery %s%% after a %.1fs stream pause",
-                    self.name,
-                    self.battery,
-                    time.monotonic() - t,
                 )
         finally:
             self._battery_pause = False

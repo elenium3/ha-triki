@@ -36,6 +36,13 @@ def auto_enable_custom_integrations(enable_custom_integrations):
 
 
 @pytest.fixture(autouse=True)
+def quick_battery_settle():
+    """The pause waits 3 s of quiet after a battery value; tests cannot afford that."""
+    with patch("custom_components.triki.device._BATTERY_SETTLE_S", 0.05):
+        yield
+
+
+@pytest.fixture(autouse=True)
 def mock_close_stale():
     """No BlueZ in the test environment: the stale-link sweep at setup is a no-op."""
     with patch("custom_components.triki.close_stale_connections_by_address", AsyncMock()) as mock:
