@@ -128,6 +128,18 @@ enclosures apply: work on a soft surface, use a plastic spudger or a guitar
 pick rather than a screwdriver, go around the rim in small steps instead of
 prying at one point, and note which way the cell faces before lifting it out.
 
+The photo series this section is waiting for (placeholders until someone
+takes them; replace the `.svg` files in `images/` with `.jpg` of the same
+name and update the links):
+
+<p align="center">
+  <img src="images/open-1-tool.svg" width="300" alt="Placeholder: the token, the cell and the tool">
+  <img src="images/open-2-pry.svg" width="300" alt="Placeholder: where to start lifting the green part">
+  <br>
+  <img src="images/open-3-inside.svg" width="300" alt="Placeholder: the open token with the cell in place">
+  <img src="images/open-4-cell.svg" width="300" alt="Placeholder: the cell out, holder and contacts">
+</p>
+
 ### When a power cycle helps
 
 Pulling the cell for a few seconds and putting it back restarts the firmware
