@@ -41,12 +41,16 @@ wall switch. More: [The token](docs/hardware.md).
 
 ## Quick install
 
-1. HACS → Integrations → ⋮ → *Custom repositories* →
-   `https://github.com/elenium3/ha-triki`, category *Integration*. Install,
-   restart Home Assistant.
-2. Press the token. *Settings → Devices & services* shows *Żabka Triki* under
-   *Discovered*; confirm.
-3. Automate on `event.<name>_action`:
+1. In [HACS](https://www.hacs.xyz/docs/use/) add this repository as a
+   [custom repository](https://www.hacs.xyz/docs/faq/custom_repositories/)
+   (`https://github.com/elenium3/ha-triki`, type *Integration*), install it and
+   [restart Home Assistant](https://www.home-assistant.io/docs/configuration/#reloading-changes).
+2. Press the token. It shows up as *Żabka Triki* under *Discovered* in
+   [Settings → Devices & services](https://my.home-assistant.io/redirect/integrations/);
+   confirm.
+3. Automate on the [event entity](https://www.home-assistant.io/integrations/event/)
+   `event.<name>_action` with a
+   [state trigger](https://www.home-assistant.io/docs/automation/trigger/#state-trigger):
 
 ```yaml
 automation:
@@ -64,15 +68,21 @@ automation:
 
 ## Full installation
 
-- **Receiver.** Put a Bluetooth receiver where the token is used. An ESP32
-  flashed as an ESPHome Bluetooth proxy next to the desk connects in under a
-  second; a Raspberry Pi across the room does not. This matters more than any
-  option. [Bluetooth proxy for beginners](docs/bluetooth-proxy.md) ·
+- **Receiver.** Home Assistant needs its
+  [Bluetooth integration](https://www.home-assistant.io/integrations/bluetooth/)
+  and a receiver where the token is used. An ESP32 flashed as an
+  [ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy.html)
+  next to the desk connects in under a second; a Raspberry Pi across the room
+  does not. This matters more than any option.
+  [Bluetooth proxy for beginners](docs/bluetooth-proxy.md) ·
   [Radio and placement](docs/radio-and-placement.md)
-- **Manual install.** Copy `custom_components/triki` into `<config>/custom_components/`
-  (or unpack `triki.zip` from a release) and restart. Not discovered: *Add
-  integration → Żabka Triki*, press the button, pick the token.
-  [Installation](docs/installation.md)
+- **Manual install.** Copy `custom_components/triki` (or unpack `triki.zip`
+  from a [release](https://github.com/elenium3/ha-triki/releases)) into the
+  `custom_components` folder of your
+  [configuration directory](https://www.home-assistant.io/docs/configuration/)
+  and restart. Not discovered:
+  [Add integration → Żabka Triki](https://my.home-assistant.io/redirect/config_flow_start/?domain=triki),
+  press the button, pick the token. [Installation](docs/installation.md)
 - **Options.** Sample rate, idle and sleep timeouts, knob step, multi-press,
   which gestures are on, raw capture. [Configuration](docs/configuration.md)
 - **Automations.** Knob dimming, long press, preset cycling, a light-effect

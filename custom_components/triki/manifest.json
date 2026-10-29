@@ -11,6 +11,9 @@
       "connectable": true
     }
   ],
+  "categories": [
+    "buttons_remotes"
+  ],
   "codeowners": [
     "@elenium3"
   ],
