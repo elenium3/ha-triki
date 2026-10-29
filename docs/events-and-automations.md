@@ -175,6 +175,198 @@ step; otherwise the whole effect waits for the slowest lamp.
               entity_id: script.police_lights
 ```
 
+## Example: media player — press pauses, knob is the volume, double press skips
+
+The volume automation uses `restart` mode for the same reason as the dimmer:
+a fast turn must not queue twenty service calls behind a slow receiver.
+
+```yaml
+  - alias: "Triki: press toggles playback"
+    mode: queued
+    max: 3
+    triggers:
+      - trigger: state
+        entity_id: event.triki_action
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.to_state.state not in ['unavailable', 'unknown']
+             and trigger.to_state.attributes.event_type == 'press' }}
+    actions:
+      - action: media_player.media_play_pause
+        target:
+          entity_id: media_player.kitchen
+
+  - alias: "Triki: knob sets the volume"
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: event.triki_action
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.to_state.state not in ['unavailable', 'unknown']
+             and trigger.to_state.attributes.event_type in ['rotate_cw', 'rotate_ccw'] }}
+    actions:
+      - action: media_player.volume_set
+        target:
+          entity_id: media_player.kitchen
+        data:
+          volume_level: >-
+            {% set v = state_attr('media_player.kitchen', 'volume_level') | float(0.3) %}
+            {% set step = 0.03 * (trigger.to_state.attributes.steps | default(1) | int) %}
+            {{ [0, [1, v + (step if trigger.to_state.attributes.event_type == 'rotate_cw' else -step)] | min] | max }}
+
+  - alias: "Triki: double press skips the track"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: event.triki_action
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.to_state.state not in ['unavailable', 'unknown']
+             and trigger.to_state.attributes.event_type == 'double_press' }}
+    actions:
+      - action: media_player.media_next_track
+        target:
+          entity_id: media_player.kitchen
+```
+
+## Example: thermostat — knob moves the set point by 0.5 °C
+
+```yaml
+  - alias: "Triki: knob sets the bedroom temperature"
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: event.triki_action
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.to_state.state not in ['unavailable', 'unknown']
+             and trigger.to_state.attributes.event_type in ['rotate_cw', 'rotate_ccw'] }}
+    actions:
+      - action: climate.set_temperature
+        target:
+          entity_id: climate.bedroom
+        data:
+          temperature: >-
+            {% set t = state_attr('climate.bedroom', 'temperature') | float(20) %}
+            {% set step = 0.5 * (trigger.to_state.attributes.steps | default(1) | int) %}
+            {{ [16, [26, t + (step if trigger.to_state.attributes.event_type == 'rotate_cw' else -step)] | min] | max }}
+```
+
+## Example: blinds — press toggles, long press stops, knob sets the position
+
+```yaml
+  - alias: "Triki: blinds"
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: event.triki_action
+    conditions:
+      - condition: template
+        value_template: "{{ trigger.to_state.state not in ['unavailable', 'unknown'] }}"
+    actions:
+      - variables:
+          kind: "{{ trigger.to_state.attributes.event_type }}"
+      - choose:
+          - conditions: "{{ kind == 'press' }}"
+            sequence:
+              - action: cover.toggle
+                target:
+                  entity_id: cover.living_room
+          - conditions: "{{ kind == 'long_press' }}"
+            sequence:
+              - action: cover.stop_cover
+                target:
+                  entity_id: cover.living_room
+          - conditions: "{{ kind in ['rotate_cw', 'rotate_ccw'] }}"
+            sequence:
+              - action: cover.set_cover_position
+                target:
+                  entity_id: cover.living_room
+                data:
+                  position: >-
+                    {% set p = state_attr('cover.living_room', 'current_position') | int(50) %}
+                    {% set step = 10 * (trigger.to_state.attributes.steps | default(1) | int) %}
+                    {{ [0, [100, p + (step if kind == 'rotate_cw' else -step)] | min] | max }}
+```
+
+## Example: triple press calls for help
+
+A bedside or bathroom use: three quick presses send a notification to every
+phone and flash the hallway light. `shake` works as a second trigger for people
+who cannot find the button.
+
+```yaml
+  - alias: "Triki: triple press calls for help"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: event.triki_action
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.to_state.state not in ['unavailable', 'unknown']
+             and trigger.to_state.attributes.event_type in ['triple_press', 'shake'] }}
+    actions:
+      - action: notify.notify
+        data:
+          title: "Triki"
+          message: "Help requested from the bedroom at {{ now().strftime('%H:%M') }}"
+      - repeat:
+          count: 5
+          sequence:
+            - action: light.toggle
+              target:
+                entity_id: light.hallway
+            - delay: "00:00:01"
+```
+
+## Example: the LED as a status light
+
+The LED can only be written while the token is linked, so set it on `wake`,
+right after the link comes up. Here it shows whether a window is open.
+
+```yaml
+  - alias: "Triki: LED shows an open window"
+    mode: single
+    triggers:
+      - trigger: state
+        entity_id: event.triki_action
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.to_state.state not in ['unavailable', 'unknown']
+             and trigger.to_state.attributes.event_type == 'wake' }}
+    actions:
+      - action: >-
+          switch.turn_{{ 'on' if is_state('binary_sensor.window', 'on') else 'off' }}
+        target:
+          entity_id: switch.triki_led
+        continue_on_error: true
+```
+
+## Example: low battery warning
+
+The battery sensor updates at most every 30 minutes while the token is idle, so
+a plain numeric state trigger is enough.
+
+```yaml
+  - alias: "Triki: battery low"
+    triggers:
+      - trigger: numeric_state
+        entity_id: sensor.triki_battery
+        below: 20
+        for: "01:00:00"
+    actions:
+      - action: notify.notify
+        data:
+          message: "Triki battery at {{ states('sensor.triki_battery') }} %: time for a CR2032."
+```
+
 ## Using the device trigger UI
 
 The event entity works with the standard *State* trigger in the automation
