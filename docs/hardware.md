@@ -171,11 +171,19 @@ on:
   (MIT): another Home Assistant integration exposing raw sensors, button and LED.
   This project differs in being gesture-oriented (event entity, knob, presses)
   and in how it manages the link (idle rate, sleep handling, proxy-first).
-- Also: [AND-Y0/TrikiReader](https://github.com/AND-Y0/TrikiReader) (C#),
-  [CreoleVR/TrikiVR](https://github.com/CreoleVR/TrikiVR) (SlimeVR tracker),
-  [Wojtekb30/unofficial-triki-api-py](https://github.com/Wojtekb30/unofficial-triki-api-py),
+- Also: [AND-Y0/TrikiReader](https://github.com/AND-Y0/TrikiReader) (C#, 3D
+  orientation viewer), [egortar-pi/TrikiControl](https://github.com/egortar-pi/TrikiControl)
+  (C#, Windows tray remote), [CreoleVR/TrikiVR](https://github.com/CreoleVR/TrikiVR)
+  (SlimeVR tracker), [Wojtekb30/unofficial-triki-api-py](https://github.com/Wojtekb30/unofficial-triki-api-py),
+  [ekl3m/triki-ble-reverse-engineering](https://github.com/ekl3m/triki-ble-reverse-engineering),
+  [kawaczek/triki](https://github.com/kawaczek/triki) (Android mouse),
+  [Diego7120/esp_triki](https://github.com/Diego7120/esp_triki) (ESP32),
   [alex-so-3/find-my-triki](https://github.com/alex-so-3/find-my-triki),
   [DISKIMG/Triki-PCB](https://github.com/DISKIMG/Triki-PCB) (KiCad).
+- Write-ups: [jmalko on elektroda.pl](https://www.elektroda.pl/news/news4175986.html)
+  (teardown, HCI snoop with `adb bugreport`, NUS and LED commands, June 2026)
+  and the [r/Polska thread](https://www.reddit.com/r/Polska/comments/1txi9uz/kontroler_triki_z_%C5%BCabki_czy_kto%C5%9B_pr%C3%B3bowa%C5%82/)
+  that collected the first findings.
 
 Triki, Żappka and Żabka are trademarks of their owners. This project is not
 affiliated with Żabka Polska or Caps Apps.

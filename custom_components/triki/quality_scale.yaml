@@ -1,0 +1,95 @@
+rules:
+  # Bronze
+  action-setup:
+    status: exempt
+    comment: The integration registers no actions.
+  appropriate-polling:
+    status: exempt
+    comment: Push only (iot_class local_push); the battery is read over the live link every 10 minutes.
+  brands: done
+  common-modules: done
+  config-flow: done
+  config-flow-test-coverage: done
+  dependency-transparency:
+    status: done
+    comment: No requirements of its own; bleak comes with Home Assistant's Bluetooth stack.
+  docs-actions:
+    status: exempt
+    comment: No actions.
+  docs-high-level-description: done
+  docs-installation-instructions: done
+  docs-removal-instructions: done
+  entity-event-setup: done
+  entity-unique-id: done
+  has-entity-name: done
+  runtime-data: done
+  test-before-configure:
+    status: exempt
+    comment: >
+      The flow only needs a fresh advertisement. The token sleeps a few seconds
+      after a press, so connecting inside the flow would race the user; the first
+      press after setup is the test.
+  test-before-setup:
+    status: exempt
+    comment: >
+      Setup only registers advertisement callbacks. The token is asleep most of
+      the time by design, so ConfigEntryNotReady could never resolve.
+  unique-config-entry: done
+
+  # Silver
+  action-exceptions: done
+  config-entry-unloading: done
+  docs-configuration-parameters: done
+  docs-installation-parameters: done
+  entity-unavailable:
+    status: done
+    comment: >
+      Only pitch and roll go unavailable while the token sleeps; sleep is its
+      normal state, so the event, button and LED entities stay available.
+  integration-owner: done
+  log-when-unavailable: todo
+  parallel-updates: done
+  reauthentication-flow:
+    status: exempt
+    comment: The token has no credentials.
+  test-coverage: done
+
+  # Gold
+  devices: done
+  diagnostics: done
+  discovery: done
+  discovery-update-info:
+    status: exempt
+    comment: The Bluetooth address is the unique id and the only connection information.
+  docs-data-update: done
+  docs-examples: done
+  docs-known-limitations: done
+  docs-supported-devices: done
+  docs-supported-functions: done
+  docs-troubleshooting: done
+  docs-use-cases: done
+  dynamic-devices:
+    status: exempt
+    comment: One token per config entry.
+  entity-category: done
+  entity-device-class: done
+  entity-disabled-by-default: done
+  entity-translations: done
+  exception-translations: done
+  icon-translations: done
+  reconfiguration-flow:
+    status: exempt
+    comment: The entry data holds only the address, which is the identity of the device.
+  repair-issues:
+    status: exempt
+    comment: Nothing the user can repair; the one known refusal state heals itself.
+  stale-devices:
+    status: exempt
+    comment: The device lives exactly as long as its config entry.
+
+  # Platinum
+  async-dependency: done
+  inject-websession:
+    status: exempt
+    comment: No HTTP.
+  strict-typing: done

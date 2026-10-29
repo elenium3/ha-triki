@@ -41,6 +41,8 @@ wall switch. More: [The token](docs/hardware.md).
 
 ## Quick install
 
+[![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=elenium3&repository=ha-triki&category=integration)
+
 1. In [HACS](https://www.hacs.xyz/docs/use/) add this repository as a
    [custom repository](https://www.hacs.xyz/docs/faq/custom_repositories/)
    (`https://github.com/elenium3/ha-triki`, type *Integration*), install it and
@@ -128,8 +130,8 @@ Every gesture is also fired on the bus as `triki_event` with `device_id`,
   ignored while the token still advertises. Keep the sleep timeout at 0.
 - Shake is unreliable through a proxy; use triple press. Tap, throw and flip
   are tuned on synthetic data only.
-- The integration icon shows up once `brands/triki` is accepted into
-  [home-assistant/brands](https://github.com/home-assistant/brands).
+- The integration icon needs Home Assistant 2026.3 or newer (it ships in
+  `custom_components/triki/brand/`); older versions show a placeholder.
 
 ## Credits
 

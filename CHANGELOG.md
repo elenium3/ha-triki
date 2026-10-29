@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Integration icon and logo ship in `custom_components/triki/brand/`
+  (Home Assistant 2026.3+ reads them from there; no brands PR needed).
+- Polish translation.
+- `quality_scale.yaml` recording the Integration Quality Scale status.
+- Config flow: `data_description` for the device picker, knob step and
+  inverted rotation; `already_in_progress` abort text.
+
 ## [0.1.0] - 2026-10-29
 
 First usable version, tested on a real token through an ESPHome Bluetooth proxy
