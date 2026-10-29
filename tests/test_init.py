@@ -155,6 +155,58 @@ async def test_capture_option(hass: HomeAssistant, mock_bluetooth, tmp_path) -> 
     assert recs[-1]["disconnected"] is True
 
 
+async def test_capture_batches_keep_their_order(
+    hass: HomeAssistant, mock_bluetooth, tmp_path
+) -> None:
+    """Two flushes in flight at once must not land in the file out of order."""
+    import json as _json
+    import time as _time
+
+    from custom_components.triki import capture as capture_mod
+
+    hass.config.config_dir = str(tmp_path)
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=ADDRESS,
+        title=NAME,
+        data={CONF_ADDRESS: ADDRESS},
+        options={"capture": True},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    real_append = capture_mod._append
+    calls = {"n": 0}
+
+    def slow_first(path, lines):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            _time.sleep(0.1)  # the first batch is slow to hit the disk
+        real_append(path, lines)
+
+    with patch("custom_components.triki.capture._append", side_effect=slow_first):
+        client, notify = await connect(hass, entry)
+        cap = entry.runtime_data._capture
+        cap._flush()  # batch 1: meta + wake
+        notify(None, bytearray(frame()))
+        cap._flush()  # batch 2: one frame
+        for _ in range(100):
+            files = list((tmp_path / "triki_captures").glob("*.jsonl"))
+            if files and len(files[0].read_text().splitlines()) >= 3:
+                break
+            await asyncio.sleep(0.02)
+        entry.runtime_data._on_disconnect(client)
+        await hass.async_block_till_done()
+    recs = [_json.loads(x) for x in files[0].read_text().splitlines()]
+    assert "meta" in recs[0]
+    assert next(r for r in recs if "hex" in r) is recs[2]
+
+
+async def test_setup_closes_stale_links_first(hass: HomeAssistant, setup, mock_close_stale) -> None:
+    mock_close_stale.assert_awaited_once_with(ADDRESS)
+
+
 async def test_ha_stop_closes_the_link(hass: HomeAssistant, setup) -> None:
     """HA does not unload entries on shutdown; the link must still be closed."""
     client, _ = await connect(hass, setup)
