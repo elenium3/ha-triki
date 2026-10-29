@@ -14,7 +14,7 @@
   <a href="https://github.com/elenium3/ha-triki/releases"><img src="https://img.shields.io/github/v/release/elenium3/ha-triki?include_prereleases" alt="Release"></a>
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-custom-41BDF5.svg" alt="HACS custom"></a>
   <img src="https://img.shields.io/badge/Home%20Assistant-2025.8%2B-blue" alt="Home Assistant 2025.8+">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/elenium3/ha-triki" alt="MIT"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT"></a>
 </p>
 
 ## What it is
