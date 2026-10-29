@@ -25,6 +25,9 @@ All notable changes to this project are documented here. The format follows
 - `docs/hardware.md`: board photo, chip photo and the community reference
   schematic (linked from Piwencjusz/zabka-triki-hardware, which has no license
   file), with the pin assignments explained in words.
+- `docs/hardware.md`: "Opening it and the battery": CR2032, how the cap is
+  built, when a power cycle helps and what it does not fix. The opening
+  technique itself is marked as not yet documented.
 
 ### Fixed
 - Security workflow: Gitleaks needs `pull-requests: read` on pull requests;
