@@ -57,10 +57,19 @@ second; raise the knob step.
 
 ## Shake is not detected, or shows up as rotations
 
-Known. The shake detector was tuned on a local adapter at 104 Hz; through a
-proxy at 52 Hz with lost frames it rarely triggers, and the swinging registers
-as alternating `rotate_cw` / `rotate_ccw`. Use triple press for the same job
-until the detector is retuned. Captures of shakes (see
+The detector wants about 0.8 s of hard swinging (peaks above 500 °/s, the
+direction reversing at least twice) and judges it on the frames' arrival times,
+so a lossy proxy link only delays the event. What still loses it:
+
+- The token was idle (26 Hz) and the link drops most frames: fewer than ~8
+  frames per second reach the detector, and a short shake may not show two
+  reversals. Shake longer, or raise the idle timeout so the token streams at
+  the configured rate when you pick it up.
+- Swinging gently: moving the token around in the hand peaks at 160–580 °/s
+  and is deliberately below the threshold.
+
+While swinging, rotations are muted, so a shake must not appear as
+`rotate_cw` / `rotate_ccw` any more. Captures of shakes that misbehave (see
 [Development](development.md)) help.
 
 ## Automations lag or presses arrive late
