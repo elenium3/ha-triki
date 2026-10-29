@@ -89,8 +89,9 @@ Also: a KiCad schematic in [DISKIMG/Triki-PCB](https://github.com/DISKIMG/Triki-
   pushes the result by notification (the Battery Level characteristic has
   `notify`); after a STOP the update came 6 s later. A read right after a
   connect returns a value taken under load: 27 % against 82 % at rest on the
-  same cell, within seconds, and that low value does not change while the
-  stream runs. On the development unit the resting level went from 84 % to
+  same cell, within seconds. While streaming the token keeps measuring under
+  load and reports a change by notification (82 % at rest, 27 % again six
+  minutes into a 26 Hz stream). On the development unit the resting level went from 84 % to
   82 % over a night with the link held most of the time. No long-term figures
   yet.
 - **Axes.** The sensor's +Z points out of the top (the Ż logo side), so a token

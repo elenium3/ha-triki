@@ -308,7 +308,8 @@ async def test_repeated_connect_failures_are_logged_once(
     assert "connected again" in caplog.text
 
 
-async def test_battery_notification_updates_the_sensor(hass: HomeAssistant, setup) -> None:
+async def test_battery_notification_counts_only_at_rest(hass: HomeAssistant, setup) -> None:
+    """The token also reports while streaming; that value is taken under load."""
     client = make_client()
     await advertise(hass, setup, client)
     dev = setup.runtime_data
@@ -316,6 +317,10 @@ async def test_battery_notification_updates_the_sensor(hass: HomeAssistant, setu
     battery_cb = next(
         c.args[1] for c in client.start_notify.await_args_list if c.args[0] == BATTERY_LEVEL_UUID
     )
+    battery_cb(None, bytearray([27]))  # unsolicited, stream running: ignored
+    await hass.async_block_till_done()
+    assert hass.states.get(BATTERY).state == "87"
+    dev._battery_pause = True
     battery_cb(None, bytearray([83]))
     await hass.async_block_till_done()
     assert hass.states.get(BATTERY).state == "83"
@@ -440,7 +445,9 @@ async def test_connect_read_only_while_battery_unknown(hass: HomeAssistant, setu
     client = make_client()
     await advertise(hass, setup, client)
     dev = setup.runtime_data
+    dev._battery_pause = True  # as during a stream pause
     battery_callback(client)(None, bytearray([82]))
+    dev._battery_pause = False
     await hass.async_block_till_done()
     assert hass.states.get(BATTERY).state == "82"
     dev._handle_disconnected()

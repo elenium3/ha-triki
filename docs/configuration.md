@@ -56,7 +56,7 @@ battery cost of a permanently held link. This is tracked as an open issue; see
 | `binary_sensor.<name>_button` | | Live button state. Off while the token sleeps. |
 | `binary_sensor.<name>_connected` | diagnostic | Link state. |
 | `light.<name>_led` | | The green LED. Last known state while asleep; can only be changed while linked. |
-| `sensor.<name>_battery` | diagnostic | The token measures its battery only while it is not streaming, so the integration stops the stream for a few seconds while the token is idle (first at the idle-rate switch, then at most every 30 min) and takes the value the token pushes. The first value after setup is read at the connect and is low (taken under load) until the first pause. Restored across restarts. |
+| `sensor.<name>_battery` | diagnostic | The token measures its battery only while it is not streaming, so the integration stops the stream for a few seconds while the token is idle (first at the idle-rate switch, then at most every 30 min) and takes the value the token pushes. Values the token reports on its own while streaming are taken under load and ignored. The first value after setup is read at the connect and is low (taken under load) until the first pause. Restored across restarts. |
 | `sensor.<name>_rssi` | diagnostic, disabled | Signal of the last advertisement as seen by the scanner that received it. |
 | `sensor.<name>_pitch`, `_roll` | disabled | Tilt in degrees from the gravity estimate, published at most once per second. |
 

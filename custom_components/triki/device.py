@@ -185,6 +185,7 @@ class TrikiDevice:
         self._unreachable_logged = False
         self._battery_refreshed = 0.0  # monotonic time of the last stream pause for it
         self._battery_event = asyncio.Event()  # set by a battery notification
+        self._battery_pause = False  # the stream is stopped for a measurement right now
         self._unsub_adv: CALLBACK_TYPE | None = None
         self._unsub_poll: CALLBACK_TYPE | None = None
         self._unsub_idle: CALLBACK_TYPE | None = None
@@ -498,12 +499,18 @@ class TrikiDevice:
             return
         level = max(0, min(100, int(data[0])))
         _LOGGER.debug(
-            "%s: battery notify %d%% (link age %.1fs, stream %s Hz)",
+            "%s: battery notify %d%% (link age %.1fs, stream %s Hz, %s)",
             self.name,
             level,
             time.monotonic() - self._session_t0,
             self.stream_rate,
+            "at rest" if self._battery_pause else "under load, ignored",
         )
+        if not self._battery_pause:
+            # the token also measures while streaming and reports the change;
+            # that value is taken under load (27 % against 82 % at rest on the
+            # same cell) and would make the sensor flap
+            return
         self._battery_event.set()
         if level != self.battery:
             self.battery = level
@@ -753,25 +760,29 @@ class TrikiDevice:
         runs while the token has been idle for a while and rarely.
         """
         self._battery_event.clear()
-        async with asyncio.timeout(_STOP_TIMEOUT_S):
-            await client.write_gatt_char(NUS_RX_UUID, stop_command(), response=True)
-        t = time.monotonic()
+        self._battery_pause = True
         try:
-            async with asyncio.timeout(_BATTERY_REFRESH_WAIT_S):
-                await self._battery_event.wait()
-        except TimeoutError:
-            _LOGGER.debug(
-                "%s: no battery update within %.0fs of the stream pause",
-                self.name,
-                _BATTERY_REFRESH_WAIT_S,
-            )
-        else:
-            _LOGGER.debug(
-                "%s: battery %s%% after a %.1fs stream pause",
-                self.name,
-                self.battery,
-                time.monotonic() - t,
-            )
+            async with asyncio.timeout(_STOP_TIMEOUT_S):
+                await client.write_gatt_char(NUS_RX_UUID, stop_command(), response=True)
+            t = time.monotonic()
+            try:
+                async with asyncio.timeout(_BATTERY_REFRESH_WAIT_S):
+                    await self._battery_event.wait()
+            except TimeoutError:
+                _LOGGER.debug(
+                    "%s: no battery update within %.0fs of the stream pause",
+                    self.name,
+                    _BATTERY_REFRESH_WAIT_S,
+                )
+            else:
+                _LOGGER.debug(
+                    "%s: battery %s%% after a %.1fs stream pause",
+                    self.name,
+                    self.battery,
+                    time.monotonic() - t,
+                )
+        finally:
+            self._battery_pause = False
         self._battery_refreshed = time.monotonic()
 
     async def _async_set_rate(self, rate: int, *, refresh: bool = False) -> None:
