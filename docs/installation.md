@@ -14,23 +14,32 @@
 
 ## HACS (recommended)
 
-1. HACS → Integrations → ⋮ → *Custom repositories*.
-2. Repository `https://github.com/elenium3/ha-triki`, category *Integration*.
-3. Install *Żabka Triki*, restart Home Assistant.
+1. [Install HACS](https://www.hacs.xyz/docs/use/download/download/) if you do
+   not have it.
+2. HACS → ⋮ → *Custom repositories*
+   ([how](https://www.hacs.xyz/docs/faq/custom_repositories/)): repository
+   `https://github.com/elenium3/ha-triki`, type *Integration*.
+3. Download *Żabka Triki* and
+   [restart Home Assistant](https://www.home-assistant.io/docs/configuration/#reloading-changes).
 
 ## Manual
 
-Copy `custom_components/triki` into `<config>/custom_components/` and restart.
-Releases on GitHub ship a `triki.zip` with the same content.
+Copy `custom_components/triki` into the `custom_components` folder of your
+[configuration directory](https://www.home-assistant.io/docs/configuration/)
+(create the folder if it is missing) and restart. Each
+[release](https://github.com/elenium3/ha-triki/releases) ships a `triki.zip`
+with the same content.
 
 ## Adding the token
 
 1. Press the green button on the token. It advertises for a few seconds after a
    press, so do this right before the next step.
-2. Home Assistant discovers it as *Żabka Triki* (Settings → Devices & services →
-   *Discovered*). Confirm.
-3. If nothing is discovered: *Add integration → Żabka Triki*, press the button
-   again and pick the token from the list.
+2. Home Assistant discovers it as *Żabka Triki* under *Discovered* in
+   [Settings → Devices & services](https://my.home-assistant.io/redirect/integrations/).
+   Confirm.
+3. If nothing is discovered:
+   [Add integration → Żabka Triki](https://my.home-assistant.io/redirect/config_flow_start/?domain=triki),
+   press the button again and pick the token from the list.
 
 The device is created immediately. Entities that only make sense while the token
 is linked (button, action, tilt) show as unavailable until the first connection.
