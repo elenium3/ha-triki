@@ -106,6 +106,16 @@ def test_knob_ccw_and_cw():
     assert sum(e.data["steps"] for e in ev) == 2
 
 
+def test_knob_muted_while_button_down_and_shortly_after():
+    d = det()
+    # the token twists in the hand while the button is pressed and released
+    ev = feed(d, secs(0.3), button=True, gz=185.0) + feed(d, secs(0.6), gz=185.0)
+    assert types(ev) == ["press"]
+    # a real turn a second after the release is reported again
+    ev = feed(d, secs(0.5)) + feed(d, secs(1.0), gz=185.0)
+    assert set(types(ev)) == {"rotate_ccw"}
+
+
 def test_knob_ignores_slow_drift():
     d = det()
     assert feed(d, secs(10), gz=5.0) == []  # bias below deadband

@@ -1,0 +1,15 @@
+name: Feature request
+description: A new gesture, option or entity
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do with the token that you cannot do now?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: How it could work. For gestures, describe the motion precisely; a capture (`tools/triki_probe.py record --label ...`) helps a lot.
