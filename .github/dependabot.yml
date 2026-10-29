@@ -4,3 +4,9 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    groups:
+      # one pull request for all action bumps; github/codeql-action init and
+      # analyze must move together or the analyze step fails
+      github-actions:
+        patterns:
+          - "*"
