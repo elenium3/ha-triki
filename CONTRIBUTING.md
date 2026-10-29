@@ -15,7 +15,7 @@ Thanks for taking the time. This is a small project, so the rules are short.
 ```bash
 git clone https://github.com/elenium3/ha-triki
 cd ha-triki
-python3.13 -m venv .venv && . .venv/bin/activate
+python3.14 -m venv .venv && . .venv/bin/activate
 pip install pytest-homeassistant-custom-component pytest-cov mypy ruff bleak
 ```
 

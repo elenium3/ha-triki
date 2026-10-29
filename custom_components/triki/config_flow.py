@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
+try:
+    # the schema library of the 2026 cores; those cores alias voluptuous to it,
+    # the 2025 cores do not ship it
+    import probatio as vol
+except ImportError:  # pragma: no cover
+    import voluptuous as vol  # type: ignore[no-redef]
 from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_discovered_service_info,

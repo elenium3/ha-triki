@@ -497,6 +497,7 @@ class TrikiDevice:
             if self._unreachable_logged:
                 self._unreachable_logged = False
                 _LOGGER.info("%s: connected again (via %s)", self.name, self.stats.last_source)
+            self._cancel_timer("_unsub_watchdog")
             self._unsub_watchdog = async_call_later(
                 self.hass, _STREAM_WATCHDOG_S, self._stream_watchdog
             )
@@ -712,10 +713,8 @@ class TrikiDevice:
         self._battery_event.set()  # do not keep a stream pause waiting on a dead link
         was_connected = self.connected
         self.connected = False
-        for unsub in (self._unsub_idle, self._unsub_battery, self._unsub_watchdog):
-            if unsub:
-                unsub()
-        self._unsub_idle = self._unsub_battery = self._unsub_watchdog = None
+        for attr in ("_unsub_idle", "_unsub_battery", "_unsub_watchdog"):
+            self._cancel_timer(attr)
         for ev in self._detector.flush():
             self._emit(ev.type, ev.data)
         if self._capture:
@@ -753,9 +752,7 @@ class TrikiDevice:
             self.stats.frames += 1
             if not self._streaming:
                 self._streaming = True
-                if self._unsub_watchdog:
-                    self._unsub_watchdog()
-                    self._unsub_watchdog = None
+                self._cancel_timer("_unsub_watchdog")
             sample = Sample.from_frame(frame)
             # frames of one notification arrived together: spread them one
             # sample period apart, ending at the arrival time
@@ -790,8 +787,21 @@ class TrikiDevice:
 
     # ------------------------------------------------------------ timers
     @callback
+    def _cancel_timer(self, attr: str) -> None:
+        """Cancel one of the call_later timers, if armed.
+
+        The timer callbacks call this on themselves first: cancelling the handle
+        that is already running is a no-op, and a callback invoked by hand (the
+        tests do) must not leave its own timer behind.
+        """
+        unsub = getattr(self, attr)
+        if unsub is not None:
+            unsub()
+            setattr(self, attr, None)
+
+    @callback
     def _stream_watchdog(self, _now: Any) -> None:
-        self._unsub_watchdog = None
+        self._cancel_timer("_unsub_watchdog")
         if not self.connected or self._streaming:
             return
         self.stats.stream_refusals += 1
@@ -807,13 +817,14 @@ class TrikiDevice:
 
     @callback
     def _schedule_idle_check(self) -> None:
+        self._cancel_timer("_unsub_idle")
         if self.options.idle_timeout <= 0 and self.options.sleep_timeout <= 0:
             return
         self._unsub_idle = async_call_later(self.hass, _IDLE_CHECK_S, self._idle_check)
 
     @callback
     def _idle_check(self, _now: Any) -> None:
-        self._unsub_idle = None
+        self._cancel_timer("_unsub_idle")
         if not self.connected:
             return
         idle = 0.0 if self.button else time.monotonic() - self._last_activity
@@ -940,6 +951,7 @@ class TrikiDevice:
 
     @callback
     def _schedule_battery_check(self) -> None:
+        self._cancel_timer("_unsub_battery")
         self._unsub_battery = async_call_later(self.hass, _BATTERY_CHECK_S, self._battery_check)
 
     @callback
@@ -949,7 +961,7 @@ class TrikiDevice:
         The idle-rate switch already refreshes when it happens; this covers links
         that stay idle for hours and setups with the idle timeout off.
         """
-        self._unsub_battery = None
+        self._cancel_timer("_unsub_battery")
         if not self.connected or self._client is None:
             return
         idle = time.monotonic() - self._last_activity

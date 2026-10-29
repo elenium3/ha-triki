@@ -50,7 +50,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"  # the pinned toolchain is Home Assistant 2026.10
       - run: pip install -r requirements_test.txt
       # the bluetooth component imports usb; install both components' pinned
       # requirements from the installed Home Assistant's manifests
@@ -75,10 +75,12 @@ jobs:
       matrix:
         include:
           - name: min
+            python: "3.13"  # the last Python of the 2025.x cores
             # aiodns pinned by the 2025.8 constraints breaks with pycares 5 (the
             # value is word-split by the shell, not re-parsed: no quotes needed)
             install: homeassistant==2025.8.3 pytest-homeassistant-custom-component pycares<5
           - name: latest
+            python: "3.14"  # on 3.13 pip would quietly resolve to the last 2026.2 toolchain
             install: pytest-homeassistant-custom-component
     name: compat (${{ matrix.name }})
     runs-on: ubuntu-latest
@@ -88,7 +90,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
-          python-version: "3.13"
+          python-version: ${{ matrix.python }}
       - env:
           INSTALL: ${{ matrix.install }}
         run: pip install $INSTALL
