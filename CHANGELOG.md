@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- A restart or reload no longer shows the under-load battery figure (17–27 %)
+  for the first minute: the sensor's last value seeds the device and the
+  connect-time read is skipped.
+- Picking the token up or putting it down no longer registers a rotation step
+  (the knob ignores frames with the accelerometer more than 0.25 g off 1 g).
+- Unload waits for a connect in flight and undoes it, so no link outlives the
+  entry.
+- CI: `compat` jobs run the suite against Home Assistant 2025.8 (the declared
+  minimum) and the newest release, next to the pinned toolchain.
+- Repository: full Contributor Covenant text; Discussions enabled and linked
+  from the issue chooser; release notes come from the changelog only;
+  `scripts/setup` falls back to `uv` when `python3.13` is not on PATH.
+
 ## [0.2.2] - 2026-10-29
 
 ### Changed

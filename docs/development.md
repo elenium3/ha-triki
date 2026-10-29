@@ -97,9 +97,9 @@ next to the events that were recorded live.
 ## Releasing
 
 1. Update `CHANGELOG.md`: move *Unreleased* into a new version section.
-2. Tag `vX.Y.Z` and publish a GitHub release. The release workflow stamps the
-   version into `manifest.json` and attaches `triki.zip` for HACS. GitHub's
-   generated notes are grouped by pull request label (`.github/release.yml`).
+2. Tag `vX.Y.Z` and publish a GitHub release with that section as the notes
+   (`gh release create vX.Y.Z --notes-file …`). The release workflow stamps the
+   version into `manifest.json` and attaches `triki.zip` for HACS.
 
 ## Branch protection
 

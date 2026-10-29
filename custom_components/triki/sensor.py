@@ -94,6 +94,9 @@ class TrikiSensor(TrikiEntity, RestoreSensor):
         await super().async_added_to_hass()
         if self.entity_description.restore and (last := await self.async_get_last_sensor_data()):
             self._restored = last.native_value  # type: ignore[assignment]
+            if self.entity_description.key == "battery" and isinstance(self._restored, int | float):
+                # a known level spares the under-load read at the next connect
+                self.device.restore_battery(int(self._restored))
 
     @property
     def native_value(self) -> float | int | None:
