@@ -13,9 +13,11 @@ device-independent automations.
 | `press` | `count: 1`; `source: wake` for synthetic presses | Button released (immediately, or after the multi-press window if that option is on). |
 | `double_press`, `triple_press` | `count` | Multi-press option on. |
 | `long_press` | | Button held for 0.8 s. Reported while still held; the release does not produce a `press`. |
-| `rotate_cw`, `rotate_ccw` | `steps`, `degrees` | Turned around the vertical axis by at least one knob step. Several steps can arrive in one event after a fast turn. Muted while the button is down and for 0.8 s after release. |
+| `rotate_cw`, `rotate_ccw` | `steps`, `degrees` | Turned around the vertical axis by at least one knob step, flat on a surface or held within 60° of level. Several steps can arrive in one event after a fast turn. Muted while the button is down and for 0.8 s after release, and for 0.5 s after a jolt, a shake or free fall. |
 | `shake` | | Several quick back-and-forth swings. One event per episode. |
-| `tap`, `throw`, `flip` | | Motion gestures option. Uncalibrated. |
+| `tap` | | A jolt on a token that is at rest: a finger tap on the table, a light knock. Reported once the token is still again (up to 0.4 s). Motion gestures option. |
+| `throw` | | Free fall of at least 60 ms: a toss or a drop. Motion gestures option. |
+| `flip` | | Turned upside down and held still for 0.3 s; the way back is a flip too. Motion gestures option. |
 
 ### Gesture status
 
@@ -25,9 +27,11 @@ and a Raspberry Pi 5 adapter):
 | Gesture | Status |
 |---|---|
 | wake, press, long press, double and triple press | Reliable. |
-| rotate | Reliable with the token flat on a surface or held level. A press twists the token in the hand; those false rotations are filtered. |
-| shake | Confirmed through a proxy: one event per shake about a second after it starts, no rotations while swinging. Timed on the frames' arrival clock, so lost frames and the 26 Hz idle rate only delay it. The twist of picking the token up may register one rotation step before the shake. |
-| tap, throw, flip | Synthetic data only. |
+| rotate | Reliable flat on a surface or held level. On the 29 Oct 2026 session a brisk back-and-forth spin on the table reported 85 % of the turned angle, between the fingers 65–70 % (the rest is the remainder dropped at every reversal and pause). A press twists the token in the hand; those false rotations are filtered. Picking the token up and turning it in the same move still counts as a turn. |
+| shake | Confirmed: 4 of 4 through a proxy, one event per shake about a second after it starts, no false taps or rotations while swinging. Timed on the frames' arrival clock, so lost frames and the 26 Hz idle rate only delay it. |
+| tap | Confirmed on the table: 4 of 5 finger taps. Not detected when the token is knocked against something while being moved in the hand (by design: it must be at rest before the jolt). |
+| throw | Confirmed: 3 tosses and a drop gave 5 events, a catch can count twice. |
+| flip | Confirmed on a real turn-over. Also fires when the token is held upside down in the hand for 0.3 s. |
 
 ## Bus event
 
@@ -85,9 +89,13 @@ automation:
         target:
           entity_id: light.ceiling
         data:
-          brightness_step_pct: >-
-            {{ 8 * (trigger.to_state.attributes.steps | default(1) | int)
-               * (1 if trigger.to_state.attributes.event_type == 'rotate_cw' else -1) }}
+          # clamped to 1 %: brightness_step_pct would switch the light off at the
+          # bottom, and the knob then needs a press to bring it back
+          brightness_pct: >-
+            {% set cur = (state_attr('light.ceiling', 'brightness') | int(0)) * 100 / 255 %}
+            {% set delta = 8 * (trigger.to_state.attributes.steps | default(1) | int)
+               * (1 if trigger.to_state.attributes.event_type == 'rotate_cw' else -1) %}
+            {{ [1, [100, (cur + delta) | round(0)] | min] | max | int }}
 
   - alias: "Triki: long press = full warm white"
     mode: single
