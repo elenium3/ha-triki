@@ -140,15 +140,17 @@ async def test_capture_option(hass: HomeAssistant, mock_bluetooth, tmp_path) -> 
     notify(None, bytearray(frame() * 2))
     entry.runtime_data._on_disconnect(client)
     await hass.async_block_till_done()
-    # the capture file is written from an executor job that block_till_done
-    # does not wait for, so poll for it briefly
-    for _ in range(50):
+    # the capture file is created and written from an executor job that
+    # block_till_done does not wait for: poll until the final record is in
+    recs: list[dict] = []
+    for _ in range(100):
         files = list((tmp_path / "triki_captures").glob("*.jsonl"))
-        if files:
-            break
+        if files and (text := files[0].read_text()).endswith("\n"):
+            recs = [_json.loads(x) for x in text.splitlines()]
+            if "disconnected" in recs[-1]:
+                break
         await asyncio.sleep(0.02)
     assert len(files) == 1
-    recs = [_json.loads(x) for x in files[0].read_text().splitlines()]
     assert recs[0]["meta"]["rate"] == DEFAULT_RATE
     assert any(r.get("event") == "wake" for r in recs)
     assert any("hex" in r for r in recs)
