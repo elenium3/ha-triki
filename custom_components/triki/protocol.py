@@ -108,9 +108,12 @@ class Sample:
 
 
 class FrameParser:
-    """Reassemble 14-byte frames from BLE notification chunks, resyncing on header."""
+    """Reassemble 14-byte frames from BLE notification chunks, resyncing on header.
 
-    MAX_BUFFER = 256
+    The buffer never outgrows one chunk plus a partial frame: whatever has no
+    header is dropped on the spot, and a header is consumed as soon as a full
+    frame follows it.
+    """
 
     def __init__(self) -> None:
         self._buf = bytearray()
@@ -142,8 +145,6 @@ class FrameParser:
                 self.dropped += idx
                 del self._buf[:idx]
             if len(self._buf) < FRAME_LEN:
-                if len(self._buf) > self.MAX_BUFFER:  # pragma: no cover - defensive
-                    self._buf.clear()
                 return
             frame = bytes(self._buf[:FRAME_LEN])
             del self._buf[:FRAME_LEN]

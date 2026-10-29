@@ -9,6 +9,7 @@ Same line format as tools/triki_probe.py, so tools/replay.py works on both:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from pathlib import Path
@@ -29,6 +30,9 @@ class Capture:
         self._buf: list[str] = []
         self._t0 = 0.0
         self._unsub: CALLBACK_TYPE | None = None
+        # one writer at a time, in flush order: two executor jobs in flight at
+        # once could append the later batch first
+        self._io_lock = asyncio.Lock()
 
     @callback
     def start(self, meta: dict[str, Any]) -> None:
@@ -58,7 +62,15 @@ class Capture:
         if not self._buf or self.path is None:
             return
         lines, self._buf = self._buf, []
-        self.hass.async_add_executor_job(_append, self.path, lines)
+        # eager: the lock is taken (or queued for) right here, so batches are
+        # written in the order they were flushed
+        self.hass.async_create_background_task(
+            self._write(self.path, lines), f"triki_capture_{self.name}", eager_start=True
+        )
+
+    async def _write(self, path: Path, lines: list[str]) -> None:
+        async with self._io_lock:
+            await self.hass.async_add_executor_job(_append, path, lines)
 
     @callback
     def stop(self) -> None:

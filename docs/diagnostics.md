@@ -33,6 +33,7 @@ produces a JSON like this (addresses redacted):
 | `stream_refusals` | Connected, start acknowledged, no frames within 3 s. |
 | `notifications`, `frames` | BLE notifications received and 14-byte frames parsed from them. Notifications far above frames means BlueZ duplicates, see [Troubleshooting](troubleshooting.md). |
 | `rate_switches` | Idle ↔ active stream re-starts over the live link. |
+| `led_write_retries` | LED writes that failed with a GATT error and were retried (up to three tries, 0.3 s apart). |
 | `parser_dropped_bytes` | Bytes skipped while re-synchronising on a frame header. A handful per session is normal. |
 | `last_source` | Scanner the last link went through (redacted: it is the adapter's or proxy's MAC). |
 | `last_link_s` | Time from the connect request to the stream running. 0.1–0.3 s through a proxy, 1.5–10 s on a distant local adapter. |

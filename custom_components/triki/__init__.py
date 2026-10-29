@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from bleak_retry_connector import close_stale_connections_by_address
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, EVENT_HOMEASSISTANT_STOP, Platform
@@ -44,6 +45,9 @@ async def async_migrate_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> b
 
 async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> bool:
     address: str = entry.data[CONF_ADDRESS]
+    # A link left open by a previous Home Assistant process (crash, kill) stays
+    # up in BlueZ; the token then neither advertises nor accepts a second link.
+    await close_stale_connections_by_address(address)
     device = TrikiDevice(hass, address, entry.title, TrikiOptions.from_entry(entry), entry=entry)
     dev = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,

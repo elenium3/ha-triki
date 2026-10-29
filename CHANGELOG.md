@@ -13,6 +13,30 @@ All notable changes to this project are documented here. The format follows
 - `quality_scale.yaml` recording the Integration Quality Scale status.
 - Config flow: `data_description` for the device picker, knob step and
   inverted rotation; `already_in_progress` abort text.
+- One info log line after three failed connect attempts in a row for an awake
+  token, and one when it links again.
+- `led_write_retries` link statistic in diagnostics.
+
+### Changed
+- A stale BlueZ link left by a previous Home Assistant process is closed when
+  the entry loads.
+- The LED write has a 5 s timeout and is retried up to three times on a GATT
+  error. Turning the LED on while the token sleeps now raises
+  `HomeAssistantError` (a device state, not invalid input).
+
+### Fixed
+- Battery level stuck at a low value (17–27 %) for whole sessions while the
+  resting level was 82–100 %. The token measures its battery only while it is
+  not streaming; the integration read it right after the connect, under load,
+  and the 10-minute re-reads returned the same stale number. Now the value
+  comes from the token's own notification after a short stream pause while it
+  is idle (at the idle-rate switch, then at most every 30 min); the connect
+  read is only used while no value is known.
+- A slow reconnect right after a weak-signal drop was reported as a new `wake`
+  (the gap was measured at the end of the connect, not at its start).
+- A failed firmware or hardware revision read was never retried and could wipe
+  the value stored in the device registry.
+- Capture files could get batches out of order when two flushes overlapped.
 
 ## [0.1.0] - 2026-10-29
 

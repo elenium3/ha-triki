@@ -1,6 +1,7 @@
 """TrikiDevice failure paths: connect errors, setup errors, gating, polling."""
 
 import asyncio
+import logging
 from dataclasses import replace
 from unittest.mock import AsyncMock, patch
 
@@ -9,6 +10,7 @@ from bleak.exc import BleakError
 from bleak_retry_connector import BleakNotFoundError, BleakOutOfConnectionSlotsError
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import async_capture_events
 
 from custom_components.triki.const import BUS_EVENT
@@ -16,9 +18,10 @@ from custom_components.triki.protocol import (
     BATTERY_LEVEL_UUID,
     CTRL_UUID,
     FIRMWARE_REV_UUID,
+    HARDWARE_REV_UUID,
 )
 
-from .conftest import BATTERY, CONNECTED, ESTABLISH, make_client, service_info
+from .conftest import BATTERY, CONNECTED, ESTABLISH, make_client, service_info, settle
 
 
 async def advertise(hass: HomeAssistant, entry, client=None, side_effect=None):
@@ -226,6 +229,105 @@ async def test_quick_reconnect_after_drop_is_not_a_new_wake(hass: HomeAssistant,
     assert [e.data["type"] for e in bus] == ["wake"]  # no second wake on resume
 
 
+async def test_slow_reconnect_after_drop_is_still_a_resume(hass: HomeAssistant, setup) -> None:
+    """The resume window is measured from the start of the connect, not its end.
+
+    A link that takes seconds to come up after a weak-signal drop must not turn
+    the resume into a second ``wake``.
+    """
+    dev = setup.runtime_data
+    bus = async_capture_events(hass, BUS_EVENT)
+    await advertise(hass, setup, make_client())
+    dev._handle_disconnected()
+    await hass.async_block_till_done()
+    dev._last_attempt = 0
+
+    async def slow(*_args, **_kwargs):
+        await asyncio.sleep(0.15)  # longer than the (patched) resume window
+        return make_client()
+
+    with patch("custom_components.triki.device._WAKE_GAP_S", 0.1):
+        await advertise(hass, setup, side_effect=slow)
+        for _ in range(100):
+            if dev.connected:
+                break
+            await asyncio.sleep(0.01)
+    assert dev.connected
+    assert [e.data["type"] for e in bus] == ["wake"]
+
+
+async def test_revision_reads_are_retried_and_never_wipe_the_registry(
+    hass: HomeAssistant, setup
+) -> None:
+    dev = setup.runtime_data
+    registry = dr.async_get(hass)
+    # a value stored by an earlier run of the integration
+    registry.async_update_device(dev.device_id, sw_version="old")
+
+    def reader(fail: str, answers: dict[str, bytes]):
+        async def read(uuid):
+            if uuid == fail:
+                raise BleakError("busy")
+            return answers.get(uuid, b"")
+
+        return AsyncMock(side_effect=read)
+
+    # first link: the firmware read fails, the hardware read answers
+    client = make_client()
+    client.read_gatt_char = reader(FIRMWARE_REV_UUID, {HARDWARE_REV_UUID: b"A"})
+    await advertise(hass, setup, client)
+    assert dev.firmware is None and dev.hardware == "A"
+    device = registry.async_get(dev.device_id)
+    assert device.sw_version == "old"  # not wiped by the failed read
+    assert device.hw_version == "A"
+
+    # next link: the firmware read is retried
+    dev._handle_disconnected()
+    await hass.async_block_till_done()
+    dev._last_attempt = 0
+    client = make_client()
+    client.read_gatt_char = reader(HARDWARE_REV_UUID, {FIRMWARE_REV_UUID: b"1.2.3"})
+    await advertise(hass, setup, client)
+    assert dev.firmware == "1.2.3" and dev.hardware == "A"
+    device = registry.async_get(dev.device_id)
+    assert (device.sw_version, device.hw_version) == ("1.2.3", "A")
+
+
+async def test_repeated_connect_failures_are_logged_once(
+    hass: HomeAssistant, setup, caplog
+) -> None:
+    caplog.set_level(logging.INFO, logger="custom_components.triki")
+    dev = setup.runtime_data
+    for _ in range(4):
+        dev._last_attempt = 0
+        await advertise(hass, setup, side_effect=BleakError("boom"))
+    assert caplog.text.count("connect attempts in a row failed") == 1
+    dev._last_attempt = 0
+    await advertise(hass, setup, make_client())
+    assert dev.connected
+    assert "connected again" in caplog.text
+
+
+async def test_battery_notification_counts_only_at_rest(hass: HomeAssistant, setup) -> None:
+    """The token also reports while streaming; that value is taken under load."""
+    client = make_client()
+    await advertise(hass, setup, client)
+    dev = setup.runtime_data
+    assert hass.states.get(BATTERY).state == "87"
+    battery_cb = next(
+        c.args[1] for c in client.start_notify.await_args_list if c.args[0] == BATTERY_LEVEL_UUID
+    )
+    battery_cb(None, bytearray([27]))  # unsolicited, stream running: ignored
+    await hass.async_block_till_done()
+    assert hass.states.get(BATTERY).state == "87"
+    dev._battery_pause = True
+    battery_cb(None, bytearray([83]))
+    await hass.async_block_till_done()
+    assert hass.states.get(BATTERY).state == "83"
+    battery_cb(None, bytearray())  # empty payload: ignored
+    assert dev.battery == 83
+
+
 async def test_advertisement_updates_rssi(hass: HomeAssistant, setup) -> None:
     dev = setup.runtime_data
     info = service_info()
@@ -237,27 +339,124 @@ async def test_advertisement_updates_rssi(hass: HomeAssistant, setup) -> None:
     assert dev.rssi == info.rssi
 
 
-async def test_battery_poll_refreshes_and_reschedules(hass: HomeAssistant, setup) -> None:
+def battery_callback(client):
+    return next(
+        c.args[1] for c in client.start_notify.await_args_list if c.args[0] == BATTERY_LEVEL_UUID
+    )
+
+
+def answer_stop_with_battery(hass: HomeAssistant, client, level: int) -> None:
+    """Make the token behave as measured: a battery notification follows a STOP."""
+    from custom_components.triki.protocol import stop_command
+
+    async def write(uuid, data, response=False):
+        if data == stop_command():
+            hass.loop.call_soon(battery_callback(client), None, bytearray([level]))
+
+    client.write_gatt_char = AsyncMock(side_effect=write)
+
+
+def written(client) -> list[bytes]:
+    return [c.args[1] for c in client.write_gatt_char.await_args_list]
+
+
+async def test_idle_switch_pauses_the_stream_for_a_battery_measurement(
+    hass: HomeAssistant, setup
+) -> None:
+    """The token measures its battery only while not streaming (exp9/exp10)."""
+    from custom_components.triki.const import IDLE_RATE
+    from custom_components.triki.protocol import start_command, stop_command
+
     client = make_client()
     await advertise(hass, setup, client)
     dev = setup.runtime_data
-    assert hass.states.get(BATTERY).state == "87"
+    assert hass.states.get(BATTERY).state == "87"  # the under-load value at connect
+    answer_stop_with_battery(hass, client, 82)
+    dev._last_activity -= 100  # past idle_timeout, not past sleep_timeout
+    dev._idle_check(None)
+    await settle(hass, dev)
+    assert written(client) == [stop_command(), start_command(IDLE_RATE)]
+    assert hass.states.get(BATTERY).state == "82"
+    assert dev.stream_rate == IDLE_RATE
+    assert not dev._battery_refresh_due()
 
-    async def read(uuid):
-        return bytes([55]) if uuid == BATTERY_LEVEL_UUID else b""
 
-    client.read_gatt_char = AsyncMock(side_effect=read)
-    dev._battery_poll(None)
-    await hass.async_block_till_done()
-    assert hass.states.get(BATTERY).state == "55"
-    assert dev._unsub_battery is not None  # next poll scheduled
+async def test_battery_pause_ends_on_timeout(hass: HomeAssistant, setup) -> None:
+    from custom_components.triki.const import IDLE_RATE
+    from custom_components.triki.protocol import start_command, stop_command
 
-
-async def test_battery_poll_noop_when_disconnected(hass: HomeAssistant, setup) -> None:
+    client = make_client()
+    await advertise(hass, setup, client)
     dev = setup.runtime_data
-    dev._battery_poll(None)
+    client.write_gatt_char = AsyncMock()  # a token that never answers the STOP
+    dev._last_activity -= 100
+    with patch("custom_components.triki.device._BATTERY_REFRESH_WAIT_S", 0.01):
+        dev._idle_check(None)
+        await settle(hass, dev)
+    assert written(client) == [stop_command(), start_command(IDLE_RATE)]
+    assert hass.states.get(BATTERY).state == "87"  # unchanged, but the stream is back
+    assert not dev._battery_refresh_due()  # no hammering: next try after the interval
+
+
+async def test_no_second_pause_before_the_interval(hass: HomeAssistant, setup) -> None:
+    from custom_components.triki.const import IDLE_RATE
+    from custom_components.triki.protocol import start_command
+
+    client = make_client()
+    await advertise(hass, setup, client)
+    dev = setup.runtime_data
+    client.write_gatt_char.reset_mock()
+    dev._battery_refreshed = dev._last_activity  # refreshed a moment ago
+    dev._last_activity -= 100  # past idle_timeout, not past sleep_timeout
+    dev._idle_check(None)
+    await settle(hass, dev)
+    assert written(client) == [start_command(IDLE_RATE)]
+
+
+async def test_battery_check_refreshes_a_long_idle_link(hass: HomeAssistant, setup) -> None:
+    from custom_components.triki.protocol import start_command, stop_command
+
+    client = make_client()
+    await advertise(hass, setup, client)
+    dev = setup.runtime_data
+    answer_stop_with_battery(hass, client, 80)
+    # just used: nothing happens, the check is re-armed
+    dev._battery_check(None)
+    await hass.async_block_till_done()
+    assert written(client) == []
+    assert dev._unsub_battery is not None
+    # idle for long enough: pause at the current rate
+    dev._last_activity -= 100
+    dev._battery_check(None)
+    await settle(hass, dev)
+    assert written(client) == [stop_command(), start_command(dev.options.rate)]
+    assert hass.states.get(BATTERY).state == "80"
+
+
+async def test_battery_check_noop_when_disconnected(hass: HomeAssistant, setup) -> None:
+    dev = setup.runtime_data
+    dev._battery_check(None)
     await hass.async_block_till_done()
     assert dev._unsub_battery is None
+
+
+async def test_connect_read_only_while_battery_unknown(hass: HomeAssistant, setup) -> None:
+    """A measured value must not be replaced by the under-load read of the next link."""
+    client = make_client()
+    await advertise(hass, setup, client)
+    dev = setup.runtime_data
+    dev._battery_pause = True  # as during a stream pause
+    battery_callback(client)(None, bytearray([82]))
+    dev._battery_pause = False
+    await hass.async_block_till_done()
+    assert hass.states.get(BATTERY).state == "82"
+    dev._handle_disconnected()
+    await hass.async_block_till_done()
+    dev._last_attempt = 0
+    client = make_client()
+    await advertise(hass, setup, client)
+    assert BATTERY_LEVEL_UUID not in [c.args[0] for c in client.read_gatt_char.await_args_list]
+    assert hass.states.get(BATTERY).state == "82"
 
 
 async def test_led_write_error(hass: HomeAssistant, setup) -> None:
@@ -265,9 +464,52 @@ async def test_led_write_error(hass: HomeAssistant, setup) -> None:
     await advertise(hass, setup, client)
     dev = setup.runtime_data
     client.write_gatt_char = AsyncMock(side_effect=BleakError("write failed"))
-    with pytest.raises(HomeAssistantError):
+    with (
+        patch("custom_components.triki.device._LED_WRITE_RETRY_DELAY_S", 0),
+        pytest.raises(HomeAssistantError),
+    ):
         await dev.async_set_led(True)
     assert dev.led_on is False  # unchanged
+    assert client.write_gatt_char.await_count == 3  # all tries used
+    assert dev.stats.led_write_retries == 2
+
+
+async def test_led_write_retried_once_on_gatt_error(hass: HomeAssistant, setup) -> None:
+    client = make_client()
+    await advertise(hass, setup, client)
+    dev = setup.runtime_data
+    calls = {"n": 0}
+
+    async def flaky(*_args, **_kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise BleakError("GATT 0x0e")
+
+    client.write_gatt_char = AsyncMock(side_effect=flaky)
+    with patch("custom_components.triki.device._LED_WRITE_RETRY_DELAY_S", 0):
+        await dev.async_set_led(True)
+    assert dev.led_on is True
+    assert client.write_gatt_char.await_count == 2
+    assert dev.stats.led_write_retries == 1
+
+
+async def test_led_write_timeout_is_not_retried(hass: HomeAssistant, setup) -> None:
+    client = make_client()
+    await advertise(hass, setup, client)
+    dev = setup.runtime_data
+
+    async def hang(*_args, **_kwargs):
+        await asyncio.sleep(10)
+
+    client.write_gatt_char = AsyncMock(side_effect=hang)
+    with (
+        patch("custom_components.triki.device._LED_WRITE_TIMEOUT_S", 0.01),
+        pytest.raises(HomeAssistantError),
+    ):
+        await dev.async_set_led(True)
+    assert client.write_gatt_char.await_count == 1
+    assert dev.stats.led_write_retries == 0
+    client.write_gatt_char = AsyncMock()  # the stop write at unload must not hang
 
 
 async def test_idle_check_keeps_link_while_button_held(hass: HomeAssistant, setup) -> None:

@@ -47,7 +47,12 @@ rules:
       Only pitch and roll go unavailable while the token sleeps; sleep is its
       normal state, so the event, button and LED entities stay available.
   integration-owner: done
-  log-when-unavailable: todo
+  log-when-unavailable:
+    status: done
+    comment: >
+      Sleeping is the token's normal state and is not logged. One info line
+      after three failed connect attempts in a row for an awake token, one when
+      it links again.
   parallel-updates: done
   reauthentication-flow:
     status: exempt

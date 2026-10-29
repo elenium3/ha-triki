@@ -33,13 +33,14 @@ from bleak_retry_connector import (
 from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
+from homeassistant.helpers.typing import UNDEFINED
 
 from .capture import Capture
 from .const import (
-    BATTERY_POLL_INTERVAL,
+    BATTERY_REFRESH_INTERVAL,
     BUS_EVENT,
     DOMAIN,
     IDLE_RATE,
@@ -93,6 +94,21 @@ _WAKE_GAP_S = 5.0
 # for the next wake-up. Must outlast the few seconds it keeps advertising after we
 # drop the link, or we would reconnect to the same still-awake token.
 _SLEEP_GAP_S = 15.0
+# The LED write fails now and then with a GATT error on a fresh link (seen by
+# other clients too); a short retry is enough.
+_LED_WRITE_TIMEOUT_S = 5.0
+_LED_WRITE_RETRIES = 3
+_LED_WRITE_RETRY_DELAY_S = 0.3
+# This many connect failures in a row for an awake token is worth one line at
+# info level (the entities only show "asleep", which looks normal).
+_UNREACHABLE_AFTER = 3
+# Battery: the token re-measures only while the stream is stopped and then pushes
+# the value by notification (6 s after STOP on the test unit). The value read
+# right after a connect is taken under load (27 % against 82 % at rest on the
+# same cell) and never changes while the stream runs.
+_BATTERY_REFRESH_WAIT_S = 10.0  # how long the stream may stay stopped for a measurement
+_BATTERY_CHECK_S = 60.0  # how often to look for an idle moment once a refresh is due
+_BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before pausing
 
 
 @dataclass(slots=True)
@@ -106,6 +122,7 @@ class LinkStats:
     notifications: int = 0
     frames: int = 0
     rate_switches: int = 0  # idle <-> active stream rate changes over the live link
+    led_write_retries: int = 0  # LED writes that needed a second (or third) try
     parser_dropped_bytes: int = 0
     last_source: str | None = None  # scanner the last connect went through
     last_link_s: float | None = None  # time to establish the last link
@@ -164,6 +181,13 @@ class TrikiDevice:
         self._awake_seen = 0.0
         self._last_drop = 0.0
         self._last_skip: str | None = None
+        self._fail_streak = 0
+        self._unreachable_logged = False
+        # monotonic time of the last stream pause for it; -inf so the first idle
+        # switch refreshes even on a host whose monotonic clock is young
+        self._battery_refreshed = float("-inf")
+        self._battery_event = asyncio.Event()  # set by a battery notification
+        self._battery_pause = False  # the stream is stopped for a measurement right now
         self._unsub_adv: CALLBACK_TYPE | None = None
         self._unsub_poll: CALLBACK_TYPE | None = None
         self._unsub_idle: CALLBACK_TYPE | None = None
@@ -356,12 +380,10 @@ class TrikiDevice:
                         ble_device_callback=lambda: self._ble_device(ble_device),
                     )
             except (BleakNotFoundError, BleakOutOfConnectionSlotsError) as err:
-                self.stats.connect_failures += 1
-                _LOGGER.debug("%s: cannot connect: %s", self.name, err)
+                self._connect_failed("cannot connect", err)
                 return
             except (BleakError, TimeoutError) as err:
-                self.stats.connect_failures += 1
-                _LOGGER.debug("%s: connect failed: %s", self.name, err)
+                self._connect_failed("connect failed", err)
                 return
 
             if self._stopping:  # unloaded while connecting: do not leave a live link
@@ -390,11 +412,15 @@ class TrikiDevice:
             self._last_activity = self._session_t0 = time.monotonic()
             self.stats.connects += 1
             self.stats.last_link_s = round(t_link - t0, 2)
+            self._fail_streak = 0
+            if self._unreachable_logged:
+                self._unreachable_logged = False
+                _LOGGER.info("%s: connected again (via %s)", self.name, self.stats.last_source)
             self._unsub_watchdog = async_call_later(
                 self.hass, _STREAM_WATCHDOG_S, self._stream_watchdog
             )
             self._schedule_idle_check()
-            self._schedule_battery_poll()
+            self._schedule_battery_check()
             _LOGGER.debug(
                 "%s: connected, streaming at %s Hz (advert age %.1fs, link %.1fs, setup %.1fs: notify %.1fs, write %.1fs)",
                 self.name,
@@ -408,7 +434,9 @@ class TrikiDevice:
             # The token drops the link on its own on a weak signal; reconnecting
             # right away is a resume, not a new wake-up. Only report "wake" if it was
             # gone long enough to have actually slept (or this is the first link).
-            resumed = self._last_drop and time.monotonic() - self._last_drop < _WAKE_GAP_S
+            # Measured from the start of this attempt: a slow link must not turn a
+            # resume into a wake.
+            resumed = self._last_drop and t0 - self._last_drop < _WAKE_GAP_S
             if not resumed:
                 self._emit("wake")
                 if self.options.wake_as_press:
@@ -417,6 +445,20 @@ class TrikiDevice:
             self._notify()
             self._create_task(self._async_read_info(client), "info")
 
+    def _connect_failed(self, what: str, err: BaseException) -> None:
+        self.stats.connect_failures += 1
+        self._fail_streak += 1
+        _LOGGER.debug("%s: %s: %s", self.name, what, err)
+        if self._fail_streak == _UNREACHABLE_AFTER and not self._unreachable_logged:
+            self._unreachable_logged = True
+            _LOGGER.info(
+                "%s: %d connect attempts in a row failed (last: %s); "
+                "it is seen but cannot be linked, check the receiver placement",
+                self.name,
+                self._fail_streak,
+                err,
+            )
+
     async def _async_read_info(self, client: BleakClient) -> None:
         """Read the slow, non-essential characteristics once the stream runs.
 
@@ -424,19 +466,56 @@ class TrikiDevice:
         that is not needed to start the IMU stream may delay it.
         """
         try:
-            if self.firmware is None:
-                self.firmware = await self._read_str(client, FIRMWARE_REV_UUID)
-                self.hardware = await self._read_str(client, HARDWARE_REV_UUID)
+            if self.firmware is None or self.hardware is None:
+                # each read is retried on later links until it succeeds once
+                if self.firmware is None:
+                    self.firmware = await self._read_str(client, FIRMWARE_REV_UUID)
+                if self.hardware is None:
+                    self.hardware = await self._read_str(client, HARDWARE_REV_UUID)
                 self._update_device_registry()
-            await self._read_battery(client)
+            if self.battery is None:
+                # taken under load right after the connect, so a low number; the
+                # first stream pause replaces it. Better than nothing until then.
+                await self._read_battery(client)
             try:
                 ctrl = await client.read_gatt_char(CTRL_UUID)
                 self.led_on = bool(ctrl and ctrl[0] & 0x01)
             except BleakError:
                 self.led_on = None
+            # the measured value arrives by notification after a stream pause
+            try:
+                await client.start_notify(
+                    BATTERY_LEVEL_UUID,
+                    lambda _char, data: self._on_battery_notify(client, data),
+                )
+            except BleakError as err:
+                _LOGGER.debug("%s: battery notify unavailable: %s", self.name, err)
         except (BleakError, TimeoutError) as err:
             _LOGGER.debug("%s: info read failed: %s", self.name, err)
         if self._client is client:
+            self._notify()
+
+    @callback
+    def _on_battery_notify(self, client: BleakClient, data: bytearray) -> None:
+        if client is not self._client or not data:
+            return
+        level = max(0, min(100, int(data[0])))
+        _LOGGER.debug(
+            "%s: battery notify %d%% (link age %.1fs, stream %s Hz, %s)",
+            self.name,
+            level,
+            time.monotonic() - self._session_t0,
+            self.stream_rate,
+            "at rest" if self._battery_pause else "under load, ignored",
+        )
+        if not self._battery_pause:
+            # the token also measures while streaming and reports the change;
+            # that value is taken under load (27 % against 82 % at rest on the
+            # same cell) and would make the sensor flap
+            return
+        self._battery_event.set()
+        if level != self.battery:
+            self.battery = level
             self._notify()
 
     async def _async_session_setup(self, client: BleakClient) -> tuple[float, float]:
@@ -481,14 +560,24 @@ class TrikiDevice:
             return
         if raw:
             self.battery = max(0, min(100, int(raw[0])))
+            _LOGGER.debug(
+                "%s: battery read %d%% (link age %.1fs, stream %s Hz)",
+                self.name,
+                self.battery,
+                time.monotonic() - self._session_t0,
+                self.stream_rate,
+            )
 
     @callback
     def _update_device_registry(self) -> None:
         if self.device_id is None:
             return
         dev_reg = dr.async_get(self.hass)
+        # a failed read must not wipe a value stored by an earlier session
         dev_reg.async_update_device(
-            self.device_id, sw_version=self.firmware, hw_version=self.hardware
+            self.device_id,
+            sw_version=self.firmware if self.firmware is not None else UNDEFINED,
+            hw_version=self.hardware if self.hardware is not None else UNDEFINED,
         )
 
     async def async_disconnect(self) -> None:
@@ -539,6 +628,7 @@ class TrikiDevice:
             )
         self._client = None
         self._last_drop = bluetooth.MONOTONIC_TIME()
+        self._battery_event.set()  # do not keep a stream pause waiting on a dead link
         was_connected = self.connected
         self.connected = False
         for unsub in (self._unsub_idle, self._unsub_battery, self._unsub_watchdog):
@@ -655,17 +745,57 @@ class TrikiDevice:
             and not self._rate_write_pending
         ):
             # keep the link (a fresh one is slow for 10-20 s and the token would
-            # advertise for minutes), just stop asking for a fast stream
-            self._create_task(self._async_set_rate(IDLE_RATE), "lowrate")
+            # advertise for minutes), just stop asking for a fast stream. The
+            # token is idle anyway, so this is the moment for a battery refresh.
+            self._create_task(
+                self._async_set_rate(IDLE_RATE, refresh=self._battery_refresh_due()), "lowrate"
+            )
         self._schedule_idle_check()
 
-    async def _async_set_rate(self, rate: int) -> None:
+    def _battery_refresh_due(self) -> bool:
+        return time.monotonic() - self._battery_refreshed >= BATTERY_REFRESH_INTERVAL
+
+    async def _async_pause_for_battery(self, client: BleakClient) -> None:
+        """Stop the stream until the token reports a fresh battery level.
+
+        Presses and motion during the pause are not seen, which is why this only
+        runs while the token has been idle for a while and rarely.
+        """
+        self._battery_event.clear()
+        self._battery_pause = True
+        try:
+            async with asyncio.timeout(_STOP_TIMEOUT_S):
+                await client.write_gatt_char(NUS_RX_UUID, stop_command(), response=True)
+            t = time.monotonic()
+            try:
+                async with asyncio.timeout(_BATTERY_REFRESH_WAIT_S):
+                    await self._battery_event.wait()
+            except TimeoutError:
+                _LOGGER.debug(
+                    "%s: no battery update within %.0fs of the stream pause",
+                    self.name,
+                    _BATTERY_REFRESH_WAIT_S,
+                )
+            else:
+                _LOGGER.debug(
+                    "%s: battery %s%% after a %.1fs stream pause",
+                    self.name,
+                    self.battery,
+                    time.monotonic() - t,
+                )
+        finally:
+            self._battery_pause = False
+        self._battery_refreshed = time.monotonic()
+
+    async def _async_set_rate(self, rate: int, *, refresh: bool = False) -> None:
         """Re-send START at another rate over the live link (no reconnect needed).
 
         Activity that arrives while the write is in flight cannot queue a second
         write (``_rate_write_pending`` gates the callers), so after a switch to
         the idle rate we re-check: if the token was used meanwhile, go straight
         back to the configured rate instead of waiting for the next frame.
+
+        With ``refresh`` the stream is first stopped for a battery measurement.
         """
         if self._rate_write_pending:
             return
@@ -677,6 +807,11 @@ class TrikiDevice:
                     return
                 activity_before = self._last_activity
                 try:
+                    if refresh:
+                        refresh = False
+                        await self._async_pause_for_battery(client)
+                        if self._client is not client:
+                            return
                     async with asyncio.timeout(_STOP_TIMEOUT_S):
                         await client.write_gatt_char(
                             NUS_RX_UUID, start_command(rate), response=True
@@ -704,40 +839,60 @@ class TrikiDevice:
             self._rate_write_pending = False
 
     @callback
-    def _schedule_battery_poll(self) -> None:
-        self._unsub_battery = async_call_later(self.hass, BATTERY_POLL_INTERVAL, self._battery_poll)
+    def _schedule_battery_check(self) -> None:
+        self._unsub_battery = async_call_later(self.hass, _BATTERY_CHECK_S, self._battery_check)
 
     @callback
-    def _battery_poll(self, _now: Any) -> None:
+    def _battery_check(self, _now: Any) -> None:
+        """On a long link, refresh the battery at the next idle moment once due.
+
+        The idle-rate switch already refreshes when it happens; this covers links
+        that stay idle for hours and setups with the idle timeout off.
+        """
         self._unsub_battery = None
         if not self.connected or self._client is None:
             return
-        client = self._client
-
-        async def _run() -> None:
-            await self._read_battery(client)
-            self._notify()
-            if self.connected:
-                self._schedule_battery_poll()
-
-        self._create_task(_run(), "battery")
+        idle = time.monotonic() - self._last_activity
+        if (
+            self._battery_refresh_due()
+            and not self.button
+            and idle >= _BATTERY_IDLE_FOR_REFRESH_S
+            and not self._rate_write_pending
+        ):
+            self._create_task(self._async_set_rate(self.stream_rate, refresh=True), "battery")
+        self._schedule_battery_check()
 
     # ------------------------------------------------------------ commands
     async def async_set_led(self, on: bool) -> None:
-        if not self.connected or self._client is None:
-            raise ServiceValidationError(
+        client = self._client
+        if not self.connected or client is None:
+            # a sleeping token is a device state, not bad input from the caller
+            raise HomeAssistantError(
                 translation_domain=DOMAIN,
                 translation_key="asleep",
                 translation_placeholders={"name": self.name},
             )
-        try:
-            await self._client.write_gatt_char(CTRL_UUID, led_command(on), response=True)
-        except BleakError as err:
-            raise HomeAssistantError(
-                translation_domain=DOMAIN,
-                translation_key="led_write_failed",
-                translation_placeholders={"error": str(err)},
-            ) from err
+        for attempt in range(1, _LED_WRITE_RETRIES + 1):
+            try:
+                async with asyncio.timeout(_LED_WRITE_TIMEOUT_S):
+                    await client.write_gatt_char(CTRL_UUID, led_command(on), response=True)
+                break
+            except (BleakError, TimeoutError) as err:
+                # only a live link is worth another try; a timeout or a lost link
+                # is reported right away
+                if (
+                    isinstance(err, TimeoutError)
+                    or attempt == _LED_WRITE_RETRIES
+                    or self._client is not client
+                ):
+                    raise HomeAssistantError(
+                        translation_domain=DOMAIN,
+                        translation_key="led_write_failed",
+                        translation_placeholders={"error": str(err)},
+                    ) from err
+                self.stats.led_write_retries += 1
+                _LOGGER.debug("%s: LED write %d failed (%s), retrying", self.name, attempt, err)
+                await asyncio.sleep(_LED_WRITE_RETRY_DELAY_S)
         self.led_on = on
         self._last_activity = time.monotonic()
         self._notify()
