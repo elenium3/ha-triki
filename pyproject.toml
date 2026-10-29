@@ -1,0 +1,35 @@
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+
+[tool.ruff.lint]
+# the subset of Home Assistant core's rule set that applies to a custom integration
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "ASYNC", "PL", "TRY", "RET", "C4", "PIE", "N"]
+ignore = [
+  "E501",     # line length is handled by the formatter
+  "PLR2004",  # magic values: thresholds and byte offsets are the whole point here
+  "PLR0911", "PLR0912", "PLR0913", "PLR0915",
+  "TRY003",   # exception messages are built inline
+  "RUF001", "RUF002", "RUF003",  # Polish letters in strings and comments
+  "RUF012",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tools/*" = ["T201", "PLR0917", "SIM105", "ASYNC109"]  # command line scripts
+"tests/*" = ["PLR0917", "N802", "PLC0415", "RUF059"]  # local imports, unused unpacks
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+ignore_missing_imports = true
+follow_imports = "silent"
+# like Home Assistant core: its components re-export without __all__
+implicit_reexport = true
+files = ["custom_components/triki"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.coverage.run]
+source = ["custom_components/triki"]

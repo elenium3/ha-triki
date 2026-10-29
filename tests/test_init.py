@@ -1,75 +1,44 @@
 """End-to-end: advertisement -> connect -> stream -> HA entities/events."""
 
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-from homeassistant.const import CONF_ADDRESS, STATE_UNAVAILABLE, STATE_UNKNOWN
+from bleak.exc import BleakError
+from homeassistant.const import (
+    CONF_ADDRESS,
+    EVENT_HOMEASSISTANT_STOP,
+    STATE_UNAVAILABLE,
+    STATE_UNKNOWN,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from pytest_homeassistant_custom_component.common import MockConfigEntry, async_capture_events
+from pytest_homeassistant_custom_component.common import (
+    MockConfigEntry,
+    async_capture_events,
+)
 
 from custom_components.triki.const import BUS_EVENT, DOMAIN
 from custom_components.triki.protocol import (
     CTRL_UUID,
-    BATTERY_LEVEL_UUID,
-    FIRMWARE_REV_UUID,
+    DEFAULT_RATE,
     NUS_RX_UUID,
     NUS_TX_UUID,
     start_command,
 )
 
-from .conftest import ADDRESS, NAME, service_info
+from .conftest import (
+    ADDRESS,
+    BATTERY,
+    BUTTON,
+    CONNECTED,
+    EVENT,
+    LED,
+    NAME,
+    connect,
+    service_info,
+)
 from .helpers import frame
-
-EVENT = "event.triki_0000_action"
-BUTTON = "binary_sensor.triki_0000_button"
-CONNECTED = "binary_sensor.triki_0000_connected"
-LED = "light.triki_0000_led"
-BATTERY = "sensor.triki_0000_battery"
-
-
-def make_client():
-    client = MagicMock()
-    client.is_connected = True
-    reads = {
-        FIRMWARE_REV_UUID: b"1.2.3\x00",
-        BATTERY_LEVEL_UUID: bytes([87]),
-        CTRL_UUID: b"\x00",
-    }
-
-    async def read(uuid):
-        return reads.get(uuid, b"")
-
-    client.read_gatt_char = AsyncMock(side_effect=read)
-    client.write_gatt_char = AsyncMock()
-    client.start_notify = AsyncMock()
-    client.disconnect = AsyncMock()
-    return client
-
-
-@pytest.fixture
-async def setup(hass: HomeAssistant, mock_bluetooth):
-    entry = MockConfigEntry(
-        domain=DOMAIN, unique_id=ADDRESS, title=NAME, data={CONF_ADDRESS: ADDRESS}
-    )
-    entry.add_to_hass(hass)
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    return entry
-
-
-async def connect(hass, entry):
-    client = make_client()
-    with patch(
-        "custom_components.triki.device.establish_connection",
-        AsyncMock(return_value=client),
-    ) as est:
-        entry.runtime_data._on_advertisement(service_info(), None)
-        await hass.async_block_till_done()
-    assert est.await_count == 1
-    notify_cb = client.start_notify.await_args.args[1]
-    return client, notify_cb
 
 
 async def test_asleep_state(hass: HomeAssistant, setup) -> None:
@@ -84,9 +53,7 @@ async def test_asleep_state(hass: HomeAssistant, setup) -> None:
 async def test_stale_advertisement_ignored(hass: HomeAssistant, setup) -> None:
     info = service_info()
     info.time -= 60
-    with patch(
-        "custom_components.triki.device.establish_connection", AsyncMock()
-    ) as est:
+    with patch("custom_components.triki.device.establish_connection", AsyncMock()) as est:
         setup.runtime_data._on_advertisement(info, None)
         await hass.async_block_till_done()
     est.assert_not_awaited()
@@ -96,7 +63,7 @@ async def test_wake_stream_events(hass: HomeAssistant, setup) -> None:
     bus = async_capture_events(hass, BUS_EVENT)
     client, notify = await connect(hass, setup)
 
-    client.write_gatt_char.assert_any_await(NUS_RX_UUID, start_command(104), response=True)
+    client.write_gatt_char.assert_any_await(NUS_RX_UUID, start_command(DEFAULT_RATE), response=True)
     assert client.start_notify.await_args.args[0] == NUS_TX_UUID
     assert hass.states.get(CONNECTED).state == "on"
     assert hass.states.get(BATTERY).state == "87"
@@ -173,7 +140,57 @@ async def test_capture_option(hass: HomeAssistant, mock_bluetooth, tmp_path) -> 
         await asyncio.sleep(0.02)
     assert len(files) == 1
     recs = [_json.loads(x) for x in files[0].read_text().splitlines()]
-    assert recs[0]["meta"]["rate"] == 104
+    assert recs[0]["meta"]["rate"] == DEFAULT_RATE
     assert any(r.get("event") == "wake" for r in recs)
     assert any("hex" in r for r in recs)
     assert recs[-1]["disconnected"] is True
+
+
+async def test_ha_stop_closes_the_link(hass: HomeAssistant, setup) -> None:
+    """HA does not unload entries on shutdown; the link must still be closed."""
+    client, _ = await connect(hass, setup)
+    hass.bus.async_fire(EVENT_HOMEASSISTANT_STOP)
+    await hass.async_block_till_done()
+    client.disconnect.assert_awaited()
+    assert setup.runtime_data.connected is False
+
+
+async def test_unload_rediscovers_address(hass: HomeAssistant, setup) -> None:
+    with patch("custom_components.triki.bluetooth.async_rediscover_address") as redisc:
+        assert await hass.config_entries.async_unload(setup.entry_id)
+    redisc.assert_called_once_with(hass, ADDRESS)
+
+
+async def test_own_disconnect_echo_is_silent(hass: HomeAssistant, setup, caplog) -> None:
+    """bleak reports the disconnect we asked for; that is not an 'old client'."""
+    import logging
+
+    dev = setup.runtime_data
+    client, _ = await connect(hass, setup)
+    caplog.set_level(logging.DEBUG, logger="custom_components.triki")
+    await dev.async_disconnect()
+    dev._on_disconnect(client)
+    await hass.async_block_till_done()
+    assert "ignoring drop" not in caplog.text
+
+
+async def test_own_disconnect_sends_stop_first(hass: HomeAssistant, setup) -> None:
+    from custom_components.triki.protocol import stop_command
+
+    dev = setup.runtime_data
+    client, _ = await connect(hass, setup)
+    dev._last_activity -= 10_000
+    dev._idle_check(None)
+    await hass.async_block_till_done()
+    calls = [c.args for c in client.write_gatt_char.await_args_list]
+    assert calls[-1] == (NUS_RX_UUID, stop_command())
+    client.disconnect.assert_awaited()
+
+    # a failing stop write must not keep the link open
+    dev._await_sleep = False  # the idle gate would otherwise refuse this connect
+    dev._no_connect_until = dev._last_attempt = 0
+    client, _ = await connect(hass, setup)
+    client.write_gatt_char.side_effect = BleakError("gone")
+    await dev.async_disconnect()
+    client.disconnect.assert_awaited()
+    assert dev.connected is False

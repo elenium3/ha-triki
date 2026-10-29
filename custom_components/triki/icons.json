@@ -1,0 +1,30 @@
+{
+  "entity": {
+    "binary_sensor": {
+      "button": {
+        "default": "mdi:gesture-tap-button"
+      }
+    },
+    "event": {
+      "action": {
+        "default": "mdi:gesture"
+      }
+    },
+    "light": {
+      "led": {
+        "default": "mdi:led-on",
+        "state": {
+          "off": "mdi:led-off"
+        }
+      }
+    },
+    "sensor": {
+      "pitch": {
+        "default": "mdi:angle-acute"
+      },
+      "roll": {
+        "default": "mdi:angle-acute"
+      }
+    }
+  }
+}

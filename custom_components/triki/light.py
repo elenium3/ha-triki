@@ -4,12 +4,18 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.light import ColorMode, LightEntity, LightEntityDescription
+from homeassistant.components.light import (
+    ColorMode,
+    LightEntity,
+    LightEntityDescription,
+)
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import TrikiConfigEntry
 from .entity import TrikiEntity
+
+PARALLEL_UPDATES = 1  # one GATT write at a time
 
 DESCRIPTION = LightEntityDescription(key="led", translation_key="led")
 
