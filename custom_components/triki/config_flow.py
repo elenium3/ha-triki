@@ -53,7 +53,8 @@ def _is_triki(info: BluetoothServiceInfoBleak) -> bool:
 
 
 class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
-    VERSION = 1
+    # 2: idle_timeout no longer drops the link (sleep_timeout does), see async_migrate_entry
+    VERSION = 2
 
     def __init__(self) -> None:
         self._discovery: BluetoothServiceInfoBleak | None = None

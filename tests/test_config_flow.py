@@ -115,7 +115,7 @@ async def test_options_change_reloads_entry(hass: HomeAssistant, mock_bluetooth)
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    assert entry.runtime_data.rate == DEFAULT_RATE
+    assert entry.runtime_data.options.rate == DEFAULT_RATE
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
@@ -123,4 +123,4 @@ async def test_options_change_reloads_entry(hass: HomeAssistant, mock_bluetooth)
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()
-    assert entry.runtime_data.rate == 26  # new TrikiDevice from the reload
+    assert entry.runtime_data.options.rate == 26  # new TrikiDevice from the reload

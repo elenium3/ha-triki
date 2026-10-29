@@ -12,7 +12,8 @@ from homeassistant.core import HomeAssistant
 
 from . import TrikiConfigEntry
 
-TO_REDACT = {CONF_ADDRESS}
+# the scanner source is the MAC of the adapter/proxy the link went through
+TO_REDACT = {CONF_ADDRESS, "source", "last_source"}
 
 
 async def async_get_config_entry_diagnostics(

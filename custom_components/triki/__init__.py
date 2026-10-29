@@ -8,7 +8,13 @@ from homeassistant.const import CONF_ADDRESS, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
-from .const import MANUFACTURER, MODEL
+from .const import (
+    CONF_IDLE_TIMEOUT,
+    CONF_SLEEP_TIMEOUT,
+    DEFAULT_IDLE_TIMEOUT,
+    MANUFACTURER,
+    MODEL,
+)
 from .device import TrikiDevice
 from .models import TrikiOptions
 
@@ -20,6 +26,20 @@ PLATFORMS = [
 ]
 
 type TrikiConfigEntry = ConfigEntry[TrikiDevice]
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> bool:
+    if entry.version > 2:
+        return False  # created by a newer version of the integration
+    if entry.version == 1:
+        # v1: idle_timeout dropped the link. v2: idle_timeout lowers the stream
+        # rate and sleep_timeout drops the link, so a user-set value moves over.
+        options = dict(entry.options)
+        if CONF_IDLE_TIMEOUT in options and CONF_SLEEP_TIMEOUT not in options:
+            options[CONF_SLEEP_TIMEOUT] = options[CONF_IDLE_TIMEOUT]
+            options[CONF_IDLE_TIMEOUT] = DEFAULT_IDLE_TIMEOUT
+        hass.config_entries.async_update_entry(entry, options=options, version=2)
+    return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> bool:

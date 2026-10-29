@@ -24,7 +24,7 @@ async def test_diagnostics(hass: HomeAssistant, setup, hass_client: ClientSessio
     assert diag["link"]["connects"] == 1
     assert diag["link"]["notifications"] == 1
     assert diag["link"]["frames"] == 2
-    assert diag["link"]["last_source"] == "local"
+    assert diag["link"]["last_source"] == "**REDACTED**"  # adapter/proxy MAC
 
     setup.runtime_data._on_disconnect(client)
     await hass.async_block_till_done()
