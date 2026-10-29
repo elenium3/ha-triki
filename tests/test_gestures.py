@@ -376,6 +376,22 @@ def test_motion_gestures_option_does_not_enable_knob_or_shake():
     assert "tap" in types(feed(d, 2, az=3.0) + feed(d, secs(0.3)))  # the experimental ones do work
 
 
+def test_brisk_turn_back_and_forth_is_not_a_shake():
+    """Turning between the fingers reverses fast about gravity; a shake swings about
+    a horizontal axis and comes with a linear shock."""
+    d = det()
+    ev = []
+    for i in range(8):
+        ev += feed(d, secs(0.08), gz=1500.0 if i % 2 else -1500.0)
+    assert "shake" not in types(ev)
+    assert {"rotate_cw", "rotate_ccw"} & set(types(ev))  # it is a turn, and counted
+    d = det()
+    ev = []
+    for i in range(8):  # the same reversals about gravity, but with the shock of a shake
+        ev += feed(d, secs(0.08), gz=1500.0 if i % 2 else -1500.0, az=4.0)
+    assert "shake" in types(ev)
+
+
 def test_knob_counts_a_fast_spin_despite_its_centripetal_acceleration():
     """The IMU sits off the axis: a brisk spin reads 1.3-1.6 g while perfectly flat."""
     d = det()

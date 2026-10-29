@@ -49,6 +49,13 @@ THROW_MIN_S = 0.06
 SHAKE_WINDOW_S = 0.8  # ~5 swings; 26 Hz with 70 % loss still leaves 5-7 frames
 SHAKE_ACTIVE_DPS = 500.0  # moving the token in the hand peaks at 160-580, shakes at 1000+
 SHAKE_ACTIVE_G = 0.6  # |a| - 1 g
+# A frame whose rotation is mostly about gravity is a turn, not a swing: a brisk
+# back-and-forth turn between the fingers reads 500-2000 °/s with reversals and
+# on hardware fired shake three times in twenty seconds. Such a frame counts as
+# a swing only with the linear shock of a real shake (5-17 g on hardware, a spin
+# at most 2 g).
+SHAKE_ABOUT_GRAVITY = 0.8  # |rate about gravity| / |gyro|
+SHAKE_HARD_G = 2.0
 SHAKE_ACTIVE_FRACTION = 0.6
 SHAKE_REVERSALS = 2
 SHAKE_MIN_FRAMES = 5  # fewer frames in the window say nothing
@@ -342,6 +349,13 @@ class GestureDetector:
         rates = (s.gx, s.gy, s.gz)
         dominant = max(range(3), key=lambda i: abs(rates[i]))
         active = abs(a - 1.0) > SHAKE_ACTIVE_G or s.gyro_mag > SHAKE_ACTIVE_DPS
+        if (
+            active
+            and self.gravity is not None
+            and abs(a - 1.0) <= SHAKE_HARD_G
+            and abs(_dot(rates, self.gravity)) >= SHAKE_ABOUT_GRAVITY * s.gyro_mag
+        ):
+            active = False  # turning, not swinging
         sign = (1 if rates[dominant] > 0 else -1) if active else 0
         frames = self._shake_frames
         frames.append((self.t, active, sign))

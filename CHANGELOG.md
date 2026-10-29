@@ -21,6 +21,11 @@ All notable changes to this project are documented here. The format follows
   shake swing and catch instead. A tap is now a 0.7 g jump between frames on a
   token at rest, reported once it is still again.
 
+- Shake fired while turning the token briskly between the fingers (three times
+  in twenty seconds on hardware) and muted the knob each time. A frame whose
+  rotation is mostly about gravity is a turn, not a swing, unless it comes with
+  the linear shock of a real shake (over 2 g).
+
 ### Added
 - A trimmed capture of the hardware session as a test fixture; the replay test
   scores every rule against it.
