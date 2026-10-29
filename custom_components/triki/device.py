@@ -316,12 +316,14 @@ class TrikiDevice:
         now = time.monotonic()
         self.stats.adverts += 1
         self._advert_times.append(service_info.time)
+        rssi_changed = service_info.rssi != self.rssi
         self.rssi = service_info.rssi
         # an awake token advertises several times a second: one state write and
         # one log line per second is plenty
         if now - self._last_advert_notify >= _ADVERT_NOTIFY_S:
             self._last_advert_notify = now
-            self._notify()
+            if rssi_changed:
+                self._notify()
             _LOGGER.debug(
                 "%s: advert via %s rssi %s age %.1fs",
                 self.name,
@@ -358,22 +360,26 @@ class TrikiDevice:
             # reconnecting then just resets its sleep timer. Only once its
             # advertisements have stopped for a stretch (it actually slept) do we arm
             # for the next genuine wake-up. A fresh advert keeps pushing that out.
+            # The gap is judged before this advert refreshes the mark: with the
+            # per-advertisement callback this call only ever sees fresh adverts,
+            # and the first one after the gap *is* the wake-up to connect on.
+            slept = now - self._awake_seen >= _SLEEP_GAP_S
             if age < max_age:
                 self._awake_seen = now
-            if now - self._awake_seen >= _SLEEP_GAP_S:
+            if slept:
                 self._await_sleep = False
-                reason = "token slept, waiting for a fresh wake-up"
             else:
                 reason = "waiting for the token to sleep after an idle disconnect"
-        elif age > max_age:
-            reason = f"advert too old ({age:.1f}s > {max_age:.0f}s)"
-        elif service_info.time < self._last_drop:
-            # advertisement from before the token fell asleep: it is gone now
-            reason = "advert older than the last link drop"
-        elif now < self._no_connect_until:
-            reason = "idle cooldown"
-        elif now - self._last_attempt < _RECONNECT_BACKOFF_S:
-            reason = "reconnect backoff"
+        if reason is None:
+            if age > max_age:
+                reason = f"advert too old ({age:.1f}s > {max_age:.0f}s)"
+            elif service_info.time < self._last_drop:
+                # advertisement from before the token fell asleep: it is gone now
+                reason = "advert older than the last link drop"
+            elif now < self._no_connect_until:
+                reason = "idle cooldown"
+            elif now - self._last_attempt < _RECONNECT_BACKOFF_S:
+                reason = "reconnect backoff"
         if reason:
             if reason.split(" (")[0] != self._last_skip:
                 self._last_skip = reason.split(" (")[0]

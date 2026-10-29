@@ -119,17 +119,6 @@ Until someone documents it with photos (see [images/README.md](images/README.md)
 the usual rules for crimped coin-cell cases: soft surface, plastic spudger or
 guitar pick, go around the rim in small steps, note which way the cell faces.
 
-Placeholders for that photo series (replace the `.svg` in `images/` with `.jpg`
-of the same name):
-
-<p align="center">
-  <img src="images/open-1-tool.svg" width="300" alt="Placeholder: the token, the cell and the tool">
-  <img src="images/open-2-pry.svg" width="300" alt="Placeholder: where to start lifting the green part">
-  <br>
-  <img src="images/open-3-inside.svg" width="300" alt="Placeholder: the open token with the cell in place">
-  <img src="images/open-4-cell.svg" width="300" alt="Placeholder: the cell out, holder and contacts">
-</p>
-
 ### When a power cycle helps
 
 Pulling the cell for a few seconds is the only reset the token has. There is

@@ -47,7 +47,7 @@ restarts that window, so presses in that period do nothing. The log shows
 
 Workaround: set *Disconnect after idle* to 0. A proper fix needs a way to tell a
 press from post-drop advertising, which the token's advertisement does not
-provide. Tracked in the issues.
+provide.
 
 ## A press produces rotate events
 

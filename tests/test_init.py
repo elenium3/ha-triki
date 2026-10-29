@@ -295,3 +295,34 @@ async def test_migrate_refuses_newer_entry(hass: HomeAssistant, mock_bluetooth) 
     entry.add_to_hass(hass)
     assert not await hass.config_entries.async_setup(entry.entry_id)
     assert entry.state is ConfigEntryState.MIGRATION_ERROR
+
+
+async def test_capture_stops_at_the_size_limit(
+    hass: HomeAssistant, mock_bluetooth, tmp_path, caplog
+) -> None:
+    from custom_components.triki import capture as capture_mod
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=ADDRESS,
+        title=NAME,
+        data={CONF_ADDRESS: ADDRESS},
+        options={"capture": True},
+    )
+    entry.add_to_hass(hass)
+    hass.config.config_dir = str(tmp_path)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    cap = entry.runtime_data._capture
+    assert cap is not None
+    cap.start({"name": NAME})
+    with patch.object(capture_mod, "MAX_BYTES", 200):
+        for i in range(20):
+            cap.write({"hex": "00" * 10, "i": i})
+    stopped = [line for line in cap._buf if "stopped" in line]
+    assert len(stopped) == 1
+    assert cap._buf[-1] == stopped[0]  # nothing recorded after the limit
+    assert len(cap._buf) < 20
+    assert "recording stopped" in caplog.text
+    cap.stop()
+    await hass.async_block_till_done()

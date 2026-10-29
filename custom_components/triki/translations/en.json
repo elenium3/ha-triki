@@ -34,7 +34,7 @@
           "wake_as_press": "Treat wake-up as a press",
           "knob": "Knob rotation (rotate_cw / rotate_ccw)",
           "shake": "Shake",
-          "motion_gestures": "Motion gestures (rotate, shake, tap, throw, flip)",
+          "motion_gestures": "Motion gestures (tap, throw, flip)",
           "multi_press": "Double and triple press",
           "multi_press_window": "Double/triple press window",
           "capture": "Record raw sessions to /config/triki_captures (debug)"
