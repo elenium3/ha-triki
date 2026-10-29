@@ -76,11 +76,12 @@ automation:
   does not. This matters more than any option.
   [Bluetooth proxy for beginners](docs/bluetooth-proxy.md) ·
   [Radio and placement](docs/radio-and-placement.md)
-- **Manual install.** Copy `custom_components/triki` (or unpack `triki.zip`
-  from a [release](https://github.com/elenium3/ha-triki/releases)) into the
+- **Manual install.** Copy `custom_components/triki` into the
   `custom_components` folder of your
   [configuration directory](https://www.home-assistant.io/docs/configuration/)
-  and restart. Not discovered:
+  and restart. The `triki.zip` of a
+  [release](https://github.com/elenium3/ha-triki/releases) holds the files
+  without the folder: unpack it into `custom_components/triki/`. Not discovered:
   [Add integration → Żabka Triki](https://my.home-assistant.io/redirect/config_flow_start/?domain=triki),
   press the button, pick the token. [Installation](docs/installation.md)
 - **Options.** Sample rate, idle and sleep timeouts, knob step, multi-press,
