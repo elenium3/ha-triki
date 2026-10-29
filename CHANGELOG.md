@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-29
+
 ### Added
 - Integration icon and logo ship in `custom_components/triki/brand/`
   (Home Assistant 2026.3+ reads them from there; no brands PR needed).
@@ -37,8 +39,8 @@ All notable changes to this project are documented here. The format follows
   multi-press, long-press and motion windows.
 - Shake detector rewritten: share of hard-motion frames and gyro reversals
   within 0.8 s of wall time, one event per episode, knob muted while swinging.
-  Tested at 104/52/26 Hz with 50–70 % synthetic frame loss; not yet confirmed
-  on hardware.
+  Tested at 104/52/26 Hz with 50–70 % synthetic frame loss and confirmed
+  through an ESPHome proxy: one event per shake, no rotations while swinging.
 
 ### Fixed
 - Battery level stuck at a low value (17–27 %) for whole sessions while the
@@ -104,5 +106,6 @@ and a Raspberry Pi 5 built-in adapter.
 - Duplicate BlueZ notifications counted as separate frames.
 - Wake reported again on a quick resume after a weak-signal drop.
 
-[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/elenium3/ha-triki/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/elenium3/ha-triki/releases/tag/v0.1.0

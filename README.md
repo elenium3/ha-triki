@@ -128,9 +128,9 @@ Every gesture is also fired on the bus as `triki_event` with `device_id`,
 
 - With a sleep timeout set, presses in the minutes after a sleep disconnect are
   ignored while the token still advertises. Keep the sleep timeout at 0.
-- Shake is tuned on synthetic data with up to 70 % frame loss; it is not yet
-  confirmed on hardware through a proxy. Triple press does the same job
-  reliably. Tap, throw and flip are tuned on synthetic data only.
+- Shake needs about a second of hard swinging; picking the token up may
+  register one rotation step before it. Tap, throw and flip are tuned on
+  synthetic data only.
 - The integration icon needs Home Assistant 2026.3 or newer (it ships in
   `custom_components/triki/brand/`); older versions show a placeholder.
 
