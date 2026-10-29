@@ -376,7 +376,14 @@ async def test_led_write_retried_once_on_gatt_error(hass: HomeAssistant, setup) 
     client = make_client()
     await advertise(hass, setup, client)
     dev = setup.runtime_data
-    client.write_gatt_char = AsyncMock(side_effect=[BleakError("GATT 0x0e"), None])
+    calls = {"n": 0}
+
+    async def flaky(*_args, **_kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise BleakError("GATT 0x0e")
+
+    client.write_gatt_char = AsyncMock(side_effect=flaky)
     with patch("custom_components.triki.device._LED_WRITE_RETRY_DELAY_S", 0):
         await dev.async_set_led(True)
     assert dev.led_on is True
@@ -400,6 +407,7 @@ async def test_led_write_timeout_is_not_retried(hass: HomeAssistant, setup) -> N
         await dev.async_set_led(True)
     assert client.write_gatt_char.await_count == 1
     assert dev.stats.led_write_retries == 0
+    client.write_gatt_char = AsyncMock()  # the stop write at unload must not hang
 
 
 async def test_idle_check_keeps_link_while_button_held(hass: HomeAssistant, setup) -> None:
