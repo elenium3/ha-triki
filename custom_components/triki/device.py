@@ -183,7 +183,9 @@ class TrikiDevice:
         self._last_skip: str | None = None
         self._fail_streak = 0
         self._unreachable_logged = False
-        self._battery_refreshed = 0.0  # monotonic time of the last stream pause for it
+        # monotonic time of the last stream pause for it; -inf so the first idle
+        # switch refreshes even on a host whose monotonic clock is young
+        self._battery_refreshed = float("-inf")
         self._battery_event = asyncio.Event()  # set by a battery notification
         self._battery_pause = False  # the stream is stopped for a measurement right now
         self._unsub_adv: CALLBACK_TYPE | None = None
