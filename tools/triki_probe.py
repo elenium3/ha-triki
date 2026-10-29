@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import importlib.util
 import json
 import sys
@@ -211,10 +212,9 @@ async def _stream(args, steps):
             await steps(sess)
         finally:
             if c.is_connected:
-                try:
+                # the link may already be gone; the capture is what matters
+                with contextlib.suppress(Exception):
                     await c.stop_notify(P.NUS_TX_UUID)
-                except Exception:
-                    pass
             sess.close()
 
 

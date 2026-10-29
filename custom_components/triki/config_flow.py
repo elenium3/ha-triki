@@ -74,7 +74,7 @@ class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_bluetooth_confirm(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        assert self._discovery is not None
+        assert self._discovery is not None  # noqa: S101  # set by async_step_bluetooth
         if user_input is not None:
             return self.async_create_entry(
                 title=self._discovery.name,
