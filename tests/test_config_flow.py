@@ -78,6 +78,9 @@ async def test_options(hass: HomeAssistant, mock_bluetooth) -> None:
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_RATE] == 52
+    # the flow schedules a reload (here: a first setup); let it finish before
+    # teardown, or a slow runner finds the setup still in flight
+    await hass.async_block_till_done()
 
 
 async def test_bluetooth_discovery_rejects_other_devices(
