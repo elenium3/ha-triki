@@ -45,6 +45,10 @@ STATIC_GYRO_DPS = 30.0
 MOTION_CONFIRM_S = 0.1
 KNOB_DEADBAND_DPS = 15.0  # below this the turn accumulator is not fed
 KNOB_RESET_S = 0.6  # idle time after which a partial turn is dropped
+# Pressing the button twists the token in the hand: on hardware every press came
+# with 3-5 spurious rotate events within ~0.7 s. The knob is muted while the button
+# is down and for this long after it is released.
+KNOB_BUTTON_GUARD_S = 0.8
 GRAVITY_ALPHA = 0.08  # low-pass for the gravity estimate
 
 KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
@@ -118,6 +122,7 @@ class GestureDetector:
         self._long_fired = False
         self._clicks = 0
         self._last_release_t = 0.0
+        self._release_t = -KNOB_BUTTON_GUARD_S
         # gravity / orientation
         self.gravity: tuple[float, float, float] | None = None
         self._ref_up: tuple[float, float, float] | None = None
@@ -200,6 +205,7 @@ class GestureDetector:
                 self._clicks = 0
                 out.append(Event("long_press", {}))
         elif not pressed and self.button:
+            self._release_t = self.t
             if not self._long_fired:
                 if self.multi_press:
                     self._clicks += 1
@@ -286,6 +292,8 @@ class GestureDetector:
         # token around every axis, so the knob is muted for the whole episode
         if oscillating or self._shake_latched:
             self._turn_acc = 0.0
+        elif self.button or self.t - self._release_t < KNOB_BUTTON_GUARD_S:
+            self._turn_acc = 0.0  # a press twists the token: not a turn
         elif self.gravity is not None:
             rate = _dot((s.gx, s.gy, s.gz), self.gravity)
             if self.invert_rotation:
