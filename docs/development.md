@@ -113,6 +113,18 @@ next to the events that were recorded live.
 2. Tag `vX.Y.Z` and publish a GitHub release. The release workflow stamps the
    version into `manifest.json` and attaches `triki.zip` for HACS.
 
+## Branch protection
+
+`.github/rulesets/main.json` is the ruleset for `main`: no deletion or force
+push, changes only through a pull request with resolved threads, required
+checks test, lint, hassfest, Bandit, zizmor and Gitleaks. GitHub offers
+rulesets on private repositories only with a paid plan, so apply it once the
+repository is public (or import it under *Settings → Rules → Rulesets*):
+
+```bash
+gh api -X POST repos/elenium3/ha-triki/rulesets --input .github/rulesets/main.json
+```
+
 ## Conventions
 
 - Commit messages: imperative, one topic, body explains *why*.

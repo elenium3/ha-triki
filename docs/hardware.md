@@ -47,11 +47,9 @@ cell and the button's metal spring. See
 
 ## Board, pinout and schematic
 
-The images in this section are shown from
+Images in this section are linked from
 [Piwencjusz/zabka-triki-hardware](https://github.com/Piwencjusz/zabka-triki-hardware)
-(Piwencjusz, with tsuki and AND-Y0). That repository has no license file, so
-the pictures are linked, not copied into this one; all rights stay with the
-authors. If they disappear, the originals are in that repository's `photos/`.
+(Piwencjusz, tsuki, AND-Y0; no license file, so not copied here).
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Piwencjusz/zabka-triki-hardware/main/photos/TIKIpinout.jpg" width="420" alt="The board with the 3V3, GND, nRESET, SWCLK and SWDIO pads marked">
@@ -65,21 +63,18 @@ authors. If they disappear, the originals are in that repository's `photos/`.
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Piwencjusz/zabka-triki-hardware/main/photos/schematic.png" width="760" alt="Reference schematic: LSM6DSL on I2C, nRF52810 with crystal, antenna, SWD, LED, button and SPI NOR">
-  <br><sub>Reference schematic reconstructed from PCB tracing by Piwencjusz. Their own caveat is printed on it: it is a reference, not electrically verified, and some GPIO assignments may be wrong.</sub>
+  <br><sub>Reference schematic from PCB tracing by Piwencjusz; their caveat is printed on it: not electrically verified, some GPIOs may be wrong.</sub>
 </p>
 
-What the schematic says, in words: the LSM6DSL talks to the nRF52810 over I²C
-(SDA on P0.05, SCL on P0.06, two interrupt lines on P0.09 and P0.10), the
-SPI NOR flash hangs on P0.12 to P0.20, the LED and the button are on P0.28 and
-P0.30, the 32 MHz crystal is on XC1/XC2, and the PCB antenna is on the ANT pin.
-SWD is on the two pads next to the chip; it is useless without erasing the chip
-because readout protection is on.
+In words: LSM6DSL on I²C (SDA P0.05, SCL P0.06, interrupts P0.09 and P0.10),
+SPI NOR on P0.12 to P0.20, LED and button on P0.28 and P0.30, 32 MHz crystal
+on XC1/XC2, PCB antenna on ANT. SWD is on the pads next to the chip but
+readout protection is on, so it only serves a full erase.
 
-A KiCad version of the schematic is being drawn in
-[DISKIMG/Triki-PCB](https://github.com/DISKIMG/Triki-PCB) (no license file
-either; link only). Flopsstuff's
+Also: a KiCad schematic in [DISKIMG/Triki-PCB](https://github.com/DISKIMG/Triki-PCB)
+(no license) and Flopsstuff's
 [hardware guide](https://github.com/Flopsstuff/triki/blob/main/docs/guide/hardware.md)
-(MIT) covers the same parts from the firmware's point of view.
+(MIT).
 
 ## Behaviour
 
@@ -103,34 +98,23 @@ either; link only). Flopsstuff's
 
 ## Opening it and the battery
 
-The token is meant to be opened by the user: Żabka's own
-[FAQ](https://triki.zabka.pl/#faq) says that an irregularly blinking LED or
-frequent disconnects mean a weak battery and tells you to replace it "according
-to the controller's manual" (that manual is not published online). The cell is
-a **CR2032**
-([gsmonline review](https://gsmonline.pl/artykuly/sprawdzilismy-nowy-kontroler-triki-z-zabki)),
-the most common 3 V coin cell, sold everywhere.
+The cell is a **CR2032**
+([gsmonline](https://gsmonline.pl/artykuly/sprawdzilismy-nowy-kontroler-triki-z-zabki))
+and is user-replaceable: Żabka's [FAQ](https://triki.zabka.pl/#faq) says an
+irregularly blinking LED or frequent disconnects mean a weak battery and refers
+to the controller's manual, which is not published online.
 
-How it is built, from the same review and the photos above: a classic steel
-bottle cap with the electronics on a round board, and a translucent green
-polypropylene part that closes the underside. Polypropylene was chosen because
-it flexes without cracking, which is also what lets the cap act as a button.
-In the photos the green part sits inside the crimped rim of the steel cap and
-no screws are visible.
+Construction (same review, photos above): steel cap, round board, translucent
+green polypropylene underside that flexes to act as the button. The green part
+sits inside the crimped rim; no screws are visible.
 
-**What we have not verified:** the exact way to get the green part out without
-marking it. Several short videos on TikTok show a battery swap, but none that
-we could cite describes the technique in text, and the author of this project
-has not opened their own token for a photo series yet. Until there is a
-documented procedure with pictures (contributions welcome, see
-[images/README.md](images/README.md)), the general rules for crimped coin-cell
-enclosures apply: work on a soft surface, use a plastic spudger or a guitar
-pick rather than a screwdriver, go around the rim in small steps instead of
-prying at one point, and note which way the cell faces before lifting it out.
+**Not verified yet:** how to lift the green part out without marking it.
+Until someone documents it with photos (see [images/README.md](images/README.md)),
+the usual rules for crimped coin-cell cases: soft surface, plastic spudger or
+guitar pick, go around the rim in small steps, note which way the cell faces.
 
-The photo series this section is waiting for (placeholders until someone
-takes them; replace the `.svg` files in `images/` with `.jpg` of the same
-name and update the links):
+Placeholders for that photo series (replace the `.svg` in `images/` with `.jpg`
+of the same name):
 
 <p align="center">
   <img src="images/open-1-tool.svg" width="300" alt="Placeholder: the token, the cell and the tool">
@@ -142,28 +126,21 @@ name and update the links):
 
 ### When a power cycle helps
 
-Pulling the cell for a few seconds and putting it back restarts the firmware
-from scratch. It is the only reset the token has: there is no reset button,
-and the app's "turn off" (a second press after wake-up, the LED blinks twice,
-per the FAQ) is a software sleep, not a reset. Cases where a power cycle is the
-right tool:
+Pulling the cell for a few seconds is the only reset the token has. There is
+no reset button; the app's "turn off" (second press after wake, LED blinks
+twice, per the FAQ) is a software sleep. When it helps:
 
-- The token advertises, Home Assistant connects, the start command is
-  acknowledged, and no frames arrive (seen once during development; it
-  recovered on its own after a minute, a power cycle would have been faster).
-- The token stays connected to a phone that is no longer around, so Home
-  Assistant never sees it advertise. Turning Bluetooth off on the phone is the
-  cleaner fix; the cell works when the phone is not at hand.
+- Home Assistant connects, the start command is acknowledged, no frames arrive
+  (seen once; it recovered by itself after a minute).
+- A phone still holds the link, so the token never advertises. Turning the
+  phone's Bluetooth off is the cleaner fix.
 
-A power cycle does not forget anything: the token has no pairing or bonding
-with Home Assistant, and the integration keeps its options. What the firmware
-itself keeps across a power cycle (name, calibration, if any) has not been
-checked.
+Nothing is lost: there is no pairing or bonding, and the integration keeps its
+options. What the firmware keeps (name, calibration, if any) is unchecked.
 
-The things a power cycle does **not** fix: presses ignored right after a sleep
-disconnect (that is the integration's post-drop gate, see
-[Troubleshooting](troubleshooting.md#presses-ignored-after-a-sleep-disconnect)),
-and a weak link (that is radio placement).
+It does **not** fix presses ignored after a sleep disconnect
+([the post-drop gate](troubleshooting.md#presses-ignored-after-a-sleep-disconnect))
+or a weak link (placement).
 
 ## Identification
 
