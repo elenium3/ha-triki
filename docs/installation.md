@@ -28,7 +28,13 @@ Copy `custom_components/triki` into the `custom_components` folder of your
 [configuration directory](https://www.home-assistant.io/docs/configuration/)
 (create the folder if it is missing) and restart. Each
 [release](https://github.com/elenium3/ha-triki/releases) ships a `triki.zip`
-with the same content.
+with the files of that folder, without the folder itself (that is the layout
+HACS expects); unpack it into `custom_components/triki/`:
+
+```bash
+mkdir -p custom_components/triki
+unzip triki.zip -d custom_components/triki
+```
 
 ## Adding the token
 
