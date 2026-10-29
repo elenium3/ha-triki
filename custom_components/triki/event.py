@@ -12,6 +12,8 @@ from . import TrikiConfigEntry
 from .const import EVENT_TYPES
 from .entity import TrikiEntity
 
+PARALLEL_UPDATES = 0  # push only
+
 DESCRIPTION = EventEntityDescription(
     key="action",
     translation_key="action",

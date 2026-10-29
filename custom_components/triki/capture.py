@@ -11,12 +11,12 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
+from homeassistant.util import dt as dt_util
 
 FLUSH_S = 1.0
 
@@ -28,11 +28,11 @@ class Capture:
         self.path: Path | None = None
         self._buf: list[str] = []
         self._t0 = 0.0
-        self._unsub = None
+        self._unsub: CALLBACK_TYPE | None = None
 
     @callback
     def start(self, meta: dict[str, Any]) -> None:
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        stamp = dt_util.now().strftime("%Y%m%d-%H%M%S")
         slug = "".join(c if c.isalnum() else "_" for c in self.name).strip("_")
         self.path = Path(self.hass.config.path("triki_captures", f"{stamp}-{slug}.jsonl"))
         self._t0 = time.monotonic()

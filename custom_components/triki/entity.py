@@ -6,6 +6,7 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity, EntityDescription
 
+from .const import MANUFACTURER, MODEL
 from .device import TrikiDevice
 
 
@@ -19,8 +20,13 @@ class TrikiEntity(Entity):
         self.device = device
         self.entity_description = description
         self._attr_unique_id = f"{device.address}_{description.key}"
+        # firmware/hardware revisions are written to the registry by the device
+        # once read; passing them here as None would wipe the stored values
         self._attr_device_info = DeviceInfo(
-            connections={(dr.CONNECTION_BLUETOOTH, device.address)}
+            connections={(dr.CONNECTION_BLUETOOTH, device.address)},
+            name=device.name,
+            manufacturer=MANUFACTURER,
+            model=MODEL,
         )
 
     @property
