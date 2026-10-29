@@ -13,6 +13,12 @@ All notable changes to this project are documented here. The format follows
 - Repository hygiene: MIT license, contributing guide, code of conduct, security
   policy, issue and pull request templates, Dependabot, release workflow that
   publishes a HACS zip.
+- Security workflow: Bandit, ruff security rules, zizmor for the workflows,
+  Gitleaks, pip-audit, CodeQL (once the repository is public). All actions
+  pinned to commit SHAs, checkouts do not persist credentials, CI runs with
+  read-only permissions.
+- A beginner's guide to building an ESPHome Bluetooth proxy
+  (`docs/bluetooth-proxy.md`).
 
 ## [0.1.0] - 2026-10-29
 

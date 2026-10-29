@@ -4,7 +4,7 @@ line-length = 100
 
 [tool.ruff.lint]
 # the subset of Home Assistant core's rule set that applies to a custom integration
-select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "ASYNC", "PL", "TRY", "RET", "C4", "PIE", "N"]
+select = ["E", "F", "W", "I", "UP", "B", "SIM", "RUF", "ASYNC", "PL", "TRY", "RET", "C4", "PIE", "N", "S"]
 ignore = [
   "E501",     # line length is handled by the formatter
   "PLR2004",  # magic values: thresholds and byte offsets are the whole point here
@@ -16,7 +16,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tools/*" = ["T201", "PLR0917", "SIM105", "ASYNC109"]  # command line scripts
-"tests/*" = ["PLR0917", "N802", "PLC0415", "RUF059"]  # local imports, unused unpacks
+"tests/*" = ["PLR0917", "N802", "PLC0415", "RUF059", "S101"]  # local imports, unused unpacks, asserts
 
 [tool.mypy]
 python_version = "3.13"
