@@ -47,14 +47,15 @@ unzip triki.zip -d custom_components/triki
    [Add integration → Żabka Triki](https://my.home-assistant.io/redirect/config_flow_start/?domain=triki),
    press the button again and pick the token from the list.
 
-The device is created immediately. Entities that only make sense while the token
-is linked (button, action, tilt) show as unavailable until the first connection.
+The device is created immediately. Pitch and roll show as unavailable until the
+first connection; the other entities have a state right away.
 
 ## First check
 
 Press the button once. The *Action* event entity should show `wake`, the
 *Connected* binary sensor should turn on, and the battery sensor should get a
-value within a few seconds. If the connection takes more than a second or the
+value within a few seconds (a low first value is normal: it is measured under
+load and corrected at the first idle pause, see [Configuration](configuration.md#entities)). If the connection takes more than a second or the
 link drops within a minute, the receiver is too far from the token. See
 [Radio and placement](radio-and-placement.md).
 

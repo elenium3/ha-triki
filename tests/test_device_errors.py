@@ -773,3 +773,81 @@ async def test_advertisement_cadence_and_state_writes(hass: HomeAssistant, setup
     assert cadence["median_interval_s"] == pytest.approx(0.1, abs=0.001)
     assert cadence["min_interval_s"] == pytest.approx(0.1, abs=0.001)
     assert 59 < cadence["last_age_s"] < 61
+
+
+async def test_sleep_gate_clears_on_the_first_advert_after_the_gap(
+    hass: HomeAssistant, mock_bluetooth
+) -> None:
+    """HA 2026.10+ delivers only real (fresh) adverts and there is no poll: the first
+    advert after the token's silence must be taken as the wake-up and connect."""
+    from homeassistant.components import bluetooth
+    from homeassistant.const import CONF_ADDRESS
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.triki.const import DOMAIN
+
+    from .conftest import ADDRESS, NAME
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=ADDRESS, title=NAME, data={CONF_ADDRESS: ADDRESS}
+    )
+    entry.add_to_hass(hass)
+    with patch.object(bluetooth, "async_register_advertisement_callback", MagicMock(), create=True):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    dev = entry.runtime_data
+    assert dev._unsub_poll is None
+
+    with patch(ESTABLISH, AsyncMock(return_value=make_client())) as est:
+        dev._on_every_advertisement(service_info())
+        await hass.async_block_till_done()
+    assert est.await_count == 1
+    dev._last_activity -= 10_000
+    dev._idle_check(None)  # sleep timeout: we drop the link, the token still advertises
+    await hass.async_block_till_done()
+    assert dev._await_sleep is True
+
+    dev._last_attempt = 0
+    dev._no_connect_until = 0
+    with patch(ESTABLISH, AsyncMock(return_value=make_client())) as est:
+        for _ in range(5):  # post-drop advertising: ignored, keeps the deadline out
+            dev._on_every_advertisement(service_info())
+        await hass.async_block_till_done()
+        assert est.await_count == 0
+        assert dev._await_sleep is True
+
+        dev._awake_seen -= 30  # silence: the token slept
+        dev._on_every_advertisement(service_info())  # a press: the next wake-up
+        await hass.async_block_till_done()
+    assert est.await_count == 1
+    assert dev._await_sleep is False
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+def test_options_from_a_hand_edited_store_are_sanitised() -> None:
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.triki.const import (
+        CONF_KNOB_STEP,
+        CONF_MULTI_PRESS_WINDOW,
+        CONF_RATE,
+        CONF_SLEEP_TIMEOUT,
+        DOMAIN,
+    )
+    from custom_components.triki.models import TrikiOptions
+    from custom_components.triki.protocol import DEFAULT_RATE
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        options={
+            CONF_RATE: 60,
+            CONF_KNOB_STEP: 0,
+            CONF_MULTI_PRESS_WINDOW: 0,
+            CONF_SLEEP_TIMEOUT: -5,
+        },
+    )
+    o = TrikiOptions.from_entry(entry)
+    assert o.rate == DEFAULT_RATE
+    assert o.knob_step == 1.0
+    assert o.multi_press_window == 0.1
+    assert o.sleep_timeout == 0

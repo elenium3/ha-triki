@@ -339,3 +339,16 @@ def test_timed_frames_never_step_back():
     assert d.t == pytest.approx(t0 + d.dt)
     d.update(Sample.from_frame(frame()), 12.0)
     assert d.t == pytest.approx(t0 + 2.0)
+
+
+def test_motion_gestures_option_does_not_enable_knob_or_shake():
+    d = GestureDetector(
+        RATE, knob_step_deg=30, startup_discard=0, motion_gestures=True, knob=False, shake=False
+    )
+    feed(d, RATE // 2)
+    assert types(feed(d, secs(1.0), gz=185.0)) == []
+    ev = []
+    for i in range(8):
+        ev += feed(d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, az=1.0)
+    assert "shake" not in types(ev)
+    assert "tap" in types(feed(d, 3, az=4.0) + feed(d, 30))  # the experimental ones do work

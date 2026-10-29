@@ -83,8 +83,8 @@ automation:
   [configuration directory](https://www.home-assistant.io/docs/configuration/)
   and restart. The `triki.zip` of a
   [release](https://github.com/elenium3/ha-triki/releases) holds the files
-  without the folder: unpack it into `custom_components/triki/`. Not discovered:
-  [Add integration → Żabka Triki](https://my.home-assistant.io/redirect/config_flow_start/?domain=triki),
+  without the folder: unpack it into `custom_components/triki/`. If it is not
+  discovered, use [Add integration → Żabka Triki](https://my.home-assistant.io/redirect/config_flow_start/?domain=triki),
   press the button, pick the token. [Installation](docs/installation.md)
 - **Options.** Sample rate, idle and sleep timeouts, knob step, multi-press,
   which gestures are on, raw capture. [Configuration](docs/configuration.md)
@@ -97,7 +97,7 @@ automation:
 
 | Entity | Notes |
 |---|---|
-| `event.<name>_action` | `wake`, `press`, `double_press`, `triple_press`, `long_press`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`), `shake`, `tap`, `throw`, `flip` |
+| `event.<name>_action` | `wake`, `press`, `double_press`, `triple_press` (`count`), `long_press`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`), `shake`, `tap`, `throw`, `flip` |
 | `binary_sensor.<name>_button` | live button state, off while asleep |
 | `binary_sensor.<name>_connected` | diagnostic |
 | `light.<name>_led` | the green LED; changeable only while connected |

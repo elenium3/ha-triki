@@ -6,11 +6,33 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-10-29
+
+### Fixed
+- On Home Assistant 2026.10+ the token never reconnected after a sleep-timeout
+  disconnect: the "wait until the token slept" gate judged the silence after
+  refreshing its own mark, and without the 1 s poll nothing ever cleared it.
+  The first advertisement after 15 s of silence is now taken as the wake-up.
+  Affects 0.2.0 only, with a sleep timeout other than 0.
+
+### Changed
+- The *Motion gestures* option enables only `tap`, `throw` and `flip`; rotate
+  and shake have their own switches and are no longer implied by it.
+- A capture file stops at 50 MB with one warning, so a forgotten debug option
+  cannot fill the disk; a new link starts a new file.
+- Options read from a hand-edited store are sanitised (unknown rate, zero knob
+  step or window, negative timeouts) instead of crashing the stream.
+- RSSI state writes only when the value changed; platforms unload before the
+  link is closed.
+- Docs: shake status, entity availability and battery interval corrected;
+  photo placeholders removed; obsolete `render_readme` dropped from `hacs.json`.
+
 ## [0.2.0] - 2026-10-29
 
 ### Added
 - Integration icon and logo ship in `custom_components/triki/brand/`
-  (Home Assistant 2026.3+ reads them from there; no brands PR needed).
+  (Home Assistant 2026.3+ reads them from there; older versions show the
+  icon once the domain is in `home-assistant/brands`).
 - Polish translation.
 - `quality_scale.yaml` recording the Integration Quality Scale status.
 - Config flow: `data_description` for the device picker, knob step and
@@ -33,7 +55,6 @@ All notable changes to this project are documented here. The format follows
 - The LED write has a 5 s timeout and is retried up to three times on a GATT
   error. Turning the LED on while the token sleeps now raises
   `HomeAssistantError` (a device state, not invalid input).
-
 - Gestures are timed on the frames' arrival clock instead of counting frames,
   so a lossy proxy link or the 26 Hz idle rate no longer stretches the
   multi-press, long-press and motion windows.
@@ -106,6 +127,7 @@ and a Raspberry Pi 5 built-in adapter.
 - Duplicate BlueZ notifications counted as separate frames.
 - Wake reported again on a quick resume after a weak-signal drop.
 
-[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/elenium3/ha-triki/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/elenium3/ha-triki/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/elenium3/ha-triki/releases/tag/v0.1.0

@@ -62,6 +62,7 @@ GRAVITY_ALPHA = 0.08  # low-pass for the gravity estimate
 
 KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
 MOTION_EVENTS = frozenset({"rotate_cw", "rotate_ccw", "shake", "tap", "throw", "flip"})
+EXPERIMENTAL_EVENTS = frozenset({"tap", "throw", "flip"})  # the "motion gestures" option
 
 REFRACTORY_S = {
     "tap": 0.3,
@@ -196,7 +197,7 @@ class GestureDetector:
             if self.shake:
                 allowed.add("shake")
             if self.motion_gestures:
-                allowed |= MOTION_EVENTS
+                allowed |= EXPERIMENTAL_EVENTS
             out[:] = [e for e in out if e.type not in MOTION_EVENTS or e.type in allowed]
         return out
 
