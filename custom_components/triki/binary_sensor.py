@@ -18,6 +18,8 @@ from . import TrikiConfigEntry
 from .device import TrikiDevice
 from .entity import TrikiEntity
 
+PARALLEL_UPDATES = 0  # push only
+
 
 @dataclass(frozen=True, kw_only=True)
 class TrikiBinaryDescription(BinarySensorEntityDescription):

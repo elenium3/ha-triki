@@ -4,3 +4,7 @@ __pycache__/
 .venv/
 *.log
 captures/
+.coverage
+SESSION_NOTES.md
+.mypy_cache/
+.ruff_cache/

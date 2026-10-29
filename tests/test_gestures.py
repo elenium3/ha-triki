@@ -27,7 +27,7 @@ def det():
 
 
 def secs(x):
-    return int(round(x * RATE))
+    return round(x * RATE)
 
 
 def test_static_is_quiet():
@@ -158,7 +158,9 @@ def test_motion_events_can_be_switched_off():
     feed(d, RATE // 2)
     ev = feed(d, 20, gx=200, ax=3.0)  # hard motion, would be tap/rotate/shake
     ev += feed(d, 60, az=0.0, ax=0.0)  # free fall
-    assert not [e for e in ev if e.type in ("tap", "throw", "shake", "flip", "rotate_cw", "rotate_ccw")]
+    assert not [
+        e for e in ev if e.type in ("tap", "throw", "shake", "flip", "rotate_cw", "rotate_ccw")
+    ]
     assert d.last_motion_t > 0  # still tracked for the idle logic
 
 
@@ -167,7 +169,12 @@ def test_single_press_is_immediate_without_multi_press():
     feed(d, RATE // 2)
     assert types(feed(d, secs(0.1), button=True)) == []
     assert types(feed(d, 1)) == ["press"]  # on release, no waiting window
-    ev = feed(d, secs(0.1), button=True) + feed(d, secs(0.15)) + feed(d, secs(0.1), button=True) + feed(d, secs(0.6))
+    ev = (
+        feed(d, secs(0.1), button=True)
+        + feed(d, secs(0.15))
+        + feed(d, secs(0.1), button=True)
+        + feed(d, secs(0.6))
+    )
     assert types(ev) == ["press", "press"]  # no double_press
 
 
@@ -181,22 +188,9 @@ def test_knob_only_reports_rotation():
 
 
 def test_knob_off_reports_no_rotation():
-    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=False)
-    feed(d, RATE // 2)
-    assert types(feed(d, secs(1.0), gz=185.0)) == []
-
-
-def test_knob_only_reports_rotation():
-    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=True)
-    feed(d, RATE // 2)
-    ev = feed(d, secs(1.0), gz=185.0)
-    assert set(types(ev)) == {"rotate_ccw"}
-    ev = feed(d, 20, gx=200, ax=3.0) + feed(d, 60, az=0.0, ax=0.0)
-    assert not [e for e in ev if e.type in ("tap", "throw", "shake", "flip")]
-
-
-def test_knob_off_reports_no_rotation():
-    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=False)
+    d = GestureDetector(
+        RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=False
+    )
     feed(d, RATE // 2)
     assert types(feed(d, secs(1.0), gz=185.0)) == []
 
@@ -227,7 +221,9 @@ def test_hand_motion_is_not_a_shake():
 
 
 def test_shake_option_reports_only_shake():
-    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=False, shake=True)
+    d = GestureDetector(
+        RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=False, shake=True
+    )
     feed(d, RATE // 2)
     ev = []
     for i in range(8):
@@ -236,7 +232,9 @@ def test_shake_option_reports_only_shake():
 
 
 def test_shake_off_reports_nothing():
-    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=False, shake=False)
+    d = GestureDetector(
+        RATE, knob_step_deg=30, startup_discard=0, motion_gestures=False, knob=False, shake=False
+    )
     feed(d, RATE // 2)
     ev = []
     for i in range(8):

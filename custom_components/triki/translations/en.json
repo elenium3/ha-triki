@@ -23,7 +23,8 @@
       "init": {
         "data": {
           "sample_rate": "IMU sample rate (Hz)",
-          "idle_timeout": "Disconnect after idle (s, 0 = never)",
+          "idle_timeout": "Low-power stream after idle (s, 0 = never)",
+          "sleep_timeout": "Disconnect after idle (s, 0 = never)",
           "knob_step": "Knob step (degrees per rotate event)",
           "invert_rotation": "Invert rotation direction",
           "wake_as_press": "Treat wake-up as a press",
@@ -36,7 +37,8 @@
         },
         "data_description": {
           "sample_rate": "Higher = snappier gestures, faster battery drain. Above 104 Hz BLE often cannot keep up.",
-          "idle_timeout": "Streaming keeps the token awake. Keep this short to save the battery.",
+          "idle_timeout": "After this long without motion or button activity the stream drops to 26 Hz but the link stays up, so the button keeps working. Any activity restores the configured rate.",
+          "sleep_timeout": "After this long without activity the link is dropped. The token then advertises for about 3 minutes before it sleeps, and the button is not seen until it has slept.",
           "wake_as_press": "The press that wakes the token ends before the link is up, so it is reported as wake. Also emit press on wake (a wake caused by movement then looks like a press too).",
           "shake": "Off by default. Several quick back-and-forth swings of the wrist. Turn on to test.",
           "knob": "Off by default. Reports turns around the vertical axis as rotate_cw / rotate_ccw. Turn on to test.",
@@ -46,6 +48,14 @@
           "capture": "Every connection writes a .jsonl file with raw BLE notifications and detected events. Turn off when done."
         }
       }
+    }
+  },
+  "exceptions": {
+    "asleep": {
+      "message": "{name} is asleep; press its button to wake it up first."
+    },
+    "led_write_failed": {
+      "message": "Writing the LED state failed: {error}"
     }
   },
   "entity": {

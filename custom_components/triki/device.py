@@ -13,7 +13,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Coroutine
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
 
@@ -26,21 +27,23 @@ from bleak_retry_connector import (
     BleakOutOfConnectionSlotsError,
     establish_connection,
 )
-
 from homeassistant.components import bluetooth
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 
+from .capture import Capture
 from .const import (
     BATTERY_POLL_INTERVAL,
     BUS_EVENT,
     DOMAIN,
+    IDLE_RATE,
     TILT_PUBLISH_INTERVAL,
 )
-from .capture import Capture
 from .gestures import GestureDetector
+from .models import TrikiOptions
 from .protocol import (
     BATTERY_LEVEL_UUID,
     CTRL_UUID,
@@ -52,6 +55,7 @@ from .protocol import (
     Sample,
     led_command,
     start_command,
+    stop_command,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -70,6 +74,7 @@ _POLL_FRESH_S = 10.0
 # The token can accept the connection but refuse to stream (start ack 21 01, no
 # frames). Do not keep waking it in a loop.
 _STREAM_WATCHDOG_S = 3.0
+_STOP_TIMEOUT_S = 2.0  # the stop write must not hold up an idle/unload disconnect
 _NO_STREAM_COOLDOWN_S = 60.0
 _DUP_WINDOW_S = 0.003  # identical chunks closer than this are one notification
 # After we drop the link on idle, the token keeps advertising for several more
@@ -87,6 +92,23 @@ _WAKE_GAP_S = 5.0
 _SLEEP_GAP_S = 15.0
 
 
+@dataclass(slots=True)
+class LinkStats:
+    """Counters since setup, exposed through diagnostics."""
+
+    connects: int = 0
+    connect_failures: int = 0
+    drops: int = 0  # the token (or the radio) closed the link, not us
+    stream_refusals: int = 0  # connected, but no frames after the start command
+    notifications: int = 0
+    frames: int = 0
+    rate_switches: int = 0  # idle <-> active stream rate changes over the live link
+    parser_dropped_bytes: int = 0
+    last_source: str | None = None  # scanner the last connect went through
+    last_link_s: float | None = None  # time to establish the last link
+    last_session_s: float | None = None  # how long the last link lasted
+
+
 class TrikiDevice:
     """State + BLE session for a single token."""
 
@@ -95,43 +117,43 @@ class TrikiDevice:
         hass: HomeAssistant,
         address: str,
         name: str,
-        rate: int,
-        idle_timeout: int,
-        knob_step: float,
-        invert_rotation: bool,
-        capture: bool = False,
-        wake_as_press: bool = False,
-        multi_press_window: float = 0.5,
-        motion_gestures: bool = False,
-        multi_press: bool = False,
-        knob: bool = False,
-        shake: bool = False,
+        options: TrikiOptions | None = None,
+        *,
+        entry: ConfigEntry | None = None,
     ) -> None:
+        options = options or TrikiOptions()
         self.hass = hass
+        self.entry = entry
         self.address = address
         self.name = name
-        self.rate = rate
-        self.idle_timeout = idle_timeout
-        self.wake_as_press = wake_as_press
+        self.options = options
+        self.rate = options.rate
+        self.idle_timeout = options.idle_timeout
+        self.sleep_timeout = options.sleep_timeout
+        self.wake_as_press = options.wake_as_press
+        self.stream_rate = options.rate  # what the token was last told to stream at
+        self._rate_write_pending = False
         # BlueZ/bleak may deliver one notification several times (the count grew by
         # one per connection in captures): ignore other clients and repeats.
         self._stale_notifs = 0
         self._dup_notifs = 0
         self._last_chunk: bytes | None = None
         self._last_chunk_t = 0.0
+        self.stats = LinkStats()
+        self._session_t0 = 0.0
 
         self._parser = FrameParser()
         self._detector = GestureDetector(
-            rate,
-            knob_step,
-            invert_rotation,
-            multi_press_window_s=multi_press_window,
-            motion_gestures=motion_gestures,
-            multi_press=multi_press,
-            knob=knob,
-            shake=shake,
+            options.rate,
+            knob_step_deg=options.knob_step,
+            invert_rotation=options.invert_rotation,
+            multi_press_window_s=options.multi_press_window,
+            motion_gestures=options.motion_gestures,
+            multi_press=options.multi_press,
+            knob=options.knob,
+            shake=options.shake,
         )
-        self._capture = Capture(hass, name) if capture else None
+        self._capture = Capture(hass, name) if options.capture else None
 
         self._client: BleakClient | None = None
         self._lock = asyncio.Lock()
@@ -177,9 +199,7 @@ class TrikiDevice:
         return lambda: self._state_listeners.remove(cb)
 
     @callback
-    def async_add_event_listener(
-        self, cb: Callable[[str, dict[str, Any]], None]
-    ) -> CALLBACK_TYPE:
+    def async_add_event_listener(self, cb: Callable[[str, dict[str, Any]], None]) -> CALLBACK_TYPE:
         self._event_listeners.append(cb)
         return lambda: self._event_listeners.remove(cb)
 
@@ -187,6 +207,15 @@ class TrikiDevice:
     def _notify(self) -> None:
         for cb in list(self._state_listeners):
             cb()
+
+    @callback
+    def _create_task(self, coro: Coroutine[Any, Any, Any], name: str) -> None:
+        """Run a background task that dies with the config entry (unload cancels it)."""
+        name = f"{DOMAIN}_{name}_{self.address}"
+        if self.entry is not None:
+            self.entry.async_create_background_task(self.hass, coro, name)
+        else:
+            self.hass.async_create_background_task(coro, name)
 
     @callback
     def _emit(self, kind: str, data: dict[str, Any] | None = None) -> None:
@@ -234,9 +263,7 @@ class TrikiDevice:
         """Catch wake-ups whose advertisement HA did not dispatch (unchanged data)."""
         if self._stopping or self.connected or self._lock.locked():
             return
-        info = bluetooth.async_last_service_info(
-            self.hass, self.address, connectable=True
-        )
+        info = bluetooth.async_last_service_info(self.hass, self.address, connectable=True)
         if info is not None:
             self._maybe_connect(info, _POLL_FRESH_S)
 
@@ -297,19 +324,15 @@ class TrikiDevice:
             return
         self._last_skip = None
         self._last_attempt = now
+        self.stats.last_source = service_info.source
         # taken here, not inside the task: the lock is only acquired once the task
         # runs, and a second advertisement in between would queue a second attempt
         self._connecting = True
-        self.hass.async_create_background_task(
-            self._async_connect(service_info.device, service_info.time),
-            f"{DOMAIN}_connect_{self.address}",
-        )
+        self._create_task(self._async_connect(service_info.device, service_info.time), "connect")
 
     def _ble_device(self, fallback: BLEDevice) -> BLEDevice:
         return (
-            bluetooth.async_ble_device_from_address(
-                self.hass, self.address, connectable=True
-            )
+            bluetooth.async_ble_device_from_address(self.hass, self.address, connectable=True)
             or fallback
         )
 
@@ -319,9 +342,7 @@ class TrikiDevice:
         finally:
             self._connecting = False
 
-    async def _async_connect_locked(
-        self, ble_device: BLEDevice, seen: float | None
-    ) -> None:
+    async def _async_connect_locked(self, ble_device: BLEDevice, seen: float | None) -> None:
         async with self._lock:
             if self.connected or self._stopping:
                 return
@@ -341,9 +362,11 @@ class TrikiDevice:
                         ble_device_callback=lambda: self._ble_device(ble_device),
                     )
             except (BleakNotFoundError, BleakOutOfConnectionSlotsError) as err:
+                self.stats.connect_failures += 1
                 _LOGGER.debug("%s: cannot connect: %s", self.name, err)
                 return
             except (BleakError, TimeoutError) as err:
+                self.stats.connect_failures += 1
                 _LOGGER.debug("%s: connect failed: %s", self.name, err)
                 return
 
@@ -354,9 +377,7 @@ class TrikiDevice:
             old = self._client
             if old is not None and old is not client:
                 # should not happen; never abandon a client that may still be linked
-                self.hass.async_create_background_task(
-                    old.disconnect(), f"{DOMAIN}_stale_{self.address}"
-                )
+                self._create_task(old.disconnect(), "stale")
             self._client = client
             self._expected_disconnect = False
             try:
@@ -372,7 +393,9 @@ class TrikiDevice:
                 await client.disconnect()
                 return
             self.connected = True
-            self._last_activity = time.monotonic()
+            self._last_activity = self._session_t0 = time.monotonic()
+            self.stats.connects += 1
+            self.stats.last_link_s = round(t_link - t0, 2)
             self._unsub_watchdog = async_call_later(
                 self.hass, _STREAM_WATCHDOG_S, self._stream_watchdog
             )
@@ -380,8 +403,13 @@ class TrikiDevice:
             self._schedule_battery_poll()
             _LOGGER.debug(
                 "%s: connected, streaming at %s Hz (advert age %.1fs, link %.1fs, setup %.1fs: notify %.1fs, write %.1fs)",
-                self.name, self.rate, adv_age, t_link - t0, time.monotonic() - t_link,
-                d_notify, d_write,
+                self.name,
+                self.rate,
+                adv_age,
+                t_link - t0,
+                time.monotonic() - t_link,
+                d_notify,
+                d_write,
             )
             # The token drops the link on its own on a weak signal; reconnecting
             # right away is a resume, not a new wake-up. Only report "wake" if it was
@@ -393,9 +421,7 @@ class TrikiDevice:
                     # the press that woke the token is over before the link is up
                     self._emit("press", {"count": 1, "source": "wake"})
             self._notify()
-            self.hass.async_create_background_task(
-                self._async_read_info(client), f"{DOMAIN}_info_{self.address}"
-            )
+            self._create_task(self._async_read_info(client), "info")
 
     async def _async_read_info(self, client: BleakClient) -> None:
         """Read the slow, non-essential characteristics once the stream runs.
@@ -437,6 +463,7 @@ class TrikiDevice:
         self._stale_notifs = self._dup_notifs = 0
         self._last_chunk = None
         self._streaming = False
+        self.stream_rate = self.rate
         await client.start_notify(
             NUS_TX_UUID, lambda char, data: self._on_notify_from(client, char, data)
         )
@@ -475,6 +502,14 @@ class TrikiDevice:
         if client is None:
             return
         self._expected_disconnect = True
+        if self.connected:
+            # end the stream the way the app does; a token that is told to stop may
+            # go to sleep sooner than one whose link just vanished
+            try:
+                async with asyncio.timeout(_STOP_TIMEOUT_S):
+                    await client.write_gatt_char(NUS_RX_UUID, stop_command(), response=True)
+            except (BleakError, TimeoutError) as err:
+                _LOGGER.debug("%s: stop command failed: %s", self.name, err)
         try:
             await client.disconnect()
         except BleakError as err:
@@ -488,18 +523,25 @@ class TrikiDevice:
     @callback
     def _handle_disconnected(self, client: BleakClient | None = None) -> None:
         if client is not None and client is not self._client:
-            # a late drop report from an earlier client must not tear down the
-            # current session (the next poll would then open a second link)
-            _LOGGER.debug("%s: ignoring drop of an old client", self.name)
+            if self._client is not None:
+                # a late drop report from an earlier client must not tear down the
+                # current session (the next poll would then open a second link)
+                _LOGGER.debug("%s: ignoring drop of an old client", self.name)
+            # else: bleak echoing a disconnect we already handled ourselves
             return
         if self._client is None and not self.connected:
             return
         if not self._expected_disconnect:
+            self.stats.drops += 1
             _LOGGER.debug("%s: link dropped (token asleep?)", self.name)
+        if self.connected:
+            self.stats.last_session_s = round(time.monotonic() - self._session_t0, 1)
         if self._stale_notifs or self._dup_notifs:
             _LOGGER.debug(
                 "%s: dropped %d notifications from other clients, %d repeats",
-                self.name, self._stale_notifs, self._dup_notifs,
+                self.name,
+                self._stale_notifs,
+                self._dup_notifs,
             )
         self._client = None
         self._last_drop = bluetooth.MONOTONIC_TIME()
@@ -512,9 +554,7 @@ class TrikiDevice:
         for ev in self._detector.flush():
             self._emit(ev.type, ev.data)
         if self._capture:
-            self._capture.write(
-                {"disconnected": True, "expected": self._expected_disconnect}
-            )
+            self._capture.write({"disconnected": True, "expected": self._expected_disconnect})
             self._capture.stop()
         self.button = False
         if was_connected:
@@ -539,7 +579,10 @@ class TrikiDevice:
         if self._capture:
             self._capture.write({"hex": bytes(data).hex()})
         changed = False
+        active = False
+        self.stats.notifications += 1
         for frame in self._parser.push(data):
+            self.stats.frames += 1
             if not self._streaming:
                 self._streaming = True
                 if self._unsub_watchdog:
@@ -547,17 +590,22 @@ class TrikiDevice:
                     self._unsub_watchdog = None
             sample = Sample.from_frame(frame)
             for ev in self._detector.update(sample):
-                self._last_activity = time.monotonic()
+                active = True
                 self._emit(ev.type, ev.data)
             if sample.button != self.button:
                 self.button = sample.button
-                self._last_activity = time.monotonic()
-                changed = True
+                active = changed = True
+        self.stats.parser_dropped_bytes = self._parser.dropped
         if self._detector.last_motion_t != self._last_motion_t:
             self._last_motion_t = self._detector.last_motion_t
-            self._last_activity = time.monotonic()
+            active = True
 
         now = time.monotonic()
+        if active:
+            self._last_activity = now
+            if self.stream_rate != self.rate:
+                # the token is being used again: back to the configured rate
+                self._create_task(self._async_set_rate(self.rate), "fullrate")
         if now - self._last_tilt_pub >= TILT_PUBLISH_INTERVAL:
             pr = self._detector.pitch_roll
             if pr is not None:
@@ -575,18 +623,20 @@ class TrikiDevice:
         self._unsub_watchdog = None
         if not self.connected or self._streaming:
             return
-        _LOGGER.debug(
+        self.stats.stream_refusals += 1
+        # not debug: this is the one failure the user cannot see from the entities
+        _LOGGER.info(
             "%s: no frames %.0fs after start: the token refused to stream, backing off %.0fs",
-            self.name, _STREAM_WATCHDOG_S, _NO_STREAM_COOLDOWN_S,
+            self.name,
+            _STREAM_WATCHDOG_S,
+            _NO_STREAM_COOLDOWN_S,
         )
         self._no_connect_until = time.monotonic() + _NO_STREAM_COOLDOWN_S
-        self.hass.async_create_background_task(
-            self.async_disconnect(), f"{DOMAIN}_nostream_{self.address}"
-        )
+        self._create_task(self.async_disconnect(), "nostream")
 
     @callback
     def _schedule_idle_check(self) -> None:
-        if self.idle_timeout <= 0:
+        if self.idle_timeout <= 0 and self.sleep_timeout <= 0:
             return
         self._unsub_idle = async_call_later(self.hass, _IDLE_CHECK_S, self._idle_check)
 
@@ -595,22 +645,48 @@ class TrikiDevice:
         self._unsub_idle = None
         if not self.connected:
             return
-        if self.button or time.monotonic() - self._last_activity < self.idle_timeout:
-            self._schedule_idle_check()
+        idle = 0.0 if self.button else time.monotonic() - self._last_activity
+        if 0 < self.sleep_timeout <= idle:
+            _LOGGER.debug("%s: idle for %ss, disconnecting", self.name, self.sleep_timeout)
+            self._await_sleep = True
+            self._awake_seen = time.monotonic()
+            self._no_connect_until = time.monotonic() + _IDLE_COOLDOWN_S
+            self._create_task(self.async_disconnect(), "idle")
             return
-        _LOGGER.debug("%s: idle for %ss, disconnecting", self.name, self.idle_timeout)
-        self._await_sleep = True
-        self._awake_seen = time.monotonic()
-        self._no_connect_until = time.monotonic() + _IDLE_COOLDOWN_S
-        self.hass.async_create_background_task(
-            self.async_disconnect(), f"{DOMAIN}_idle_{self.address}"
+        if 0 < self.idle_timeout <= idle and self.stream_rate != IDLE_RATE:
+            # keep the link (a fresh one is slow for 10-20 s and the token would
+            # advertise for minutes), just stop asking for a fast stream
+            self._create_task(self._async_set_rate(IDLE_RATE), "lowrate")
+        self._schedule_idle_check()
+
+    async def _async_set_rate(self, rate: int) -> None:
+        """Re-send START at another rate over the live link (no reconnect needed)."""
+        client = self._client
+        if client is None or not self.connected or self._rate_write_pending:
+            return
+        self._rate_write_pending = True
+        try:
+            async with asyncio.timeout(_STOP_TIMEOUT_S):
+                await client.write_gatt_char(NUS_RX_UUID, start_command(rate), response=True)
+        except (BleakError, TimeoutError) as err:
+            _LOGGER.debug("%s: rate change to %s Hz failed: %s", self.name, rate, err)
+            return
+        finally:
+            self._rate_write_pending = False
+        if self._client is not client:
+            return  # the link went away meanwhile
+        self.stream_rate = rate
+        self.stats.rate_switches += 1
+        self._detector.set_rate(rate)
+        if self._capture:
+            self._capture.write({"rate": rate})
+        _LOGGER.debug(
+            "%s: stream now %s Hz (%s)", self.name, rate, "idle" if rate != self.rate else "active"
         )
 
     @callback
     def _schedule_battery_poll(self) -> None:
-        self._unsub_battery = async_call_later(
-            self.hass, BATTERY_POLL_INTERVAL, self._battery_poll
-        )
+        self._unsub_battery = async_call_later(self.hass, BATTERY_POLL_INTERVAL, self._battery_poll)
 
     @callback
     def _battery_poll(self, _now: Any) -> None:
@@ -625,18 +701,24 @@ class TrikiDevice:
             if self.connected:
                 self._schedule_battery_poll()
 
-        self.hass.async_create_background_task(_run(), f"{DOMAIN}_battery_{self.address}")
+        self._create_task(_run(), "battery")
 
     # ------------------------------------------------------------ commands
     async def async_set_led(self, on: bool) -> None:
         if not self.connected or self._client is None:
-            raise HomeAssistantError(
-                f"{self.name} is asleep; press its button to wake it up first"
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="asleep",
+                translation_placeholders={"name": self.name},
             )
         try:
             await self._client.write_gatt_char(CTRL_UUID, led_command(on), response=True)
         except BleakError as err:
-            raise HomeAssistantError(f"LED write failed: {err}") from err
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="led_write_failed",
+                translation_placeholders={"error": str(err)},
+            ) from err
         self.led_on = on
         self._last_activity = time.monotonic()
         self._notify()

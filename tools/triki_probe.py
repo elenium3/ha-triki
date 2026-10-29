@@ -78,8 +78,10 @@ async def cmd_scan(args):
     for d, ad in found.values():
         name = d.name or ad.local_name or ""
         if name.lower().startswith("triki"):
-            print(f"{d.address}  {name!r}  rssi={ad.rssi}  uuids={ad.service_uuids}  "
-                  f"mfr={ {k: v.hex() for k, v in ad.manufacturer_data.items()} }")
+            print(
+                f"{d.address}  {name!r}  rssi={ad.rssi}  uuids={ad.service_uuids}  "
+                f"mfr={ {k: v.hex() for k, v in ad.manufacturer_data.items()} }"
+            )
 
 
 async def cmd_info(args):
@@ -92,7 +94,7 @@ async def cmd_info(args):
         for k, u in DIS.items():
             try:
                 print(f"{k:12} {bytes(await c.read_gatt_char(u)).decode(errors='replace')!r}")
-            except Exception as e:  # noqa: BLE001
+            except Exception as e:
                 print(f"{k:12} <{e}>")
         print("battery     ", (await c.read_gatt_char(P.BATTERY_LEVEL_UUID))[0], "%")
         print("ctrl (LED)  ", bytes(await c.read_gatt_char(P.CTRL_UUID)).hex())
@@ -140,21 +142,38 @@ class Session:
             s = P.Sample.from_frame(fr)
             for ev in self.det.update(s):
                 print(f"  [{self.now():7.2f}] EVENT {ev.type} {ev.data or ''}")
-                self.fh.write(json.dumps({"t": self.now(), "event": ev.type, "data": ev.data}) + "\n")
+                self.fh.write(
+                    json.dumps({"t": self.now(), "event": ev.type, "data": ev.data}) + "\n"
+                )
             if self.now() - self.last_print > 0.5:
                 self.last_print = self.now()
                 pr = self.det.pitch_roll
                 tilt = f"pitch={pr[0]:6.1f} roll={pr[1]:6.1f}" if pr else ""
-                print(f"  g=({s.gx:7.1f},{s.gy:7.1f},{s.gz:7.1f})dps "
-                      f"a=({s.ax:5.2f},{s.ay:5.2f},{s.az:5.2f})g |a|={s.accel_mag:4.2f} "
-                      f"btn={int(s.button)} {tilt}")
+                print(
+                    f"  g=({s.gx:7.1f},{s.gy:7.1f},{s.gz:7.1f})dps "
+                    f"a=({s.ax:5.2f},{s.ay:5.2f},{s.az:5.2f})g |a|={s.accel_mag:4.2f} "
+                    f"btn={int(s.button)} {tilt}"
+                )
 
     def close(self):
         el = max(self.now(), 1e-6)
-        print(f"\n{self.notifs} notifications, {self.frames} frames in {el:.1f}s "
-              f"= {self.frames / el:.1f} Hz (requested {self.rate}), dropped bytes {self.parser.dropped}")
-        self.fh.write(json.dumps({"t": self.now(), "summary": {
-            "notifications": self.notifs, "frames": self.frames, "dropped": self.parser.dropped}}) + "\n")
+        print(
+            f"\n{self.notifs} notifications, {self.frames} frames in {el:.1f}s "
+            f"= {self.frames / el:.1f} Hz (requested {self.rate}), dropped bytes {self.parser.dropped}"
+        )
+        self.fh.write(
+            json.dumps(
+                {
+                    "t": self.now(),
+                    "summary": {
+                        "notifications": self.notifs,
+                        "frames": self.frames,
+                        "dropped": self.parser.dropped,
+                    },
+                }
+            )
+            + "\n"
+        )
         self.fh.close()
         print(f"capture: {self.path}")
 
@@ -172,10 +191,18 @@ async def _stream(args, steps):
         sess.disconnected.set()
 
     async with BleakClient(dev, disconnected_callback=on_disc) as c:
-        hdr = {"t": 0, "meta": {
-            "name": dev.name, "rate": args.rate, "platform": sys.platform,
-            "firmware": bytes(await c.read_gatt_char(P.FIRMWARE_REV_UUID)).decode(errors="replace"),
-            "battery": (await c.read_gatt_char(P.BATTERY_LEVEL_UUID))[0]}}
+        hdr = {
+            "t": 0,
+            "meta": {
+                "name": dev.name,
+                "rate": args.rate,
+                "platform": sys.platform,
+                "firmware": bytes(await c.read_gatt_char(P.FIRMWARE_REV_UUID)).decode(
+                    errors="replace"
+                ),
+                "battery": (await c.read_gatt_char(P.BATTERY_LEVEL_UUID))[0],
+            },
+        }
         sess.fh.write(json.dumps(hdr) + "\n")
         print("meta:", hdr["meta"])
         await c.start_notify(P.NUS_TX_UUID, sess.on_notify)
@@ -186,7 +213,7 @@ async def _stream(args, steps):
             if c.is_connected:
                 try:
                     await c.stop_notify(P.NUS_TX_UUID)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     pass
             sess.close()
 
@@ -199,6 +226,7 @@ async def cmd_record(args):
             await asyncio.wait_for(sess.disconnected.wait(), args.seconds)
         except TimeoutError:
             pass
+
     await _stream(args, steps)
 
 
@@ -231,6 +259,7 @@ async def cmd_guided(args):
                 await asyncio.wait_for(sess.disconnected.wait(), secs)
             except TimeoutError:
                 pass
+
     await _stream(args, steps)
 
 

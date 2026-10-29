@@ -18,8 +18,15 @@ CONF_MULTI_PRESS = "multi_press"
 CONF_KNOB = "knob"
 CONF_SHAKE = "shake"
 
-DEFAULT_RATE = 104
-DEFAULT_IDLE_TIMEOUT = 30  # s without motion/button -> disconnect (0 = never)
+CONF_SLEEP_TIMEOUT = "sleep_timeout"
+
+DEFAULT_IDLE_TIMEOUT = 30  # s without motion/button -> stream drops to IDLE_RATE (0 = never)
+DEFAULT_SLEEP_TIMEOUT = 300  # s without motion/button -> drop the link (0 = never)
+# Lowest rate the firmware accepts. Enough for the button and to notice motion,
+# a quarter of the radio traffic of 104 Hz. The link itself stays up: a reconnect
+# starts with a slow, lossy link for 10-20 s and the token then advertises at
+# full tilt for ~3 min, so dropping and re-taking the link is the expensive path.
+IDLE_RATE = 26
 DEFAULT_KNOB_STEP = 30
 DEFAULT_INVERT_ROTATION = False
 DEFAULT_WAKE_AS_PRESS = False
@@ -44,9 +51,6 @@ EVENT_TYPES = [
     "throw",
     "flip",
 ]
-
-SIGNAL_UPDATE = f"{DOMAIN}_update_{{}}"
-SIGNAL_EVENT = f"{DOMAIN}_event_{{}}"
 
 # Tilt sensors are throttled to keep the recorder sane.
 TILT_PUBLISH_INTERVAL = 1.0

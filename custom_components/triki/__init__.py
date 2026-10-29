@@ -2,37 +2,15 @@
 
 from __future__ import annotations
 
+from homeassistant.components import bluetooth
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_ADDRESS, Platform
-from homeassistant.core import HomeAssistant
+from homeassistant.const import CONF_ADDRESS, EVENT_HOMEASSISTANT_STOP, Platform
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers import device_registry as dr
 
-from .const import (
-    CONF_CAPTURE,
-    CONF_IDLE_TIMEOUT,
-    CONF_INVERT_ROTATION,
-    CONF_KNOB_STEP,
-    CONF_RATE,
-    CONF_KNOB,
-    CONF_MOTION_GESTURES,
-    CONF_MULTI_PRESS,
-    CONF_MULTI_PRESS_WINDOW,
-    CONF_SHAKE,
-    CONF_WAKE_AS_PRESS,
-    DEFAULT_IDLE_TIMEOUT,
-    DEFAULT_INVERT_ROTATION,
-    DEFAULT_KNOB,
-    DEFAULT_MOTION_GESTURES,
-    DEFAULT_MULTI_PRESS,
-    DEFAULT_MULTI_PRESS_WINDOW,
-    DEFAULT_SHAKE,
-    DEFAULT_WAKE_AS_PRESS,
-    DEFAULT_KNOB_STEP,
-    DEFAULT_RATE,
-    MANUFACTURER,
-    MODEL,
-)
+from .const import MANUFACTURER, MODEL
 from .device import TrikiDevice
+from .models import TrikiOptions
 
 PLATFORMS = [
     Platform.BINARY_SENSOR,
@@ -46,25 +24,7 @@ type TrikiConfigEntry = ConfigEntry[TrikiDevice]
 
 async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> bool:
     address: str = entry.data[CONF_ADDRESS]
-    opts = entry.options
-    device = TrikiDevice(
-        hass,
-        address,
-        entry.title,
-        rate=int(opts.get(CONF_RATE, DEFAULT_RATE)),
-        idle_timeout=int(opts.get(CONF_IDLE_TIMEOUT, DEFAULT_IDLE_TIMEOUT)),
-        knob_step=float(opts.get(CONF_KNOB_STEP, DEFAULT_KNOB_STEP)),
-        invert_rotation=bool(opts.get(CONF_INVERT_ROTATION, DEFAULT_INVERT_ROTATION)),
-        capture=bool(opts.get(CONF_CAPTURE, False)),
-        wake_as_press=bool(opts.get(CONF_WAKE_AS_PRESS, DEFAULT_WAKE_AS_PRESS)),
-        motion_gestures=bool(opts.get(CONF_MOTION_GESTURES, DEFAULT_MOTION_GESTURES)),
-        knob=bool(opts.get(CONF_KNOB, DEFAULT_KNOB)),
-        shake=bool(opts.get(CONF_SHAKE, DEFAULT_SHAKE)),
-        multi_press=bool(opts.get(CONF_MULTI_PRESS, DEFAULT_MULTI_PRESS)),
-        multi_press_window=float(
-            opts.get(CONF_MULTI_PRESS_WINDOW, DEFAULT_MULTI_PRESS_WINDOW)
-        ),
-    )
+    device = TrikiDevice(hass, address, entry.title, TrikiOptions.from_entry(entry), entry=entry)
     dev = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         connections={(dr.CONNECTION_BLUETOOTH, address)},
@@ -77,14 +37,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> boo
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     device.async_start()
-    entry.async_on_unload(entry.add_update_listener(_async_reload))
+
+    async def _async_stop(_event: Event) -> None:
+        # Home Assistant does not unload entries on shutdown: close the link
+        # ourselves so the token is not left connected to a dying BlueZ.
+        await device.async_stop()
+
+    entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_stop))
     return True
-
-
-async def _async_reload(hass: HomeAssistant, entry: TrikiConfigEntry) -> None:
-    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> bool:
     await entry.runtime_data.async_stop()
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unload_ok:
+        # let the token be discovered again right away if the entry was removed
+        bluetooth.async_rediscover_address(hass, entry.data[CONF_ADDRESS])
+    return unload_ok

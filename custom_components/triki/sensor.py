@@ -24,6 +24,8 @@ from . import TrikiConfigEntry
 from .device import TrikiDevice
 from .entity import TrikiEntity
 
+PARALLEL_UPDATES = 0  # push only
+
 
 @dataclass(frozen=True, kw_only=True)
 class TrikiSensorDescription(SensorEntityDescription):
@@ -90,9 +92,7 @@ class TrikiSensor(TrikiEntity, RestoreSensor):
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
-        if self.entity_description.restore and (
-            last := await self.async_get_last_sensor_data()
-        ):
+        if self.entity_description.restore and (last := await self.async_get_last_sensor_data()):
             self._restored = last.native_value  # type: ignore[assignment]
 
     @property

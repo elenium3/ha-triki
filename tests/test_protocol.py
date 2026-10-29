@@ -1,6 +1,11 @@
 import pytest
 
-from custom_components.triki.protocol import FrameParser, Sample, led_command, start_command
+from custom_components.triki.protocol import (
+    FrameParser,
+    Sample,
+    led_command,
+    start_command,
+)
 
 from .helpers import frame
 
