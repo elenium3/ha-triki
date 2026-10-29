@@ -58,6 +58,7 @@ KNOB_RESET_S = 0.6  # idle time after which a partial turn is dropped
 # with 3-5 spurious rotate events within ~0.7 s. The knob is muted while the button
 # is down and for this long after it is released.
 KNOB_BUTTON_GUARD_S = 0.8
+KNOB_LIFT_G = 0.25  # |a| this far from 1 g means the token is being moved, not turned
 GRAVITY_ALPHA = 0.08  # low-pass for the gravity estimate
 
 KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
@@ -327,6 +328,8 @@ class GestureDetector:
             self._turn_acc = 0.0
         elif self.button or self.t - self._release_t < KNOB_BUTTON_GUARD_S:
             self._turn_acc = 0.0  # a press twists the token: not a turn
+        elif abs(a - 1.0) > KNOB_LIFT_G:
+            self._turn_acc = 0.0  # being picked up or put down: the twist is not a turn
         elif self.gravity is not None:
             rate = _dot((s.gx, s.gy, s.gz), self.gravity)
             if self.invert_rotation:

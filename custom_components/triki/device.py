@@ -14,6 +14,7 @@ is the link dropped so the token can sleep.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
 from collections import deque
@@ -111,6 +112,10 @@ _UNREACHABLE_AFTER = 3
 # right after a connect is taken under load (27 % against 82 % at rest on the
 # same cell) and never changes while the stream runs.
 _BATTERY_REFRESH_WAIT_S = 10.0  # how long the stream may stay stopped for a measurement
+# The first notification after STOP can still carry the loaded figure (27 % at
+# 3.0 s, then 82 % at 4-6 s on the test unit): after a value, keep the pause
+# open for a quiet spell this long and take the last one.
+_BATTERY_SETTLE_S = 3.0
 _BATTERY_CHECK_S = 60.0  # how often to look for an idle moment once a refresh is due
 _BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before pausing
 
@@ -184,6 +189,7 @@ class TrikiDevice:
         self._no_connect_until = 0.0
         self._await_sleep = False
         self._awake_seen = 0.0
+        self._connect_task: asyncio.Task[Any] | None = None
         self._last_drop = 0.0
         self._last_skip: str | None = None
         self.every_advertisement = False  # the HA 2026.10 per-advertisement callback is in use
@@ -224,6 +230,17 @@ class TrikiDevice:
 
     # ------------------------------------------------------------ listeners
     @callback
+    @callback
+    def restore_battery(self, level: int) -> None:
+        """Seed the level from the sensor's last state (a restart or reload).
+
+        The connect-time read happens under load and shows 17-27 % on a token
+        that rests at 80+; with a known level it is skipped and the next idle
+        pause measures a fresh one.
+        """
+        if self.battery is None:
+            self.battery = level
+
     def async_add_listener(self, cb: Callable[[], None]) -> CALLBACK_TYPE:
         self._state_listeners.append(cb)
         return lambda: self._state_listeners.remove(cb)
@@ -239,9 +256,11 @@ class TrikiDevice:
             cb()
 
     @callback
-    def _create_task(self, coro: Coroutine[Any, Any, Any], name: str) -> None:
+    def _create_task(self, coro: Coroutine[Any, Any, Any], name: str) -> asyncio.Task[Any]:
         """Run a background task that dies with the config entry (unload cancels it)."""
-        self.entry.async_create_background_task(self.hass, coro, f"{DOMAIN}_{name}_{self.address}")
+        return self.entry.async_create_background_task(
+            self.hass, coro, f"{DOMAIN}_{name}_{self.address}"
+        )
 
     @callback
     def _emit(self, kind: str, data: dict[str, Any] | None = None) -> None:
@@ -290,6 +309,13 @@ class TrikiDevice:
             if unsub:
                 unsub()
                 setattr(self, attr, None)
+        task = self._connect_task
+        if task is not None and not task.done():
+            # a connect in flight must finish or be undone before the entry is
+            # gone, or its link outlives us until the next stale-link sweep
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
         await self.async_disconnect()
 
     @callback
@@ -393,7 +419,9 @@ class TrikiDevice:
         # taken here, not inside the task: the lock is only acquired once the task
         # runs, and a second advertisement in between would queue a second attempt
         self._connecting = True
-        self._create_task(self._async_connect(service_info.device, service_info.time), "connect")
+        self._connect_task = self._create_task(
+            self._async_connect(service_info.device, service_info.time), "connect"
+        )
 
     def _ble_device(self, fallback: BLEDevice) -> BLEDevice:
         return (
@@ -450,6 +478,12 @@ class TrikiDevice:
                 self._expected_disconnect = True
                 await client.disconnect()
                 return
+            except asyncio.CancelledError:
+                # unloaded in the middle of the setup: do not leave a live link
+                self._expected_disconnect = True
+                self._client = None
+                await client.disconnect()
+                raise
 
             if self._stopping:
                 self._expected_disconnect = True
@@ -819,21 +853,35 @@ class TrikiDevice:
             async with asyncio.timeout(_STOP_TIMEOUT_S):
                 await client.write_gatt_char(NUS_RX_UUID, stop_command(), response=True)
             t = time.monotonic()
-            try:
-                async with asyncio.timeout(_BATTERY_REFRESH_WAIT_S):
-                    await self._battery_event.wait()
-            except TimeoutError:
+            deadline = t + _BATTERY_REFRESH_WAIT_S
+            values = 0
+            while self._client is client:
+                remaining = deadline - time.monotonic()
+                if values:
+                    remaining = min(remaining, _BATTERY_SETTLE_S)
+                if remaining <= 0:
+                    break
+                try:
+                    async with asyncio.timeout(remaining):
+                        await self._battery_event.wait()
+                except TimeoutError:
+                    break
+                self._battery_event.clear()
+                values += 1
+            if values:
+                _LOGGER.debug(
+                    "%s: battery %s%% after a %.1fs stream pause (%d value%s)",
+                    self.name,
+                    self.battery,
+                    time.monotonic() - t,
+                    values,
+                    "" if values == 1 else "s",
+                )
+            else:
                 _LOGGER.debug(
                     "%s: no battery update within %.0fs of the stream pause",
                     self.name,
                     _BATTERY_REFRESH_WAIT_S,
-                )
-            else:
-                _LOGGER.debug(
-                    "%s: battery %s%% after a %.1fs stream pause",
-                    self.name,
-                    self.battery,
-                    time.monotonic() - t,
                 )
         finally:
             self._battery_pause = False

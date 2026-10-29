@@ -352,3 +352,9 @@ def test_motion_gestures_option_does_not_enable_knob_or_shake():
         ev += feed(d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, az=1.0)
     assert "shake" not in types(ev)
     assert "tap" in types(feed(d, 3, az=4.0) + feed(d, 30))  # the experimental ones do work
+
+
+def test_knob_ignores_the_twist_of_picking_the_token_up():
+    d = det()
+    assert types(feed(d, secs(1.0), gz=185.0, az=1.4)) == []  # lifted: |a| far from 1 g
+    assert "rotate_ccw" in types(feed(d, secs(1.0), gz=185.0))  # flat again: turns count

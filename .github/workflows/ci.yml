@@ -66,3 +66,41 @@ jobs:
           )
       - run: mypy
       - run: pytest --cov --cov-fail-under=95
+
+  compat:
+    # the suite against the oldest supported core and the newest release: the
+    # pinned toolchain above cannot see what a new core changes
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: min
+            # aiodns pinned by the 2025.8 constraints breaks with pycares 5 (the
+            # value is word-split by the shell, not re-parsed: no quotes needed)
+            install: homeassistant==2025.8.3 pytest-homeassistant-custom-component pycares<5
+          - name: latest
+            install: pytest-homeassistant-custom-component
+    name: compat (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+      - env:
+          INSTALL: ${{ matrix.install }}
+        run: pip install $INSTALL
+      - run: |
+          pip install $(python - <<'EOF'
+          import json, pathlib, homeassistant
+          base = pathlib.Path(homeassistant.__file__).parent / "components"
+          reqs = []
+          for component in ("bluetooth", "usb"):
+              reqs += json.load(open(base / component / "manifest.json"))["requirements"]
+          print(" ".join(reqs))
+          EOF
+          )
+      - run: python -c "import homeassistant.const as c; print('Home Assistant', c.__version__)"
+      - run: pytest -p no:cacheprovider --no-cov

@@ -851,3 +851,86 @@ def test_options_from_a_hand_edited_store_are_sanitised() -> None:
     assert o.knob_step == 1.0
     assert o.multi_press_window == 0.1
     assert o.sleep_timeout == 0
+
+
+async def test_unload_during_session_setup_closes_the_link(hass: HomeAssistant, setup) -> None:
+    """A cancel that lands after the connect but inside the setup must not leave
+    the token linked to a dead entry."""
+    dev = setup.runtime_data
+    client = make_client()
+
+    async def hang(*_args, **_kwargs):
+        await asyncio.Event().wait()
+
+    client.start_notify = AsyncMock(side_effect=hang)
+    with patch(ESTABLISH, AsyncMock(return_value=client)):
+        dev._on_advertisement(service_info(), None)
+        for _ in range(10):  # let the connect reach the hanging setup
+            await asyncio.sleep(0)
+        assert dev._client is client
+        assert await hass.config_entries.async_unload(setup.entry_id)
+        await hass.async_block_till_done()
+    client.disconnect.assert_awaited()
+    assert dev._client is None
+
+
+async def test_restored_battery_skips_the_under_load_read(
+    hass: HomeAssistant, mock_bluetooth
+) -> None:
+    from homeassistant.const import CONF_ADDRESS
+    from homeassistant.core import State
+    from pytest_homeassistant_custom_component.common import (
+        MockConfigEntry,
+        mock_restore_cache_with_extra_data,
+    )
+
+    from custom_components.triki.const import DOMAIN
+
+    from .conftest import ADDRESS, NAME
+
+    mock_restore_cache_with_extra_data(
+        hass,
+        ((State(BATTERY, "77"), {"native_value": 77, "native_unit_of_measurement": "%"}),),
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=ADDRESS, title=NAME, data={CONF_ADDRESS: ADDRESS}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    dev = entry.runtime_data
+    assert dev.battery == 77
+    assert hass.states.get(BATTERY).state == "77"
+
+    client = make_client()
+    await advertise(hass, entry, client)
+    assert dev.connected
+    read_uuids = [c.args[0] for c in client.read_gatt_char.await_args_list]
+    assert BATTERY_LEVEL_UUID not in read_uuids  # no 27 % flash after a restart
+    assert hass.states.get(BATTERY).state == "77"
+
+
+async def test_battery_pause_keeps_the_last_value_of_a_quiet_spell(
+    hass: HomeAssistant, setup
+) -> None:
+    """The first notification after STOP can still be the loaded figure; the rested
+    one follows a few seconds later and must win."""
+    from custom_components.triki.protocol import stop_command
+
+    client = make_client()
+    await advertise(hass, setup, client)
+    dev = setup.runtime_data
+
+    async def write(uuid, data, response=False):
+        if data == stop_command():
+            cb = battery_callback(client)
+            hass.loop.call_soon(cb, None, bytearray([27]))
+            hass.loop.call_later(0.1, cb, None, bytearray([82]))
+
+    client.write_gatt_char = AsyncMock(side_effect=write)
+    with patch("custom_components.triki.device._BATTERY_SETTLE_S", 0.3):
+        dev._last_activity -= 100
+        dev._idle_check(None)
+        await settle(hass, dev)
+    assert hass.states.get(BATTERY).state == "82"
+    assert not dev._battery_pause
