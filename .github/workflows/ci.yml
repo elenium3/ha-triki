@@ -75,8 +75,9 @@ jobs:
       matrix:
         include:
           - name: min
-            # aiodns pinned by the 2025.8 constraints breaks with pycares 5
-            install: homeassistant==2025.8.3 pytest-homeassistant-custom-component "pycares<5"
+            # aiodns pinned by the 2025.8 constraints breaks with pycares 5 (the
+            # value is word-split by the shell, not re-parsed: no quotes needed)
+            install: homeassistant==2025.8.3 pytest-homeassistant-custom-component pycares<5
           - name: latest
             install: pytest-homeassistant-custom-component
     name: compat (${{ matrix.name }})
