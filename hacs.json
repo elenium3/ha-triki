@@ -2,5 +2,6 @@
   "name": "Żabka Triki",
   "homeassistant": "2025.8.0",
   "zip_release": true,
-  "filename": "triki.zip"
+  "filename": "triki.zip",
+  "country": "PL"
 }

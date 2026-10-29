@@ -22,8 +22,8 @@ from .models import TrikiOptions
 PLATFORMS = [
     Platform.BINARY_SENSOR,
     Platform.EVENT,
-    Platform.LIGHT,
     Platform.SENSOR,
+    Platform.SWITCH,
 ]
 
 type TrikiConfigEntry = ConfigEntry[TrikiDevice]

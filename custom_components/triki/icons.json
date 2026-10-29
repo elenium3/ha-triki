@@ -10,7 +10,7 @@
         "default": "mdi:gesture"
       }
     },
-    "light": {
+    "switch": {
       "led": {
         "default": "mdi:led-on",
         "state": {

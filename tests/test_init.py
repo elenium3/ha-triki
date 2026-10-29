@@ -89,7 +89,7 @@ async def test_wake_stream_events(hass: HomeAssistant, setup) -> None:
     assert [e.data["type"] for e in bus] == ["wake", "press"]
 
     # LED
-    await hass.services.async_call("light", "turn_on", {"entity_id": LED}, blocking=True)
+    await hass.services.async_call("switch", "turn_on", {"entity_id": LED}, blocking=True)
     client.write_gatt_char.assert_awaited_with(CTRL_UUID, b"\x01", response=True)
     assert hass.states.get(LED).state == "on"
 

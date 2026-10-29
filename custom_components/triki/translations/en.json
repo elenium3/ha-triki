@@ -95,7 +95,7 @@
         "name": "Button"
       }
     },
-    "light": {
+    "switch": {
       "led": {
         "name": "LED"
       }

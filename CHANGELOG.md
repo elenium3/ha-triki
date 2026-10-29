@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-29
+
+### Changed
+- **Breaking:** the LED is a `switch` with the *Configuration* category instead
+  of a `light`, so it stays out of area light groups and "turn off all the
+  lights" no longer wakes a sleeping token into an error. The entity id changes
+  from `light.<name>_led` to `switch.<name>_led`; update automations and remove
+  the orphaned `light` entity from the registry.
+- `hacs.json` declares `country: PL` (the token is sold in Poland).
+
 ## [0.2.1] - 2026-10-29
 
 ### Fixed
@@ -127,7 +137,8 @@ and a Raspberry Pi 5 built-in adapter.
 - Duplicate BlueZ notifications counted as separate frames.
 - Wake reported again on a quick resume after a weak-signal drop.
 
-[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/elenium3/ha-triki/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/elenium3/ha-triki/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/elenium3/ha-triki/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/elenium3/ha-triki/releases/tag/v0.1.0

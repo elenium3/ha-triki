@@ -40,7 +40,7 @@ custom_components/triki/
   models.py        TrikiOptions parsed once from the entry
   capture.py       optional raw session recorder
   entity.py        base entity, device info
-  event.py, binary_sensor.py, light.py, sensor.py
+  event.py, binary_sensor.py, switch.py, sensor.py
   diagnostics.py
 tests/             pytest-homeassistant-custom-component, mocked bleak client
 tools/
