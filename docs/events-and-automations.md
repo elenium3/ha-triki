@@ -26,7 +26,7 @@ and a Raspberry Pi 5 adapter):
 |---|---|
 | wake, press, long press, double and triple press | Reliable. |
 | rotate | Reliable with the token flat on a surface or held level. A press twists the token in the hand; those false rotations are filtered. |
-| shake | Not yet seen through a proxy. A shake tends to register as a burst of alternating rotations instead. Treat as experimental. |
+| shake | Confirmed through a proxy: one event per shake about a second after it starts, no rotations while swinging. Timed on the frames' arrival clock, so lost frames and the 26 Hz idle rate only delay it. The twist of picking the token up may register one rotation step before the shake. |
 | tap, throw, flip | Synthetic data only. |
 
 ## Bus event

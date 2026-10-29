@@ -22,8 +22,8 @@ from .models import TrikiOptions
 PLATFORMS = [
     Platform.BINARY_SENSOR,
     Platform.EVENT,
-    Platform.LIGHT,
     Platform.SENSOR,
+    Platform.SWITCH,
 ]
 
 type TrikiConfigEntry = ConfigEntry[TrikiDevice]
@@ -72,9 +72,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> boo
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> bool:
-    await entry.runtime_data.async_stop()
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
+        await entry.runtime_data.async_stop()
         # let the token be discovered again right away if the entry was removed
         bluetooth.async_rediscover_address(hass, entry.data[CONF_ADDRESS])
     return unload_ok

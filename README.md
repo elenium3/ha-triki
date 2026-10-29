@@ -83,8 +83,8 @@ automation:
   [configuration directory](https://www.home-assistant.io/docs/configuration/)
   and restart. The `triki.zip` of a
   [release](https://github.com/elenium3/ha-triki/releases) holds the files
-  without the folder: unpack it into `custom_components/triki/`. Not discovered:
-  [Add integration → Żabka Triki](https://my.home-assistant.io/redirect/config_flow_start/?domain=triki),
+  without the folder: unpack it into `custom_components/triki/`. If it is not
+  discovered, use [Add integration → Żabka Triki](https://my.home-assistant.io/redirect/config_flow_start/?domain=triki),
   press the button, pick the token. [Installation](docs/installation.md)
 - **Options.** Sample rate, idle and sleep timeouts, knob step, multi-press,
   which gestures are on, raw capture. [Configuration](docs/configuration.md)
@@ -97,10 +97,10 @@ automation:
 
 | Entity | Notes |
 |---|---|
-| `event.<name>_action` | `wake`, `press`, `double_press`, `triple_press`, `long_press`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`), `shake`, `tap`, `throw`, `flip` |
+| `event.<name>_action` | `wake`, `press`, `double_press`, `triple_press` (`count`), `long_press`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`), `shake`, `tap`, `throw`, `flip` |
 | `binary_sensor.<name>_button` | live button state, off while asleep |
 | `binary_sensor.<name>_connected` | diagnostic |
-| `light.<name>_led` | the green LED; changeable only while connected |
+| `switch.<name>_led` | the green LED (configuration switch); changeable only while connected |
 | `sensor.<name>_battery` | measured by the token during a short stream pause while it is idle, at most every 30 min |
 | `sensor.<name>_rssi`, `_pitch`, `_roll` | disabled by default |
 
@@ -128,8 +128,9 @@ Every gesture is also fired on the bus as `triki_event` with `device_id`,
 
 - With a sleep timeout set, presses in the minutes after a sleep disconnect are
   ignored while the token still advertises. Keep the sleep timeout at 0.
-- Shake is unreliable through a proxy; use triple press. Tap, throw and flip
-  are tuned on synthetic data only.
+- Shake needs about a second of hard swinging; picking the token up may
+  register one rotation step before it. Tap, throw and flip are tuned on
+  synthetic data only.
 - The integration icon needs Home Assistant 2026.3 or newer (it ships in
   `custom_components/triki/brand/`); older versions show a placeholder.
 

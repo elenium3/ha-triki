@@ -14,11 +14,11 @@ Changing any option reloads the entry, which drops and re-establishes the link.
 | Invert rotation direction | off | Swap cw and ccw if they read backwards on your unit. |
 | Treat wake-up as a press | off | The press that wakes a sleeping token ends before the link is up, so it is reported as `wake`. With this on, a `press` with `source: wake` is emitted after every `wake`, including wakes caused by movement. |
 | Knob rotation | off | Enable `rotate_cw` / `rotate_ccw`. |
-| Shake | off | Enable `shake`. Not yet confirmed on hardware through a proxy; see [Events](events-and-automations.md#gesture-status). |
-| Motion gestures | off | Enable `tap`, `throw`, `flip` (and rotate, shake). Thresholds are not calibrated on hardware. |
+| Shake | off | Enable `shake`. Confirmed through a proxy; see [Events](events-and-automations.md#gesture-status). |
+| Motion gestures | off | Enable `tap`, `throw`, `flip`. Thresholds are not calibrated on hardware. |
 | Double and triple press | off | Off: `press` is reported the moment the button is released. On: single presses are delayed by the window below so that `double_press` and `triple_press` can be told apart. |
 | Double/triple press window | 0.5 s | Longest pause between releasing and pressing again that still counts as a multi-press. 0.3 s is a good compromise between a quick single press and a comfortable double press. |
-| Record raw sessions | off | Write every session to `<config>/triki_captures/*.jsonl`: raw notifications, detected events, rate switches. For debugging and for tuning gestures with `tools/replay.py`. Turn it off when done. |
+| Record raw sessions | off | Write every session to `<config>/triki_captures/*.jsonl`: raw notifications, detected events, rate switches. For debugging and for tuning gestures with `tools/replay.py`. Turn it off when done. A file stops at 50 MB; a new link starts a new file. |
 
 ## Idle and sleep: how the link behaves
 
@@ -45,7 +45,7 @@ That is what prevents a reconnect loop (reconnecting resets the token's own
 sleep timer). But the token keeps advertising for minutes after a drop and every
 press restarts that period, so presses made in that window are ignored. If you
 want the token to react at any time, set the sleep timeout to 0 and accept the
-battery cost of a permanently held link. This is tracked as an open issue; see
+battery cost of a permanently held link. See
 [Troubleshooting](troubleshooting.md#presses-ignored-after-a-sleep-disconnect).
 
 ## Entities
@@ -55,7 +55,7 @@ battery cost of a permanently held link. This is tracked as an open issue; see
 | `event.<name>_action` | | Every gesture. Attributes: `event_type`, plus `steps` and `degrees` for rotation, `count` for presses, `source: wake` for synthetic presses. |
 | `binary_sensor.<name>_button` | | Live button state. Off while the token sleeps. |
 | `binary_sensor.<name>_connected` | diagnostic | Link state. |
-| `light.<name>_led` | | The green LED. Last known state while asleep; can only be changed while linked. |
+| `switch.<name>_led` | Configuration | The green LED. Last known state while asleep; can only be changed while linked. |
 | `sensor.<name>_battery` | diagnostic | The token measures its battery only while it is not streaming, so the integration stops the stream for a few seconds while the token is idle (first at the idle-rate switch, then at most every 30 min) and takes the value the token pushes. Values the token reports on its own while streaming are taken under load and ignored. The first value after setup is read at the connect and is low (taken under load) until the first pause. Restored across restarts. |
 | `sensor.<name>_rssi` | diagnostic, disabled | Signal of the last advertisement as seen by the scanner that received it. |
 | `sensor.<name>_pitch`, `_roll` | disabled | Tilt in degrees from the gravity estimate, published at most once per second. |

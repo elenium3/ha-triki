@@ -41,6 +41,7 @@ async def async_get_config_entry_diagnostics(
             "roll": dev.roll,
         },
         "link": asdict(dev.stats),
+        "advertisements": dev.advertisement_cadence,
         "last_advertisement": None
         if info is None
         else {

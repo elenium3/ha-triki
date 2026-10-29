@@ -30,7 +30,7 @@ sequenceDiagram
     participant HA as Bluetooth stack
     participant D as TrikiDevice
     T->>HA: advertisement (after a press or motion)
-    HA->>D: callback / 1 s poll of the last advertisement
+    HA->>D: advertisement callback (older cores: 1 s poll of the last one)
     D->>D: fresh? not in cooldown? not awaiting sleep?
     D->>T: connect (bleak_retry_connector)
     D->>T: subscribe NUS TX, write START <rate>
@@ -48,11 +48,22 @@ sequenceDiagram
 
 ## Design decisions
 
-**Advertisement polling.** Home Assistant calls advertisement callbacks only
-when the advertised data changes. The token always advertises the same payload,
-so after the first wake-up the callback goes silent. `TrikiDevice` therefore also
-polls the last seen advertisement once per second and treats one younger than
-10 s as "awake now".
+**Every advertisement, or a poll.** On Home Assistant 2026.10 and newer
+`TrikiDevice` registers for every advertisement of the token's address
+(`async_register_advertisement_callback`), so a wake-up is seen on the first
+packet. Older cores call advertisement callbacks only when the advertised data
+changes; the token always advertises the same payload, so after the first
+wake-up the callback goes silent. There the device also polls the last seen
+advertisement once per second and treats one younger than 10 s as "awake now".
+The `advertisements` block in diagnostics shows which path is in use and the
+cadence of the last 32 packets.
+
+**Gesture timing on the arrival clock.** Frames reach the detector with their
+arrival time; the frames of one notification are spread one sample period
+apart. Windows (shake, multi-press, long press, motion debounce) are measured
+in seconds of that clock, so a lossy link or the 26 Hz idle rate stretches
+nothing. A burst of buffered notifications advances the clock by at least one
+sample period per frame.
 
 **Keep the link on idle.** A fresh link is slow and lossy for 10–20 s and a
 dropped link makes the token advertise at full power for minutes. Re-sending

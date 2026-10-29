@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,9 @@ from typing import Any
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util import dt as dt_util
+
+_LOGGER = logging.getLogger(__name__)
+MAX_BYTES = 50_000_000  # per capture file: ~5-10 h of a 52 Hz stream
 
 FLUSH_S = 1.0
 
@@ -28,6 +32,7 @@ class Capture:
         self.name = name
         self.path: Path | None = None
         self._buf: list[str] = []
+        self._bytes = 0
         self._t0 = 0.0
         self._unsub: CALLBACK_TYPE | None = None
         # one writer at a time, in flush order: two executor jobs in flight at
@@ -41,14 +46,28 @@ class Capture:
         self.path = Path(self.hass.config.path("triki_captures", f"{stamp}-{slug}.jsonl"))
         self._t0 = time.monotonic()
         self._buf = []
+        self._bytes = 0
         self.write({"t": 0, "meta": meta})
 
     @callback
     def write(self, rec: dict[str, Any]) -> None:
-        if self.path is None:
+        if self.path is None or self._bytes >= MAX_BYTES:
             return
         rec.setdefault("t", round(time.monotonic() - self._t0, 4))
-        self._buf.append(json.dumps(rec))
+        line = json.dumps(rec)
+        self._buf.append(line)
+        self._bytes += len(line) + 1
+        if self._bytes >= MAX_BYTES:
+            # a forgotten debug option must not fill the disk: one file per link
+            # is capped, a new link starts a new file
+            self._buf.append(json.dumps({"t": rec["t"], "stopped": "size limit"}))
+            _LOGGER.warning(
+                "%s: capture file %s reached %d MB, recording stopped; turn the "
+                "capture option off when you are done",
+                self.name,
+                self.path.name,
+                MAX_BYTES // 1_000_000,
+            )
         if self._unsub is None:
             self._unsub = async_call_later(self.hass, FLUSH_S, self._flush_cb)
 

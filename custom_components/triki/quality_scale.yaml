@@ -5,7 +5,7 @@ rules:
     comment: The integration registers no actions.
   appropriate-polling:
     status: exempt
-    comment: Push only (iot_class local_push); the battery is read over the live link every 10 minutes.
+    comment: Push only (iot_class local_push); the battery comes from the token's notification during a short stream pause while idle, at most every 30 min.
   brands: done
   common-modules: done
   config-flow: done

@@ -6,9 +6,64 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.3] - 2026-10-29
+
+### Fixed
+- The battery pause took the first notification after STOP, which can still be
+  the loaded figure (27 % at 3 s, the rested 82 % follows at 4–6 s). The pause
+  now stays open for 3 s of quiet after a value and keeps the last one.
+
+### Changed
+- A restart or reload no longer shows the under-load battery figure (17–27 %)
+  for the first minute: the sensor's last value seeds the device and the
+  connect-time read is skipped.
+- Picking the token up or putting it down no longer registers a rotation step
+  (the knob ignores frames with the accelerometer more than 0.25 g off 1 g).
+- Unload waits for a connect in flight and undoes it, so no link outlives the
+  entry.
+- CI: `compat` jobs run the suite against Home Assistant 2025.8 (the declared
+  minimum) and the newest release, next to the pinned toolchain.
+- Repository: full Contributor Covenant text; Discussions enabled and linked
+  from the issue chooser; release notes come from the changelog only;
+  `scripts/setup` falls back to `uv` when `python3.13` is not on PATH.
+
+## [0.2.2] - 2026-10-29
+
+### Changed
+- **Breaking:** the LED is a `switch` with the *Configuration* category instead
+  of a `light`, so it stays out of area light groups and "turn off all the
+  lights" no longer wakes a sleeping token into an error. The entity id changes
+  from `light.<name>_led` to `switch.<name>_led`; update automations and remove
+  the orphaned `light` entity from the registry.
+- `hacs.json` declares `country: PL` (the token is sold in Poland).
+
+## [0.2.1] - 2026-10-29
+
+### Fixed
+- On Home Assistant 2026.10+ the token never reconnected after a sleep-timeout
+  disconnect: the "wait until the token slept" gate judged the silence after
+  refreshing its own mark, and without the 1 s poll nothing ever cleared it.
+  The first advertisement after 15 s of silence is now taken as the wake-up.
+  Affects 0.2.0 only, with a sleep timeout other than 0.
+
+### Changed
+- The *Motion gestures* option enables only `tap`, `throw` and `flip`; rotate
+  and shake have their own switches and are no longer implied by it.
+- A capture file stops at 50 MB with one warning, so a forgotten debug option
+  cannot fill the disk; a new link starts a new file.
+- Options read from a hand-edited store are sanitised (unknown rate, zero knob
+  step or window, negative timeouts) instead of crashing the stream.
+- RSSI state writes only when the value changed; platforms unload before the
+  link is closed.
+- Docs: shake status, entity availability and battery interval corrected;
+  photo placeholders removed; obsolete `render_readme` dropped from `hacs.json`.
+
+## [0.2.0] - 2026-10-29
+
 ### Added
 - Integration icon and logo ship in `custom_components/triki/brand/`
-  (Home Assistant 2026.3+ reads them from there; no brands PR needed).
+  (Home Assistant 2026.3+ reads them from there; older versions show the
+  icon once the domain is in `home-assistant/brands`).
 - Polish translation.
 - `quality_scale.yaml` recording the Integration Quality Scale status.
 - Config flow: `data_description` for the device picker, knob step and
@@ -16,6 +71,10 @@ All notable changes to this project are documented here. The format follows
 - One info log line after three failed connect attempts in a row for an awake
   token, and one when it links again.
 - `led_write_retries` link statistic in diagnostics.
+- On Home Assistant 2026.10+ every advertisement of the token is delivered to
+  the integration (`async_register_advertisement_callback`); the 1 s poll of
+  the last advertisement remains for older cores. Diagnostics gain an `adverts`
+  counter and an `advertisements` block with the cadence of the last 32 packets.
 - Repository: `requirements_test.txt` (pinned, Dependabot), `pre-commit`
   config, `scripts/setup` and `scripts/check`, weekly scheduled CI, release
   notes grouped by label. Bandit and pip-audit jobs dropped (ruff's `S` rules
@@ -27,6 +86,13 @@ All notable changes to this project are documented here. The format follows
 - The LED write has a 5 s timeout and is retried up to three times on a GATT
   error. Turning the LED on while the token sleeps now raises
   `HomeAssistantError` (a device state, not invalid input).
+- Gestures are timed on the frames' arrival clock instead of counting frames,
+  so a lossy proxy link or the 26 Hz idle rate no longer stretches the
+  multi-press, long-press and motion windows.
+- Shake detector rewritten: share of hard-motion frames and gyro reversals
+  within 0.8 s of wall time, one event per episode, knob muted while swinging.
+  Tested at 104/52/26 Hz with 50–70 % synthetic frame loss and confirmed
+  through an ESPHome proxy: one event per shake, no rotations while swinging.
 
 ### Fixed
 - Battery level stuck at a low value (17–27 %) for whole sessions while the
@@ -92,5 +158,9 @@ and a Raspberry Pi 5 built-in adapter.
 - Duplicate BlueZ notifications counted as separate frames.
 - Wake reported again on a quick resume after a weak-signal drop.
 
-[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/elenium3/ha-triki/compare/v0.2.2...v0.2.3
+[0.2.2]: https://github.com/elenium3/ha-triki/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/elenium3/ha-triki/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/elenium3/ha-triki/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/elenium3/ha-triki/releases/tag/v0.1.0

@@ -1,7 +1,9 @@
 """Gesture / button / knob detection from Triki IMU samples (pure Python).
 
-Timing is derived from the sample count and the configured stream rate, not from
-wall-clock arrival time, because BLE delivers frames in bursts.
+Timing: ``update(sample, t)`` takes the frame's arrival time. Through a proxy
+half the frames can be lost, and counting samples would then run the clock at
+half speed (a 0.3 s multi-press window becomes 0.6 s, a shake looks slow).
+Without ``t`` (tools, tests) time advances by one sample period per frame.
 
 Event types produced:
   press, double_press, triple_press, long_press   - built-in button
@@ -30,10 +32,17 @@ STARTUP_DISCARD = 20  # first frames after stream start are noise
 TAP_G = 2.5  # |a| spike
 THROW_G = 0.35  # |a| below this = free fall
 THROW_MIN_S = 0.06
-SHAKE_DPS = 600.0  # per-axis rate counted as a swing (hand motion 160-580, shakes 1000+)
-SHAKE_WINDOW_S = 0.8
-SHAKE_REVERSALS = 4  # sign changes of one axis within the window
-SHAKE_QUIET_S = 1.0  # no strong swing this long ends a shake episode
+# Shake: in the last SHAKE_WINDOW_S of wall time, enough of the frames show hard
+# motion (|a| far from 1 g or a high rate) and the dominant gyro axis reverses at
+# least SHAKE_REVERSALS times. Fractions survive lost frames; a reversal count of
+# four did not (a 50 % loss at 52 Hz hides whole swings).
+SHAKE_WINDOW_S = 0.8  # ~5 swings; 26 Hz with 70 % loss still leaves 5-7 frames
+SHAKE_ACTIVE_DPS = 500.0  # moving the token in the hand peaks at 160-580, shakes at 1000+
+SHAKE_ACTIVE_G = 0.6  # |a| - 1 g
+SHAKE_ACTIVE_FRACTION = 0.6
+SHAKE_REVERSALS = 2
+SHAKE_MIN_FRAMES = 5  # fewer frames in the window say nothing
+SHAKE_QUIET_S = 0.6  # no active frame this long ends a shake episode
 FLIP_STABLE_S = 0.3
 STATIC_ACCEL_TOL = 0.15  # g
 STATIC_GYRO_DPS = 30.0
@@ -49,10 +58,12 @@ KNOB_RESET_S = 0.6  # idle time after which a partial turn is dropped
 # with 3-5 spurious rotate events within ~0.7 s. The knob is muted while the button
 # is down and for this long after it is released.
 KNOB_BUTTON_GUARD_S = 0.8
+KNOB_LIFT_G = 0.25  # |a| this far from 1 g means the token is being moved, not turned
 GRAVITY_ALPHA = 0.08  # low-pass for the gravity estimate
 
 KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
 MOTION_EVENTS = frozenset({"rotate_cw", "rotate_ccw", "shake", "tap", "throw", "flip"})
+EXPERIMENTAL_EVENTS = frozenset({"tap", "throw", "flip"})  # the "motion gestures" option
 
 REFRACTORY_S = {
     "tap": 0.3,
@@ -115,6 +126,7 @@ class GestureDetector:
 
     def reset(self) -> None:
         self.t = 0.0
+        self._t_origin: float | None = None  # wall time of the first timed frame
         self._skip = self._startup_discard
         # button
         self.button = False
@@ -132,10 +144,10 @@ class GestureDetector:
         self._turn_idle_since = 0.0
         # free fall
         self._ff_since: float | None = None
-        # shake: per axis list of (t, sign) swings
-        self._swings: list[list[tuple[float, int]]] = [[], [], []]
+        # shake: (t, active, sign of the dominant gyro axis) per frame in the window
+        self._shake_frames: list[tuple[float, bool, int]] = []
         self._shake_latched = False
-        self._last_swing_t = 0.0
+        self._last_active_t = 0.0
         self._last: dict[str, float] = {}
         self.last_motion_t = 0.0
         self._motion_since: float | None = None
@@ -160,14 +172,22 @@ class GestureDetector:
         return pitch, roll
 
     # ------------------------------------------------------------------- main
-    def update(self, s: Sample) -> list[Event]:
+    def update(self, s: Sample, t: float | None = None) -> list[Event]:
+        """Feed one sample; ``t`` is its arrival time on any monotonic clock."""
         out: list[Event] = []
         if self._skip > 0:
             self._skip -= 1
             # keep the button edge state honest even while discarding
             self.button = s.button
             return out
-        self.t += self.dt
+        if t is None:
+            self.t += self.dt
+        else:
+            if self._t_origin is None:
+                self._t_origin = t - self.t - self.dt
+            # at least one sample period per frame: a burst of buffered
+            # notifications must not compress the stream into an instant
+            self.t = max(self.t + self.dt, t - self._t_origin)
         self._button(s.button, out)
         self._motion(s, out)
         if out:
@@ -178,7 +198,7 @@ class GestureDetector:
             if self.shake:
                 allowed.add("shake")
             if self.motion_gestures:
-                allowed |= MOTION_EVENTS
+                allowed |= EXPERIMENTAL_EVENTS
             out[:] = [e for e in out if e.type not in MOTION_EVENTS or e.type in allowed]
         return out
 
@@ -260,40 +280,56 @@ class GestureDetector:
         if a > TAP_G and self._cooldown_ok("tap") and self._cooldown_ok("throw"):
             self._fire(out, "tap", g=round(a, 2))
 
-        # shake: count sign reversals of strong swings per axis
-        shaking = False
-        swinging = False
-        for i, w in enumerate((s.gx, s.gy, s.gz)):
-            swings = self._swings[i]
-            while swings and self.t - swings[0][0] > SHAKE_WINDOW_S:
-                swings.pop(0)
-            if abs(w) > SHAKE_DPS:
-                swinging = True
-                sign = 1 if w > 0 else -1
-                if not swings or swings[-1][1] != sign:
-                    swings.append((self.t, sign))
-            if len(swings) > SHAKE_REVERSALS:
-                shaking = True
-        # back-and-forth swings: a shake in progress, not a knob turn
-        oscillating = any(len(sw) > 2 for sw in self._swings)
-        if swinging:
-            self._last_swing_t = self.t
-        elif self._shake_latched and self.t - self._last_swing_t >= SHAKE_QUIET_S:
-            self._shake_latched = False  # the episode is over, the next one may fire
+        # shake: share of hard-motion frames and reversals of the dominant gyro
+        # axis within a wall-clock window
+        rates = (s.gx, s.gy, s.gz)
+        dominant = max(range(3), key=lambda i: abs(rates[i]))
+        active = abs(a - 1.0) > SHAKE_ACTIVE_G or s.gyro_mag > SHAKE_ACTIVE_DPS
+        sign = (1 if rates[dominant] > 0 else -1) if active else 0
+        frames = self._shake_frames
+        frames.append((self.t, active, sign))
+        while frames and self.t - frames[0][0] > SHAKE_WINDOW_S:
+            frames.pop(0)
+        if active:
+            self._last_active_t = self.t
+        elif self._shake_latched and self.t - self._last_active_t >= SHAKE_QUIET_S:
+            # the episode is over: the next one is judged on its own frames
+            self._shake_latched = False
+            frames.clear()
+        # the window is judged from its first hard-motion frame, so the rest
+        # before a shake does not delay the verdict by a whole window
+        first = next((i for i, f in enumerate(frames) if f[1]), len(frames))
+        episode = frames[first:]
+        n_active = sum(1 for f in episode if f[1])
+        reversals = 0
+        last_sign = 0
+        for _t, _act, sg in episode:
+            if sg and last_sign and sg != last_sign:
+                reversals += 1
+            if sg:
+                last_sign = sg
+        shaking = (
+            active
+            and len(episode) >= SHAKE_MIN_FRAMES
+            and n_active >= SHAKE_ACTIVE_FRACTION * len(episode)
+            and reversals >= SHAKE_REVERSALS
+        )
         if shaking and not self._shake_latched:
             # one event per episode: a 2 s shake must not fire two or three times
             self._shake_latched = True
             self._fire(out, "shake")
-            for sw in self._swings:
-                sw.clear()
+            frames.clear()
             self._turn_acc = 0.0
 
         # knob: rotation rate about the vertical (gravity) axis; shaking swings the
-        # token around every axis, so the knob is muted for the whole episode
-        if oscillating or self._shake_latched:
+        # token around every axis, so the knob is muted for the whole episode and
+        # as soon as the swings start reversing
+        if reversals >= 1 or self._shake_latched:
             self._turn_acc = 0.0
         elif self.button or self.t - self._release_t < KNOB_BUTTON_GUARD_S:
             self._turn_acc = 0.0  # a press twists the token: not a turn
+        elif abs(a - 1.0) > KNOB_LIFT_G:
+            self._turn_acc = 0.0  # being picked up or put down: the twist is not a turn
         elif self.gravity is not None:
             rate = _dot((s.gx, s.gy, s.gz), self.gravity)
             if self.invert_rotation:

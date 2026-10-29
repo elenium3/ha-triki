@@ -24,7 +24,7 @@ NAME = "Triki 0000"
 EVENT = "event.triki_0000_action"
 BUTTON = "binary_sensor.triki_0000_button"
 CONNECTED = "binary_sensor.triki_0000_connected"
-LED = "light.triki_0000_led"
+LED = "switch.triki_0000_led"
 BATTERY = "sensor.triki_0000_battery"
 
 ESTABLISH = "custom_components.triki.device.establish_connection"
@@ -33,6 +33,13 @@ ESTABLISH = "custom_components.triki.device.establish_connection"
 @pytest.fixture(autouse=True)
 def auto_enable_custom_integrations(enable_custom_integrations):
     yield
+
+
+@pytest.fixture(autouse=True)
+def quick_battery_settle():
+    """The pause waits 3 s of quiet after a battery value; tests cannot afford that."""
+    with patch("custom_components.triki.device._BATTERY_SETTLE_S", 0.05):
+        yield
 
 
 @pytest.fixture(autouse=True)

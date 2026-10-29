@@ -14,11 +14,14 @@ is the link dropped so the token can sleep.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import time
+from collections import deque
 from collections.abc import Callable, Coroutine
 from dataclasses import dataclass
 from datetime import timedelta
+from itertools import pairwise
 from typing import Any
 
 from bleak import BleakClient
@@ -75,6 +78,8 @@ _RECONNECT_BACKOFF_S = 3.0
 _CONNECT_TIMEOUT_S = 12.0
 _POLL_S = 1.0
 _POLL_FRESH_S = 10.0
+_ADVERT_HISTORY = 32  # advertisement timestamps kept for the cadence figures
+_ADVERT_NOTIFY_S = 1.0  # rssi state writes and advert log lines at most this often
 # The token can accept the connection but refuse to stream (start ack 21 01, no
 # frames). Do not keep waking it in a loop.
 _STREAM_WATCHDOG_S = 3.0
@@ -107,6 +112,10 @@ _UNREACHABLE_AFTER = 3
 # right after a connect is taken under load (27 % against 82 % at rest on the
 # same cell) and never changes while the stream runs.
 _BATTERY_REFRESH_WAIT_S = 10.0  # how long the stream may stay stopped for a measurement
+# The first notification after STOP can still carry the loaded figure (27 % at
+# 3.0 s, then 82 % at 4-6 s on the test unit): after a value, keep the pause
+# open for a quiet spell this long and take the last one.
+_BATTERY_SETTLE_S = 3.0
 _BATTERY_CHECK_S = 60.0  # how often to look for an idle moment once a refresh is due
 _BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before pausing
 
@@ -115,6 +124,7 @@ _BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before 
 class LinkStats:
     """Counters since setup, exposed through diagnostics."""
 
+    adverts: int = 0  # advertisements seen (every one on HA 2026.10+, changed ones before)
     connects: int = 0
     connect_failures: int = 0
     drops: int = 0  # the token (or the radio) closed the link, not us
@@ -179,8 +189,12 @@ class TrikiDevice:
         self._no_connect_until = 0.0
         self._await_sleep = False
         self._awake_seen = 0.0
+        self._connect_task: asyncio.Task[Any] | None = None
         self._last_drop = 0.0
         self._last_skip: str | None = None
+        self.every_advertisement = False  # the HA 2026.10 per-advertisement callback is in use
+        self._advert_times: deque[float] = deque(maxlen=_ADVERT_HISTORY)
+        self._last_advert_notify = 0.0
         self._fail_streak = 0
         self._unreachable_logged = False
         # monotonic time of the last stream pause for it; -inf so the first idle
@@ -216,6 +230,17 @@ class TrikiDevice:
 
     # ------------------------------------------------------------ listeners
     @callback
+    @callback
+    def restore_battery(self, level: int) -> None:
+        """Seed the level from the sensor's last state (a restart or reload).
+
+        The connect-time read happens under load and shows 17-27 % on a token
+        that rests at 80+; with a known level it is skipped and the next idle
+        pause measures a fresh one.
+        """
+        if self.battery is None:
+            self.battery = level
+
     def async_add_listener(self, cb: Callable[[], None]) -> CALLBACK_TYPE:
         self._state_listeners.append(cb)
         return lambda: self._state_listeners.remove(cb)
@@ -231,9 +256,11 @@ class TrikiDevice:
             cb()
 
     @callback
-    def _create_task(self, coro: Coroutine[Any, Any, Any], name: str) -> None:
+    def _create_task(self, coro: Coroutine[Any, Any, Any], name: str) -> asyncio.Task[Any]:
         """Run a background task that dies with the config entry (unload cancels it)."""
-        self.entry.async_create_background_task(self.hass, coro, f"{DOMAIN}_{name}_{self.address}")
+        return self.entry.async_create_background_task(
+            self.hass, coro, f"{DOMAIN}_{name}_{self.address}"
+        )
 
     @callback
     def _emit(self, kind: str, data: dict[str, Any] | None = None) -> None:
@@ -257,6 +284,14 @@ class TrikiDevice:
     @callback
     def async_start(self) -> None:
         self._stopping = False
+        # Home Assistant 2026.10 delivers every advertisement of an address;
+        # older versions only changed ones (the token's payload never changes),
+        # which is why they also need the 1 s poll of the last advertisement.
+        register_every = getattr(bluetooth, "async_register_advertisement_callback", None)
+        if register_every is not None:
+            self.every_advertisement = True
+            self._unsub_adv = register_every(self.hass, self._on_every_advertisement, self.address)
+            return
         self._unsub_adv = bluetooth.async_register_callback(
             self.hass,
             self._on_advertisement,
@@ -274,6 +309,13 @@ class TrikiDevice:
             if unsub:
                 unsub()
                 setattr(self, attr, None)
+        task = self._connect_task
+        if task is not None and not task.done():
+            # a connect in flight must finish or be undone before the entry is
+            # gone, or its link outlives us until the next stale-link sweep
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
         await self.async_disconnect()
 
     @callback
@@ -286,22 +328,49 @@ class TrikiDevice:
             self._maybe_connect(info, _POLL_FRESH_S)
 
     @callback
+    def _on_every_advertisement(self, service_info: bluetooth.BluetoothServiceInfoBleak) -> None:
+        if not service_info.connectable:
+            return
+        self._on_advertisement(service_info, None)
+
+    @callback
     def _on_advertisement(
         self,
         service_info: bluetooth.BluetoothServiceInfoBleak,
-        change: bluetooth.BluetoothChange,
+        change: bluetooth.BluetoothChange | None,
     ) -> None:
-        if service_info.rssi != self.rssi:
-            self.rssi = service_info.rssi
-            self._notify()
-        _LOGGER.debug(
-            "%s: advert via %s rssi %s age %.1fs",
-            self.name,
-            service_info.source,
-            service_info.rssi,
-            bluetooth.MONOTONIC_TIME() - service_info.time,
-        )
+        now = time.monotonic()
+        self.stats.adverts += 1
+        self._advert_times.append(service_info.time)
+        rssi_changed = service_info.rssi != self.rssi
+        self.rssi = service_info.rssi
+        # an awake token advertises several times a second: one state write and
+        # one log line per second is plenty
+        if now - self._last_advert_notify >= _ADVERT_NOTIFY_S:
+            self._last_advert_notify = now
+            if rssi_changed:
+                self._notify()
+            _LOGGER.debug(
+                "%s: advert via %s rssi %s age %.1fs",
+                self.name,
+                service_info.source,
+                service_info.rssi,
+                bluetooth.MONOTONIC_TIME() - service_info.time,
+            )
         self._maybe_connect(service_info, _FRESH_ADV_S)
+
+    @property
+    def advertisement_cadence(self) -> dict[str, Any]:
+        """Recent advertisement timing for diagnostics (seconds)."""
+        times = list(self._advert_times)
+        gaps = sorted(b - a for a, b in pairwise(times))
+        return {
+            "every": self.every_advertisement,
+            "recent": len(times),
+            "last_age_s": round(bluetooth.MONOTONIC_TIME() - times[-1], 1) if times else None,
+            "median_interval_s": round(gaps[len(gaps) // 2], 3) if gaps else None,
+            "min_interval_s": round(gaps[0], 3) if gaps else None,
+        }
 
     @callback
     def _maybe_connect(
@@ -317,22 +386,26 @@ class TrikiDevice:
             # reconnecting then just resets its sleep timer. Only once its
             # advertisements have stopped for a stretch (it actually slept) do we arm
             # for the next genuine wake-up. A fresh advert keeps pushing that out.
+            # The gap is judged before this advert refreshes the mark: with the
+            # per-advertisement callback this call only ever sees fresh adverts,
+            # and the first one after the gap *is* the wake-up to connect on.
+            slept = now - self._awake_seen >= _SLEEP_GAP_S
             if age < max_age:
                 self._awake_seen = now
-            if now - self._awake_seen >= _SLEEP_GAP_S:
+            if slept:
                 self._await_sleep = False
-                reason = "token slept, waiting for a fresh wake-up"
             else:
                 reason = "waiting for the token to sleep after an idle disconnect"
-        elif age > max_age:
-            reason = f"advert too old ({age:.1f}s > {max_age:.0f}s)"
-        elif service_info.time < self._last_drop:
-            # advertisement from before the token fell asleep: it is gone now
-            reason = "advert older than the last link drop"
-        elif now < self._no_connect_until:
-            reason = "idle cooldown"
-        elif now - self._last_attempt < _RECONNECT_BACKOFF_S:
-            reason = "reconnect backoff"
+        if reason is None:
+            if age > max_age:
+                reason = f"advert too old ({age:.1f}s > {max_age:.0f}s)"
+            elif service_info.time < self._last_drop:
+                # advertisement from before the token fell asleep: it is gone now
+                reason = "advert older than the last link drop"
+            elif now < self._no_connect_until:
+                reason = "idle cooldown"
+            elif now - self._last_attempt < _RECONNECT_BACKOFF_S:
+                reason = "reconnect backoff"
         if reason:
             if reason.split(" (")[0] != self._last_skip:
                 self._last_skip = reason.split(" (")[0]
@@ -346,7 +419,9 @@ class TrikiDevice:
         # taken here, not inside the task: the lock is only acquired once the task
         # runs, and a second advertisement in between would queue a second attempt
         self._connecting = True
-        self._create_task(self._async_connect(service_info.device, service_info.time), "connect")
+        self._connect_task = self._create_task(
+            self._async_connect(service_info.device, service_info.time), "connect"
+        )
 
     def _ble_device(self, fallback: BLEDevice) -> BLEDevice:
         return (
@@ -403,6 +478,12 @@ class TrikiDevice:
                 self._expected_disconnect = True
                 await client.disconnect()
                 return
+            except asyncio.CancelledError:
+                # unloaded in the middle of the setup: do not leave a live link
+                self._expected_disconnect = True
+                self._client = None
+                await client.disconnect()
+                raise
 
             if self._stopping:
                 self._expected_disconnect = True
@@ -665,7 +746,10 @@ class TrikiDevice:
         changed = False
         active = False
         self.stats.notifications += 1
-        for frame in self._parser.push(data):
+        frames = list(self._parser.push(data))
+        now = time.monotonic()
+        dt = self._detector.dt
+        for i, frame in enumerate(frames):
             self.stats.frames += 1
             if not self._streaming:
                 self._streaming = True
@@ -673,7 +757,9 @@ class TrikiDevice:
                     self._unsub_watchdog()
                     self._unsub_watchdog = None
             sample = Sample.from_frame(frame)
-            for ev in self._detector.update(sample):
+            # frames of one notification arrived together: spread them one
+            # sample period apart, ending at the arrival time
+            for ev in self._detector.update(sample, now - (len(frames) - 1 - i) * dt):
                 active = True
                 self._emit(ev.type, ev.data)
             if sample.button != self.button:
@@ -767,21 +853,35 @@ class TrikiDevice:
             async with asyncio.timeout(_STOP_TIMEOUT_S):
                 await client.write_gatt_char(NUS_RX_UUID, stop_command(), response=True)
             t = time.monotonic()
-            try:
-                async with asyncio.timeout(_BATTERY_REFRESH_WAIT_S):
-                    await self._battery_event.wait()
-            except TimeoutError:
+            deadline = t + _BATTERY_REFRESH_WAIT_S
+            values = 0
+            while self._client is client:
+                remaining = deadline - time.monotonic()
+                if values:
+                    remaining = min(remaining, _BATTERY_SETTLE_S)
+                if remaining <= 0:
+                    break
+                try:
+                    async with asyncio.timeout(remaining):
+                        await self._battery_event.wait()
+                except TimeoutError:
+                    break
+                self._battery_event.clear()
+                values += 1
+            if values:
+                _LOGGER.debug(
+                    "%s: battery %s%% after a %.1fs stream pause (%d value%s)",
+                    self.name,
+                    self.battery,
+                    time.monotonic() - t,
+                    values,
+                    "" if values == 1 else "s",
+                )
+            else:
                 _LOGGER.debug(
                     "%s: no battery update within %.0fs of the stream pause",
                     self.name,
                     _BATTERY_REFRESH_WAIT_S,
-                )
-            else:
-                _LOGGER.debug(
-                    "%s: battery %s%% after a %.1fs stream pause",
-                    self.name,
-                    self.battery,
-                    time.monotonic() - t,
                 )
         finally:
             self._battery_pause = False

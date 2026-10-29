@@ -3,7 +3,7 @@
 import asyncio
 import logging
 from dataclasses import replace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from bleak.exc import BleakError
@@ -687,3 +687,250 @@ async def test_unload_cancels_hung_connect(hass: HomeAssistant, setup) -> None:
         assert await hass.config_entries.async_unload(setup.entry_id)
         await hass.async_block_till_done()
     assert cancelled.is_set()
+
+
+# --- advertisement delivery ---
+
+EVERY = "homeassistant.components.bluetooth.async_register_advertisement_callback"
+
+
+async def test_every_advertisement_callback_replaces_the_poll(
+    hass: HomeAssistant, mock_bluetooth
+) -> None:
+    """HA 2026.10+: every advertisement is delivered, so there is no 1 s poll."""
+    from homeassistant.components import bluetooth
+    from homeassistant.const import CONF_ADDRESS
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.triki.const import DOMAIN
+
+    from .conftest import ADDRESS, NAME
+
+    unsub = MagicMock()
+    register = MagicMock(return_value=unsub)
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=ADDRESS, title=NAME, data={CONF_ADDRESS: ADDRESS}
+    )
+    entry.add_to_hass(hass)
+    with patch.object(bluetooth, "async_register_advertisement_callback", register, create=True):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    dev = entry.runtime_data
+    register.assert_called_once_with(hass, dev._on_every_advertisement, ADDRESS)
+    assert dev.every_advertisement
+    assert dev._unsub_poll is None
+
+    client = make_client()
+    with patch(ESTABLISH, AsyncMock(return_value=client)) as est:
+        info = service_info()
+        info.connectable = False  # a non-connectable scanner saw it: cannot connect through it
+        dev._on_every_advertisement(info)
+        await hass.async_block_till_done()
+        est.assert_not_awaited()
+        dev._on_every_advertisement(service_info())
+        await hass.async_block_till_done()
+    assert est.await_count == 1
+    assert dev.stats.adverts == 1
+
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    unsub.assert_called_once()
+
+
+async def test_old_core_keeps_the_poll(hass: HomeAssistant, setup) -> None:
+    dev = setup.runtime_data
+    assert not dev.every_advertisement
+    assert dev._unsub_poll is not None
+
+
+async def test_advertisement_cadence_and_state_writes(hass: HomeAssistant, setup) -> None:
+    dev = setup.runtime_data
+    assert dev.advertisement_cadence == {
+        "every": False,
+        "recent": 0,
+        "last_age_s": None,
+        "median_interval_s": None,
+        "min_interval_s": None,
+    }
+    notifies = 0
+
+    def count():
+        nonlocal notifies
+        notifies += 1
+
+    dev.async_add_listener(count)
+    with patch(ESTABLISH, AsyncMock()):
+        for i in range(5):
+            info = service_info()
+            info.time -= 60 - 0.1 * i  # stale: no connect, but 100 ms apart
+            info.rssi = -60 - i
+            dev._on_advertisement(info, None)
+        await hass.async_block_till_done()
+    assert dev.rssi == -64  # the latest value is always kept
+    assert notifies == 1  # but written at most once a second
+    assert dev.stats.adverts == 5
+    cadence = dev.advertisement_cadence
+    assert cadence["recent"] == 5
+    assert cadence["median_interval_s"] == pytest.approx(0.1, abs=0.001)
+    assert cadence["min_interval_s"] == pytest.approx(0.1, abs=0.001)
+    assert 59 < cadence["last_age_s"] < 61
+
+
+async def test_sleep_gate_clears_on_the_first_advert_after_the_gap(
+    hass: HomeAssistant, mock_bluetooth
+) -> None:
+    """HA 2026.10+ delivers only real (fresh) adverts and there is no poll: the first
+    advert after the token's silence must be taken as the wake-up and connect."""
+    from homeassistant.components import bluetooth
+    from homeassistant.const import CONF_ADDRESS
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.triki.const import DOMAIN
+
+    from .conftest import ADDRESS, NAME
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=ADDRESS, title=NAME, data={CONF_ADDRESS: ADDRESS}
+    )
+    entry.add_to_hass(hass)
+    with patch.object(bluetooth, "async_register_advertisement_callback", MagicMock(), create=True):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    dev = entry.runtime_data
+    assert dev._unsub_poll is None
+
+    with patch(ESTABLISH, AsyncMock(return_value=make_client())) as est:
+        dev._on_every_advertisement(service_info())
+        await hass.async_block_till_done()
+    assert est.await_count == 1
+    dev._last_activity -= 10_000
+    dev._idle_check(None)  # sleep timeout: we drop the link, the token still advertises
+    await hass.async_block_till_done()
+    assert dev._await_sleep is True
+
+    dev._last_attempt = 0
+    dev._no_connect_until = 0
+    with patch(ESTABLISH, AsyncMock(return_value=make_client())) as est:
+        for _ in range(5):  # post-drop advertising: ignored, keeps the deadline out
+            dev._on_every_advertisement(service_info())
+        await hass.async_block_till_done()
+        assert est.await_count == 0
+        assert dev._await_sleep is True
+
+        dev._awake_seen -= 30  # silence: the token slept
+        dev._on_every_advertisement(service_info())  # a press: the next wake-up
+        await hass.async_block_till_done()
+    assert est.await_count == 1
+    assert dev._await_sleep is False
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+def test_options_from_a_hand_edited_store_are_sanitised() -> None:
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.triki.const import (
+        CONF_KNOB_STEP,
+        CONF_MULTI_PRESS_WINDOW,
+        CONF_RATE,
+        CONF_SLEEP_TIMEOUT,
+        DOMAIN,
+    )
+    from custom_components.triki.models import TrikiOptions
+    from custom_components.triki.protocol import DEFAULT_RATE
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        options={
+            CONF_RATE: 60,
+            CONF_KNOB_STEP: 0,
+            CONF_MULTI_PRESS_WINDOW: 0,
+            CONF_SLEEP_TIMEOUT: -5,
+        },
+    )
+    o = TrikiOptions.from_entry(entry)
+    assert o.rate == DEFAULT_RATE
+    assert o.knob_step == 1.0
+    assert o.multi_press_window == 0.1
+    assert o.sleep_timeout == 0
+
+
+async def test_unload_during_session_setup_closes_the_link(hass: HomeAssistant, setup) -> None:
+    """A cancel that lands after the connect but inside the setup must not leave
+    the token linked to a dead entry."""
+    dev = setup.runtime_data
+    client = make_client()
+
+    async def hang(*_args, **_kwargs):
+        await asyncio.Event().wait()
+
+    client.start_notify = AsyncMock(side_effect=hang)
+    with patch(ESTABLISH, AsyncMock(return_value=client)):
+        dev._on_advertisement(service_info(), None)
+        for _ in range(10):  # let the connect reach the hanging setup
+            await asyncio.sleep(0)
+        assert dev._client is client
+        assert await hass.config_entries.async_unload(setup.entry_id)
+        await hass.async_block_till_done()
+    client.disconnect.assert_awaited()
+    assert dev._client is None
+
+
+async def test_restored_battery_skips_the_under_load_read(
+    hass: HomeAssistant, mock_bluetooth
+) -> None:
+    from homeassistant.const import CONF_ADDRESS
+    from homeassistant.core import State
+    from pytest_homeassistant_custom_component.common import (
+        MockConfigEntry,
+        mock_restore_cache_with_extra_data,
+    )
+
+    from custom_components.triki.const import DOMAIN
+
+    from .conftest import ADDRESS, NAME
+
+    mock_restore_cache_with_extra_data(
+        hass,
+        ((State(BATTERY, "77"), {"native_value": 77, "native_unit_of_measurement": "%"}),),
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=ADDRESS, title=NAME, data={CONF_ADDRESS: ADDRESS}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    dev = entry.runtime_data
+    assert dev.battery == 77
+    assert hass.states.get(BATTERY).state == "77"
+
+    client = make_client()
+    await advertise(hass, entry, client)
+    assert dev.connected
+    read_uuids = [c.args[0] for c in client.read_gatt_char.await_args_list]
+    assert BATTERY_LEVEL_UUID not in read_uuids  # no 27 % flash after a restart
+    assert hass.states.get(BATTERY).state == "77"
+
+
+async def test_battery_pause_keeps_the_last_value_of_a_quiet_spell(
+    hass: HomeAssistant, setup
+) -> None:
+    """The first notification after STOP can still be the loaded figure; the rested
+    one follows a few seconds later and must win."""
+    from custom_components.triki.protocol import stop_command
+
+    client = make_client()
+    await advertise(hass, setup, client)
+    dev = setup.runtime_data
+
+    async def write(uuid, data, response=False):
+        if data == stop_command():
+            cb = battery_callback(client)
+            hass.loop.call_soon(cb, None, bytearray([27]))
+            hass.loop.call_later(0.1, cb, None, bytearray([82]))
+
+    client.write_gatt_char = AsyncMock(side_effect=write)
+    with patch("custom_components.triki.device._BATTERY_SETTLE_S", 0.3):
+        dev._last_activity -= 100
+        dev._idle_check(None)
+        await settle(hass, dev)
+    assert hass.states.get(BATTERY).state == "82"
+    assert not dev._battery_pause

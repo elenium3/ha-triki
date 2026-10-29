@@ -3,7 +3,14 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-python3.13 -m venv .venv
+if command -v python3.13 >/dev/null; then
+  python3.13 -m venv .venv
+elif command -v uv >/dev/null; then
+  uv venv --seed --python 3.13 .venv
+else
+  echo "need python3.13 on PATH or uv (https://docs.astral.sh/uv/)" >&2
+  exit 1
+fi
 .venv/bin/pip install --quiet --upgrade pip
 .venv/bin/pip install --quiet -r requirements_test.txt
 # the bluetooth component imports usb; both have requirements the test package
