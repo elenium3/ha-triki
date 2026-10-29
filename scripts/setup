@@ -3,12 +3,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-if command -v python3.13 >/dev/null; then
-  python3.13 -m venv .venv
+if command -v python3.14 >/dev/null; then
+  python3.14 -m venv .venv
 elif command -v uv >/dev/null; then
-  uv venv --seed --python 3.13 .venv
+  uv venv --seed --python 3.14 .venv
 else
-  echo "need python3.13 on PATH or uv (https://docs.astral.sh/uv/)" >&2
+  echo "need python3.14 on PATH or uv (https://docs.astral.sh/uv/)" >&2
   exit 1
 fi
 .venv/bin/pip install --quiet --upgrade pip

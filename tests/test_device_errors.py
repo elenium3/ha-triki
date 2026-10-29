@@ -736,16 +736,33 @@ async def test_every_advertisement_callback_replaces_the_poll(
     unsub.assert_called_once()
 
 
-async def test_old_core_keeps_the_poll(hass: HomeAssistant, setup) -> None:
-    dev = setup.runtime_data
+async def test_old_core_keeps_the_poll(hass: HomeAssistant, mock_bluetooth) -> None:
+    """Before HA 2026.10 only changed advertisements arrive: the 1 s poll stays."""
+    from homeassistant.components import bluetooth
+    from homeassistant.const import CONF_ADDRESS
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.triki.const import DOMAIN
+
+    from .conftest import ADDRESS, NAME
+
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=ADDRESS, title=NAME, data={CONF_ADDRESS: ADDRESS}
+    )
+    entry.add_to_hass(hass)
+    with patch.object(bluetooth, "async_register_advertisement_callback", None, create=True):
+        assert await hass.config_entries.async_setup(entry.entry_id)
+        await hass.async_block_till_done()
+    dev = entry.runtime_data
     assert not dev.every_advertisement
     assert dev._unsub_poll is not None
+    assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 async def test_advertisement_cadence_and_state_writes(hass: HomeAssistant, setup) -> None:
     dev = setup.runtime_data
     assert dev.advertisement_cadence == {
-        "every": False,
+        "every": dev.every_advertisement,  # whichever path this core offers
         "recent": 0,
         "last_age_s": None,
         "median_interval_s": None,
@@ -921,8 +938,14 @@ async def test_battery_pause_keeps_the_last_value_of_a_quiet_spell(
     await advertise(hass, setup, client)
     dev = setup.runtime_data
 
+    stops = 0
+
     async def write(uuid, data, response=False):
+        nonlocal stops
         if data == stop_command():
+            stops += 1
+            if stops > 1:
+                return  # the STOP of the unload at teardown: no timer may outlive the test
             cb = battery_callback(client)
             hass.loop.call_soon(cb, None, bytearray([27]))
             hass.loop.call_later(0.1, cb, None, bytearray([82]))

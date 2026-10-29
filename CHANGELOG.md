@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- The config flow builds its forms with probatio, the schema library of the
+  2026 cores, and falls back to voluptuous on the 2025 ones. No change in
+  behaviour: the 2026 cores alias one to the other at runtime.
+- The idle, battery and stream watchdog callbacks cancel their own timer
+  first, so a callback invoked by hand cannot leave a timer behind.
+
+### Development
+- The pinned test toolchain is Home Assistant 2026.10 on Python 3.14; the
+  compatibility matrix still runs 2025.8 on Python 3.13.
+
 ## [0.2.3] - 2026-10-29
 
 ### Fixed
