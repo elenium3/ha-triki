@@ -8,3 +8,4 @@ captures/
 SESSION_NOTES.md
 .mypy_cache/
 .ruff_cache/
+.claude/

@@ -30,6 +30,12 @@ history and pip-audit over the test toolchain (`.github/workflows/security.yml`)
 CodeQL runs once the repository is public. Third-party actions are pinned to
 commit SHAs and updated by Dependabot.
 
+pip-audit is informational: the integration has no requirements of its own, and
+the packages it audits (aiohttp and friends) are pinned by
+`pytest-homeassistant-custom-component` to whatever the matching Home Assistant
+release ships. Findings there belong to Home Assistant core, not to this
+repository.
+
 ## Supported versions
 
 Only the latest release is supported. Home Assistant 2025.8 or newer is required

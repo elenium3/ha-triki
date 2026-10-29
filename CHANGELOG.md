@@ -19,6 +19,14 @@ All notable changes to this project are documented here. The format follows
   read-only permissions.
 - A beginner's guide to building an ESPHome Bluetooth proxy
   (`docs/bluetooth-proxy.md`).
+- README: a plain-language "What is Triki" section with photos and use cases.
+  The photos (Flopsstuff/triki, MIT) are now stored in `docs/images/` because
+  upstream keeps them in Git LFS and raw links returned pointer text.
+
+### Fixed
+- Security workflow: Gitleaks needs `pull-requests: read` on pull requests;
+  pip-audit is informational (`continue-on-error`) because the audited versions
+  are pinned by the Home Assistant test package.
 
 ## [0.1.0] - 2026-10-29
 
