@@ -114,9 +114,8 @@ Construction (same review, photos above): steel cap, round board, translucent
 green polypropylene underside that flexes to act as the button. The green part
 sits inside the crimped rim; no screws are visible.
 
-**Not verified yet:** how to lift the green part out without marking it.
-Until someone documents it with photos (see [images/README.md](images/README.md)),
-the usual rules for crimped coin-cell cases: soft surface, plastic spudger or
+**Not verified yet:** how to lift the green part out without marking it. The
+usual rules for crimped coin-cell cases apply: soft surface, plastic spudger or
 guitar pick, go around the rim in small steps, note which way the cell faces.
 
 ### When a power cycle helps

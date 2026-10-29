@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.4] - 2026-10-30
+
 ### Fixed
 - Knob: a brisk turn lost half its steps. The IMU sits off the axis, so a fast
   spin reads up to 2 g and the lift filter reset the partial turn on every such
@@ -20,7 +22,6 @@ All notable changes to this project are documented here. The format follows
 - Tap: the 2.5 g threshold never saw a finger tap at 52 Hz and fired on every
   shake swing and catch instead. A tap is now a 0.7 g jump between frames on a
   token at rest, reported once it is still again.
-
 - Shake fired while turning the token briskly between the fingers (three times
   in twenty seconds on hardware) and muted the knob each time. A frame whose
   rotation is mostly about gravity is a turn, not a swing, unless it comes with
@@ -193,7 +194,8 @@ and a Raspberry Pi 5 built-in adapter.
 - Duplicate BlueZ notifications counted as separate frames.
 - Wake reported again on a quick resume after a weak-signal drop.
 
-[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.2.3...HEAD
+[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/elenium3/ha-triki/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/elenium3/ha-triki/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/elenium3/ha-triki/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/elenium3/ha-triki/compare/v0.2.0...v0.2.1
