@@ -38,15 +38,21 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.typing import UNDEFINED
 
 from .capture import Capture
 from .const import (
+    BATTERY_LOW_CLEAR_MARGIN,
+    BATTERY_LOW_LEVEL,
     BATTERY_REFRESH_INTERVAL,
+    BATTERY_SAVER_LEVEL,
     BUS_EVENT,
+    DEFAULT_SLEEP_TIMEOUT,
     DOMAIN,
     IDLE_RATE,
+    ISSUE_BATTERY_LOW,
     TILT_PUBLISH_INTERVAL,
 )
 from .gestures import GestureDetector
@@ -217,6 +223,9 @@ class TrikiDevice:
         self.button = False
         self.led_on: bool | None = None
         self.battery: int | None = None
+        # the last level measured during a stream pause in this process; the
+        # restored and connect-time values may be loaded figures
+        self.battery_rest: int | None = None
         self.rssi: int | None = None
         self.firmware: str | None = None
         self.hardware: str | None = None
@@ -818,7 +827,7 @@ class TrikiDevice:
     @callback
     def _schedule_idle_check(self) -> None:
         self._cancel_timer("_unsub_idle")
-        if self.options.idle_timeout <= 0 and self.options.sleep_timeout <= 0:
+        if self.options.idle_timeout <= 0 and self.sleep_timeout <= 0:
             return
         self._unsub_idle = async_call_later(self.hass, _IDLE_CHECK_S, self._idle_check)
 
@@ -828,7 +837,7 @@ class TrikiDevice:
         if not self.connected:
             return
         idle = 0.0 if self.button else time.monotonic() - self._last_activity
-        sleep_timeout, idle_timeout = self.options.sleep_timeout, self.options.idle_timeout
+        sleep_timeout, idle_timeout = self.sleep_timeout, self.options.idle_timeout
         if 0 < sleep_timeout <= idle:
             _LOGGER.debug("%s: idle for %ss, disconnecting", self.name, sleep_timeout)
             self._await_sleep = True
@@ -851,6 +860,48 @@ class TrikiDevice:
 
     def _battery_refresh_due(self) -> bool:
         return time.monotonic() - self._battery_refreshed >= BATTERY_REFRESH_INTERVAL
+
+    @property
+    def battery_saver(self) -> bool:
+        """A "never" sleep timeout is overridden because the cell is running low."""
+        return (
+            self.options.sleep_timeout <= 0
+            and self.battery_rest is not None
+            and self.battery_rest <= BATTERY_SAVER_LEVEL
+        )
+
+    @property
+    def sleep_timeout(self) -> int:
+        """The sleep timeout in force: the option, unless the battery saver is on."""
+        return DEFAULT_SLEEP_TIMEOUT if self.battery_saver else self.options.sleep_timeout
+
+    @callback
+    def _on_rest_level(self, level: int) -> None:
+        saver_before = self.battery_saver
+        self.battery_rest = level
+        if self.battery_saver and not saver_before:
+            _LOGGER.info(
+                "%s: battery %d%% at rest: dropping the link after %ss idle although the "
+                "sleep timeout is 0, so the token can sleep (a weak cell locks it up)",
+                self.name,
+                level,
+                DEFAULT_SLEEP_TIMEOUT,
+            )
+            if self.connected:
+                self._schedule_idle_check()  # may not be running with both timeouts at 0
+        issue_id = f"{ISSUE_BATTERY_LOW}_{self.entry.entry_id}"
+        if level <= BATTERY_LOW_LEVEL:
+            ir.async_create_issue(
+                self.hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=False,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key=ISSUE_BATTERY_LOW,
+                translation_placeholders={"name": self.name, "level": str(level)},
+            )
+        elif level >= BATTERY_LOW_LEVEL + BATTERY_LOW_CLEAR_MARGIN:
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
 
     async def _async_pause_for_battery(self, client: BleakClient) -> None:
         """Stop the stream until the token reports a fresh battery level.
@@ -879,7 +930,8 @@ class TrikiDevice:
                     break
                 self._battery_event.clear()
                 values += 1
-            if values:
+            if values and self.battery is not None:
+                self._on_rest_level(self.battery)
                 _LOGGER.debug(
                     "%s: battery %s%% after a %.1fs stream pause (%d value%s)",
                     self.name,

@@ -7,7 +7,7 @@ produces a JSON like this (addresses redacted):
 {
   "entry": {"title": "Triki 4190656753", "data": {"address": "**REDACTED**"}, "options": {"sample_rate": 52, "knob_step": 30}},
   "options": {"rate": 52, "idle_timeout": 30, "sleep_timeout": 0, "knob_step": 30.0, "invert_rotation": false, "wake_as_press": false, "knob": true, "shake": false, "motion_gestures": false, "multi_press": true, "multi_press_window": 0.3, "capture": false},
-  "device": {"connected": true, "stream_rate": 26, "firmware": "3.2.1-A", "hardware": null, "battery": 82, "rssi": -71, "led_on": false, "button": false, "pitch": 1.6, "roll": -1.6},
+  "device": {"connected": true, "stream_rate": 26, "firmware": "3.2.1-A", "hardware": null, "battery": 82, "battery_rest": 82, "battery_saver": false, "sleep_timeout": 300, "rssi": -71, "led_on": false, "button": false, "pitch": 1.6, "roll": -1.6},
   "link": {"adverts": 412, "connects": 1, "connect_failures": 0, "drops": 0, "stream_refusals": 0, "notifications": 30111, "frames": 30106, "rate_switches": 3, "led_write_retries": 0, "parser_dropped_bytes": 25, "last_source": "**REDACTED**", "last_link_s": 0.11, "last_session_s": 1064.6},
   "advertisements": {"every": true, "recent": 32, "last_age_s": 5.1, "median_interval_s": 0.152, "min_interval_s": 0.021},
   "last_advertisement": {"source": "**REDACTED**", "rssi": -79, "age_s": 5.1, "connectable": true}

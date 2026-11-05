@@ -88,6 +88,34 @@ link and leaves the token alone for 60 s instead of reconnecting in a loop. It
 recovered on its own. If it does not, pull the battery for a few seconds; see
 [Opening it and the battery](hardware.md#opening-it-and-the-battery).
 
+## The token vanishes after a night and only a battery pull brings it back
+
+Seen on the development unit with *Disconnect after idle* at 0: after a link of
+7–21 hours the token dropped it and was not seen again; pressing the button did
+nothing until the cell was pulled out and put back. Both times the battery level
+measured in the stream pauses was 16–19 % and falling.
+
+The likely cause is the cell, not the radio or the integration. A held link
+keeps the token awake around the clock (about 1 mA, a week for a CR2032). A
+worn coin cell's internal resistance rises, every radio transmission pulls its
+voltage down, and an nRF52 that browns out this way can reset in a loop or
+freeze until its power is removed
+([Nordic DevZone](https://devzone.nordicsemi.com/f/nordic-q-a/116224/voltage-drop-triggers-bor-reset-mcu-occasionally-completely-freezes)).
+Pulling the cell clears the freeze and lets the cell recover a little, which is
+why it helps for a while. Żabka's FAQ says the same in short: an irregular LED
+or frequent disconnects mean a weak battery.
+
+- Replace the CR2032.
+- Set *Disconnect after idle* back to a non-zero value (the repair issue does
+  it), so the token sleeps between uses. From 30 % at rest the integration does
+  this by itself; see [Configuration](configuration.md#idle-and-sleep-how-the-link-behaves).
+
+If it happens again on a fresh cell, check before pulling it, because the pull
+wipes the evidence: does the LED blink on a press; does a phone (nRF Connect)
+see `Triki …`; does a restart of the ESPHome proxy bring it back (a proxy that
+still holds the link would explain it too). Then measure the cell with a
+multimeter.
+
 ## The token never advertises
 
 Something else holds the link, usually a phone with the Żappka app that is

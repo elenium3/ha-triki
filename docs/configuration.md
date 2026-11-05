@@ -9,7 +9,7 @@ Changing any option reloads the entry, which drops and re-establishes the link.
 |---|---|---|
 | IMU sample rate | 52 Hz | Rate the token streams motion frames at: 26, 52, 104 or 208 Hz. 52 is what the Żappka app asks for. Higher rates are snappier but lose more frames on a weak link; see [Radio and placement](radio-and-placement.md). |
 | Low-power stream after idle | 30 s | After this long without motion or button activity the stream is re-started at 26 Hz over the live link. The button keeps working; any activity restores the configured rate within a frame or two. 0 = never. |
-| Disconnect after idle | 300 s | After this long without activity the link is dropped so the token can sleep. 0 = keep the link as long as the token holds it. See the caveat below. |
+| Disconnect after idle | 300 s | After this long without activity the link is dropped so the token can sleep. 0 = keep the link as long as the token holds it; that empties a CR2032 in about a week, and while the battery is at 30 % or less 0 acts as 300 s. See the caveats below. |
 | Knob step | 30° | Degrees of rotation around the vertical axis per `rotate_cw` / `rotate_ccw` event. Smaller steps mean more events per turn. |
 | Invert rotation direction | off | Swap cw and ccw if they read backwards on your unit. |
 | Treat wake-up as a press | off | The press that wakes a sleeping token ends before the link is up, so it is reported as `wake`. With this on, a `press` with `source: wake` is emitted after every `wake`, including wakes caused by movement. |
@@ -48,11 +48,28 @@ want the token to react at any time, set the sleep timeout to 0 and accept the
 battery cost of a permanently held link. See
 [Troubleshooting](troubleshooting.md#presses-ignored-after-a-sleep-disconnect).
 
+**The cost of 0.** A held link keeps the token awake around the clock: the
+7.5 ms connection and the IMU draw roughly 1 mA, so a fresh CR2032 lasts about a
+week instead of months. On the development unit, held around the clock, the
+level measured in the stream pauses went from 25 % to 16 % over two days, and
+twice, at the end of a 7 and a 21 hour link, the token locked up: no
+advertising, the button dead, until the cell was pulled out
+([Troubleshooting](troubleshooting.md#the-token-vanishes-after-a-night-and-only-a-battery-pull-brings-it-back)).
+So the integration guards the setting:
+
+- With the sleep timeout at 0 a repair issue is raised (*Settings → System →
+  Repairs*); its fix sets the timeout to 300 s.
+- **Battery saver:** once a stream pause measures 30 % or less, 0 acts as
+  300 s until Home Assistant restarts or the entry reloads, so the token
+  sleeps between uses. The log says so once at info level.
+- At 20 % or less a second repair issue asks for a new cell. It clears once a
+  pause measures 30 % or more.
+
 **Battery figure on a held link.** The token measures its cell under the load of
 the open link. After a night asleep it reported 82 %; after 17 hours of a held
-link every pause gave 25–27 %, a fresh link included. The low figure is the
-loaded voltage, not a drained cell: judge the battery after the token has been
-asleep for a while, or treat the figure as a trend.
+link every pause gave 25–27 %, a fresh link included. Part of that is the
+loaded voltage, but on a link held for days the figure kept falling until the
+token locked up: treat a low figure on a held link as a real warning.
 
 ## Entities
 

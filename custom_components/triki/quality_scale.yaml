@@ -85,9 +85,7 @@ rules:
   reconfiguration-flow:
     status: exempt
     comment: The entry data holds only the address, which is the identity of the device.
-  repair-issues:
-    status: exempt
-    comment: Nothing the user can repair; the one known refusal state heals itself.
+  repair-issues: done
   stale-devices:
     status: exempt
     comment: The device lives exactly as long as its config entry.

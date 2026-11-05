@@ -132,6 +132,10 @@ twice, per the FAQ) is a software sleep. When it helps:
 Nothing is lost: there is no pairing or bonding, and the integration keeps its
 options. What the firmware keeps (name, calibration, if any) is unchecked.
 
+- The token vanished after a link held for hours and the button does nothing.
+  Seen twice with a weak cell; the pull helps for a while, a new cell is the
+  fix. See [Troubleshooting](troubleshooting.md#the-token-vanishes-after-a-night-and-only-a-battery-pull-brings-it-back).
+
 It does **not** fix presses ignored after a sleep disconnect
 ([the post-drop gate](troubleshooting.md#presses-ignored-after-a-sleep-disconnect))
 or a weak link (placement).

@@ -42,7 +42,7 @@
         "data_description": {
           "sample_rate": "Higher = snappier gestures, faster battery drain. Above 104 Hz BLE often cannot keep up.",
           "idle_timeout": "After this long without motion or button activity the stream drops to 26 Hz but the link stays up, so the button keeps working. Any activity restores the configured rate.",
-          "sleep_timeout": "After this long without activity the link is dropped. The token then advertises for about 3 minutes before it sleeps, and the button is not seen until it has slept.",
+          "sleep_timeout": "After this long without activity the link is dropped. The token then advertises for about 3 minutes before it sleeps, and the button is not seen until it has slept. 0 keeps the token awake around the clock, which empties a CR2032 in about a week; while the battery is at 30 % or less, 0 acts as 300.",
           "knob_step": "How far the token has to turn on the table for one rotate event. 30° gives 12 events per full turn; smaller steps flood slow lights.",
           "invert_rotation": "Swap rotate_cw and rotate_ccw, for a token used upside down or a dimmer that feels backwards.",
           "wake_as_press": "The press that wakes the token ends before the link is up, so it is reported as wake. Also emit press on wake (a wake caused by movement then looks like a press too).",
@@ -107,6 +107,23 @@
       "roll": {
         "name": "Roll"
       }
+    }
+  },
+  "issues": {
+    "sleep_timeout_never": {
+      "title": "{name} is kept awake around the clock",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Let {name} sleep between uses",
+            "description": "*Disconnect after idle* is 0, so the link is never dropped and the token never sleeps. That draws about 1 mA: a fresh CR2032 lasts about a week, and a weak cell can lock the token up until it is pulled out.\n\nSubmit to disconnect after {seconds} s without activity. The first press after the token has slept then wakes it, and the link is up again within a second or so."
+          }
+        }
+      }
+    },
+    "battery_low": {
+      "title": "{name}: replace the battery",
+      "description": "The CR2032 in {name} measured {level} % at rest. A weak cell sags when the radio transmits and can lock the token up: it stops advertising and the button does nothing until the cell is pulled out. Replace the cell; this notice clears once a fresh one is measured."
     }
   }
 }

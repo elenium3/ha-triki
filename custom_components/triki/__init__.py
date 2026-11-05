@@ -8,11 +8,16 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import issue_registry as ir
 
 from .const import (
     CONF_IDLE_TIMEOUT,
     CONF_SLEEP_TIMEOUT,
     DEFAULT_IDLE_TIMEOUT,
+    DEFAULT_SLEEP_TIMEOUT,
+    DOMAIN,
+    ISSUE_BATTERY_LOW,
+    ISSUE_SLEEP_NEVER,
     MANUFACTURER,
     MODEL,
 )
@@ -48,7 +53,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> boo
     # A link left open by a previous Home Assistant process (crash, kill) stays
     # up in BlueZ; the token then neither advertises nor accepts a second link.
     await close_stale_connections_by_address(address)
-    device = TrikiDevice(hass, address, entry.title, TrikiOptions.from_entry(entry), entry=entry)
+    options = TrikiOptions.from_entry(entry)
+    _async_update_sleep_issue(hass, entry, options)
+    device = TrikiDevice(hass, address, entry.title, options, entry=entry)
     dev = dr.async_get(hass).async_get_or_create(
         config_entry_id=entry.entry_id,
         connections={(dr.CONNECTION_BLUETOOTH, address)},
@@ -69,6 +76,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> boo
 
     entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_stop))
     return True
+
+
+def _async_update_sleep_issue(
+    hass: HomeAssistant, entry: TrikiConfigEntry, options: TrikiOptions
+) -> None:
+    """Warn while the link is set to be held forever: that drains the cell in days."""
+    issue_id = f"{ISSUE_SLEEP_NEVER}_{entry.entry_id}"
+    if options.sleep_timeout > 0:
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+        return
+    ir.async_create_issue(
+        hass,
+        DOMAIN,
+        issue_id,
+        is_fixable=True,
+        severity=ir.IssueSeverity.WARNING,
+        translation_key=ISSUE_SLEEP_NEVER,
+        translation_placeholders={"name": entry.title, "seconds": str(DEFAULT_SLEEP_TIMEOUT)},
+        data={"entry_id": entry.entry_id},
+    )
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> None:
+    for issue in (ISSUE_SLEEP_NEVER, ISSUE_BATTERY_LOW):
+        ir.async_delete_issue(hass, DOMAIN, f"{issue}_{entry.entry_id}")
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> bool:
