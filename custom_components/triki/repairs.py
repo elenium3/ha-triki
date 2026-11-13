@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from homeassistant.components.repairs import RepairsFlow, RepairsFlowResult
+from homeassistant.components.repairs import RepairsFlow
 from homeassistant.core import HomeAssistant
 
 from .const import CONF_SLEEP_TIMEOUT, DEFAULT_SLEEP_TIMEOUT
+
+if TYPE_CHECKING:
+    # annotation only: the name does not exist in the oldest supported core (2025.8)
+    from homeassistant.components.repairs import RepairsFlowResult
 
 
 class SleepTimeoutRepairFlow(RepairsFlow):
