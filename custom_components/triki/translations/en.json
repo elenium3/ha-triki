@@ -124,6 +124,10 @@
     "battery_low": {
       "title": "{name}: replace the battery",
       "description": "The CR2032 in {name} measured {level} % at rest. A weak cell sags when the radio transmits and can lock the token up: it stops advertising and the button does nothing until the cell is pulled out. Replace the cell; this notice clears once a fresh one is measured."
+    },
+    "not_responding": {
+      "title": "{name} stopped responding",
+      "description": "The link to {name} dropped on its own and the token has not been heard since. A healthy token keeps advertising for about three minutes after a drop.\n\nPress it once next to the Bluetooth receiver. If nothing happens, it has locked up: take the CR2032 out for a few seconds and put it back. This happens with a weak cell (last measured: {level}), so replace it rather than reuse it.\n\nThis notice clears as soon as the token is heard again."
     }
   }
 }

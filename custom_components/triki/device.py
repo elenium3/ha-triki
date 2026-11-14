@@ -53,6 +53,7 @@ from .const import (
     DOMAIN,
     IDLE_RATE,
     ISSUE_BATTERY_LOW,
+    ISSUE_NOT_RESPONDING,
     TILT_PUBLISH_INTERVAL,
 )
 from .gestures import GestureDetector
@@ -123,6 +124,10 @@ _BATTERY_REFRESH_WAIT_S = 10.0  # how long the stream may stay stopped for a mea
 # open for a quiet spell this long and take the last one.
 _BATTERY_SETTLE_S = 3.0
 _BATTERY_CHECK_S = 60.0  # how often to look for an idle moment once a refresh is due
+# After a link drops on its own a healthy token advertises for about three
+# minutes. One that stays silent this long has locked up (seen with a weak
+# cell: nothing until the cell is pulled) or was carried out of range.
+_SILENT_AFTER_DROP_S = 60.0
 _BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before pausing
 
 
@@ -213,6 +218,7 @@ class TrikiDevice:
         self._unsub_idle: CALLBACK_TYPE | None = None
         self._unsub_battery: CALLBACK_TYPE | None = None
         self._unsub_watchdog: CALLBACK_TYPE | None = None
+        self._unsub_silence: CALLBACK_TYPE | None = None
         self._streaming = False
 
         self._state_listeners: list[Callable[[], None]] = []
@@ -220,6 +226,8 @@ class TrikiDevice:
 
         # public state
         self.connected = False
+        # the link dropped on its own and the token has not been heard since
+        self.unresponsive = False
         self.button = False
         self.led_on: bool | None = None
         self.battery: int | None = None
@@ -313,6 +321,7 @@ class TrikiDevice:
 
     async def async_stop(self) -> None:
         self._stopping = True
+        self._cancel_timer("_unsub_silence")
         for attr in ("_unsub_adv", "_unsub_poll"):
             unsub = getattr(self, attr)
             if unsub:
@@ -385,6 +394,8 @@ class TrikiDevice:
     def _maybe_connect(
         self, service_info: bluetooth.BluetoothServiceInfoBleak, max_age: float
     ) -> None:
+        if self.unresponsive and service_info.time >= self._last_drop:
+            self._set_unresponsive(False)
         if self._stopping or self.connected or self._connecting or self._lock.locked():
             return
         now = time.monotonic()
@@ -730,8 +741,56 @@ class TrikiDevice:
             self._capture.write({"disconnected": True, "expected": self._expected_disconnect})
             self._capture.stop()
         self.button = False
+        self._cancel_timer("_unsub_silence")
+        if was_connected and not self._expected_disconnect and not self._stopping:
+            self._unsub_silence = async_call_later(
+                self.hass, _SILENT_AFTER_DROP_S, self._check_silent_after_drop
+            )
         if was_connected:
             self._notify()
+
+    @callback
+    def _check_silent_after_drop(self, _now: Any) -> None:
+        """The link dropped on its own: has the token been heard since?"""
+        self._cancel_timer("_unsub_silence")
+        if self._stopping or self.connected or self._connecting:
+            return
+        info = bluetooth.async_last_service_info(self.hass, self.address, connectable=True)
+        if info is not None and info.time >= self._last_drop:
+            return
+        self._set_unresponsive(True)
+
+    @callback
+    def _set_unresponsive(self, unresponsive: bool) -> None:
+        if unresponsive == self.unresponsive:
+            return
+        self.unresponsive = unresponsive
+        issue_id = f"{ISSUE_NOT_RESPONDING}_{self.entry.entry_id}"
+        if not unresponsive:
+            _LOGGER.info("%s: heard again", self.name)
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+            return
+        level = self.battery_rest if self.battery_rest is not None else self.battery
+        _LOGGER.warning(
+            "%s: the link dropped and the token has been silent for %.0f s (battery %s). "
+            "If a press next to the receiver does not bring it back, it has locked up: "
+            "take the cell out for a few seconds",
+            self.name,
+            _SILENT_AFTER_DROP_S,
+            f"{level} %" if level is not None else "unknown",
+        )
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=ISSUE_NOT_RESPONDING,
+            translation_placeholders={
+                "name": self.name,
+                "level": f"{level} %" if level is not None else "?",
+            },
+        )
 
     # ------------------------------------------------------------ streaming
     @callback

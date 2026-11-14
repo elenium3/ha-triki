@@ -68,8 +68,13 @@ BATTERY_REFRESH_INTERVAL = 1800.0
 BATTERY_SAVER_LEVEL = 30
 # At or below this level at rest, a repair issue asks for a new cell. It is
 # cleared once a level this many points higher is measured (a replaced cell).
-BATTERY_LOW_LEVEL = 20
+# On 14 Nov 2026 a cell that measured 18-21 % at rest locked up two different
+# tokens four times, each time 20-27 s into a session with the default 300 s
+# sleep timeout; the same tokens never did it on a fresh cell. So the warning
+# has to come well before 20 %.
+BATTERY_LOW_LEVEL = 30
 BATTERY_LOW_CLEAR_MARGIN = 10
 
 ISSUE_SLEEP_NEVER = "sleep_timeout_never"
 ISSUE_BATTERY_LOW = "battery_low"
+ISSUE_NOT_RESPONDING = "not_responding"

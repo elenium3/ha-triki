@@ -39,6 +39,27 @@ integration turns it into a small remote for Home Assistant:
 It sleeps when still and wakes on the first press, so it is a remote, not a
 wall switch. More: [The token](docs/hardware.md).
 
+## Battery: read this first
+
+The token runs on one CR2032 and the integration decides how fast it empties.
+
+- **A weak cell locks the token up.** Below about 30 % at rest it can freeze a
+  few seconds after connecting: the link drops, the token stops advertising
+  and the button does nothing until the cell is taken out and put back. Seen
+  at 18–21 % on two different tokens; never on a fresh cell.
+- **Replace the cell at the first warning.** From 30 % at rest Home Assistant
+  shows a repair notice. A token that goes silent after a dropped link gets a
+  second notice with what to do.
+- **Do not hold the link around the clock.** *Disconnect after idle* at 0 keeps
+  the token awake and empties a fresh CR2032 in about a week. The default
+  (300 s) lets it sleep; a press wakes it.
+
+> **Installed 0.2.4 or earlier?** Those versions recommended *Disconnect after
+> idle* = 0 and had none of the warnings above, so your cell may already be
+> low. Update, set *Disconnect after idle* to 300 s (the repair notice offers
+> it), and if the token no longer reacts: take the cell out for a few seconds,
+> then replace it. Details: [Troubleshooting](docs/troubleshooting.md#the-token-stops-responding-and-only-a-battery-pull-brings-it-back).
+
 ## Quick install
 
 [![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=elenium3&repository=ha-triki&category=integration)
@@ -100,7 +121,7 @@ automation:
 | `binary_sensor.<name>_button` | live button state, off while asleep |
 | `binary_sensor.<name>_connected` | diagnostic |
 | `switch.<name>_led` | the green LED (configuration switch); changeable only while connected |
-| `sensor.<name>_battery` | measured by the token during a short stream pause while it is idle, at most every 30 min |
+| `sensor.<name>_battery` | measured by the token during a short stream pause while it is idle, at most every 30 min; a repair notice asks for a new cell at 30 % or less |
 | `sensor.<name>_rssi`, `_pitch`, `_roll` | disabled by default |
 
 Every gesture is also fired on the bus as `triki_event` with `device_id`,

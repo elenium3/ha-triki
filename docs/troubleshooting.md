@@ -92,29 +92,52 @@ link and leaves the token alone for 60 s instead of reconnecting in a loop. It
 recovered on its own. If it does not, pull the battery for a few seconds; see
 [Opening it and the battery](hardware.md#opening-it-and-the-battery).
 
-## The token vanishes after a night and only a battery pull brings it back
+## The token stops responding and only a battery pull brings it back
 
-Seen on the development unit with *Disconnect after idle* at 0: after a link of
-7–21 hours the token dropped it and was not seen again; pressing the button did
-nothing until the cell was pulled out and put back. Both times the battery level
-measured in the stream pauses was 16–19 % and falling.
+The link drops on its own, the token stops advertising, and pressing the button
+does nothing until the CR2032 is taken out for a few seconds and put back. Home
+Assistant shows the repair notice *… stopped responding* a minute after such a
+drop; it clears when the token is heard again.
 
-The likely cause is the cell, not the radio or the integration. A held link
-keeps the token awake around the clock (about 1 mA, a week for a CR2032). A
-worn coin cell's internal resistance rises, every radio transmission pulls its
-voltage down, and an nRF52 that browns out this way can reset in a loop or
-freeze until its power is removed
+What was measured:
+
+- **14 Nov 2026, default settings (*Disconnect after idle* 300 s).** One cell
+  that read 18–21 % at rest locked up two different tokens four times. Each
+  time the link dropped 20–27 s into a session, while the stream still ran at
+  52 Hz; in the one session that was recorded the token lost frames for the
+  last six seconds before the drop. The same two tokens on a fresh cell went
+  through about twenty sessions without a single lock-up. With the weak cell
+  it is irregular: three times in the first eight sessions, then not once in
+  twenty-three, then again a few sessions later.
+- **October 2026, *Disconnect after idle* at 0.** After links of 7–21 hours the
+  token dropped the link and was gone; the level in the stream pauses was
+  16–19 % and falling.
+
+So the common factor is the cell, not one token, the radio path or how long
+the link was held. A worn coin cell's internal resistance rises, every radio
+transmission pulls its voltage down, and an nRF52 that browns out this way can
+reset in a loop or freeze until its power is removed
 ([Nordic DevZone](https://devzone.nordicsemi.com/f/nordic-q-a/116224/voltage-drop-triggers-bor-reset-mcu-occasionally-completely-freezes)).
 Pulling the cell clears the freeze and lets the cell recover a little, which is
 why it helps for a while. Żabka's FAQ says the same in short: an irregular LED
-or frequent disconnects mean a weak battery.
+or frequent disconnects mean a weak battery. What exactly trips it on a given
+session is not known.
 
-- Replace the CR2032.
-- Set *Disconnect after idle* back to a non-zero value (the repair issue does
-  it), so the token sleeps between uses. From 30 % at rest the integration does
-  this by itself; see [Configuration](configuration.md#idle-and-sleep-how-the-link-behaves).
+What to do:
 
-If it happens again on a fresh cell, check before pulling it, because the pull
+- Take the cell out for a few seconds to get the token back, then **replace
+  it**; a recovered weak cell locks up again.
+- Replace the cell when the *replace the battery* notice appears (30 % or less
+  at rest), before it gets this far.
+- Keep *Disconnect after idle* at a non-zero value so the token sleeps between
+  uses; at 0 a fresh cell is empty in about a week. See
+  [Configuration](configuration.md#idle-and-sleep-how-the-link-behaves).
+
+The *stopped responding* notice also appears when a token is carried out of
+range while connected. Press it next to the receiver: if it connects, it was
+only out of range.
+
+If it happens on a fresh cell, check before pulling it, because the pull
 wipes the evidence: does the LED blink on a press; does a phone (nRF Connect)
 see `Triki …`; does a restart of the ESPHome proxy bring it back (a proxy that
 still holds the link would explain it too). Then measure the cell with a

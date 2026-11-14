@@ -12,13 +12,30 @@ All notable changes to this project are documented here. The format follows
   sleep. A link held around the clock empties a CR2032 in about a week, and the
   weak cell then locked the token up until it was pulled out.
 - Repair issues: one while *Disconnect after idle* is 0, with a fix that sets it
-  to 300 s; one asking for a new cell at 20 % or less at rest.
+  to 300 s; one asking for a new cell at 30 % or less at rest.
+- Repair issue *stopped responding*: the link dropped on its own and the token
+  has not advertised for a minute. A weak cell locks the token up this way
+  (no advertising, the button dead until the cell is pulled); the notice says
+  what to do and clears when the token is heard again. Diagnostics carry
+  `unresponsive`.
 
 ### Changed
 - Docs: install by searching the default HACS catalog for *Żabka Triki*; the
   custom repository route is the fallback.
 - Docs: the README and Troubleshooting no longer recommend a sleep timeout of 0;
   they describe the trade-off between reacting at any time and battery life.
+- Docs: a *Battery* section at the top of the README, with a note for those who
+  installed 0.2.4 or earlier. Troubleshooting has the measurements behind it:
+  on 14 Nov 2026 one cell at 18–21 % at rest locked up two different tokens
+  four times with the default settings, 20–27 s into a session; neither token
+  did it on a fresh cell.
+
+### Upgrade notice
+- 0.2.4 and earlier told you to keep *Disconnect after idle* at 0. That holds
+  the link around the clock and empties a CR2032 in about a week, and a weak
+  cell can lock the token up. After updating, accept the repair notice that
+  sets it to 300 s, and replace the cell if the *replace the battery* notice
+  shows up.
 
 ## [0.2.4] - 2026-10-30
 
