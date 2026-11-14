@@ -66,6 +66,10 @@ load and corrected at the first idle pause, see [Configuration](configuration.md
 link drops within a minute, the receiver is too far from the token. See
 [Radio and placement](radio-and-placement.md).
 
+Only press and long press are reported out of the box. Rotation (the knob),
+double and triple press and shake are off until you turn them on under
+*Configure* on the integration; see [Configuration](configuration.md).
+
 ## Updating
 
 Through HACS, or replace the folder and restart. Config entries are migrated
