@@ -58,3 +58,18 @@ TILT_PUBLISH_INTERVAL = 1.0
 # means a short stream pause (see TrikiDevice._async_pause_for_battery). Do it
 # at most this often, and only while the token has been idle for a while.
 BATTERY_REFRESH_INTERVAL = 1800.0
+# A link that is never dropped keeps the token awake around the clock: the
+# 7.5 ms connection plus the IMU draw about 1 mA, so a CR2032 lasts about a
+# week. A sagging cell then locks the token up (no advertising, the button does
+# nothing) until the cell is pulled. Seen twice on the development unit, each
+# time at the end of a 7-21 h link, with the level at rest at 16-19 %.
+# At or below this level at rest, a "never" sleep timeout falls back to the
+# default one so the token gets to sleep between uses.
+BATTERY_SAVER_LEVEL = 30
+# At or below this level at rest, a repair issue asks for a new cell. It is
+# cleared once a level this many points higher is measured (a replaced cell).
+BATTERY_LOW_LEVEL = 20
+BATTERY_LOW_CLEAR_MARGIN = 10
+
+ISSUE_SLEEP_NEVER = "sleep_timeout_never"
+ISSUE_BATTERY_LOW = "battery_low"

@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Battery saver: with *Disconnect after idle* at 0, once a stream pause measures
+  30 % or less the link is dropped after 300 s idle anyway, so the token can
+  sleep. A link held around the clock empties a CR2032 in about a week, and the
+  weak cell then locked the token up until it was pulled out.
+- Repair issues: one while *Disconnect after idle* is 0, with a fix that sets it
+  to 300 s; one asking for a new cell at 20 % or less at rest.
+
 ## [0.2.4] - 2026-10-30
 
 ### Fixed

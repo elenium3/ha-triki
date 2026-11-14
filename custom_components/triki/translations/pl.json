@@ -42,7 +42,7 @@
         "data_description": {
           "sample_rate": "Wyższa częstotliwość = szybsza reakcja gestów i szybsze zużycie baterii. Powyżej 104 Hz BLE często nie nadąża.",
           "idle_timeout": "Po tym czasie bez ruchu i przycisku strumień spada do 26 Hz, ale połączenie zostaje, więc przycisk dalej działa. Każda aktywność przywraca ustawioną częstotliwość.",
-          "sleep_timeout": "Po tym czasie bez aktywności połączenie jest zrywane. Token rozgłasza się potem około 3 minut, zanim zaśnie, a przycisk nie jest widoczny, dopóki nie zaśnie.",
+          "sleep_timeout": "Po tym czasie bez aktywności połączenie jest zrywane. Token rozgłasza się potem około 3 minut, zanim zaśnie, a przycisk nie jest widoczny, dopóki nie zaśnie. 0 nie pozwala tokenowi zasnąć, co rozładowuje baterię CR2032 w około tydzień; przy baterii 30 % lub niżej 0 działa jak 300.",
           "knob_step": "O ile token musi się obrócić na stole, aby powstało jedno zdarzenie. 30° daje 12 zdarzeń na pełny obrót; mniejsze kroki zasypują wolne lampy zdarzeniami.",
           "invert_rotation": "Zamień rotate_cw i rotate_ccw, gdy token leży do góry nogami albo ściemniacz działa odwrotnie.",
           "wake_as_press": "Naciśnięcie, które budzi token, kończy się zanim powstanie połączenie, więc jest zgłaszane jako wake. Zgłaszaj też press przy wybudzeniu (wybudzenie ruchem też wygląda wtedy jak naciśnięcie).",
@@ -107,6 +107,23 @@
       "roll": {
         "name": "Przechył"
       }
+    }
+  },
+  "issues": {
+    "sleep_timeout_never": {
+      "title": "{name} nie usypia ani na chwilę",
+      "fix_flow": {
+        "step": {
+          "confirm": {
+            "title": "Pozwól {name} usypiać między użyciami",
+            "description": "*Rozłączenie po bezczynności* ma wartość 0, więc połączenie nigdy nie jest zrywane i token nigdy nie śpi. To około 1 mA: nowa bateria CR2032 wystarcza na mniej więcej tydzień, a słaba bateria może zawiesić token, dopóki się jej nie wyjmie.\n\nZatwierdź, aby rozłączać po {seconds} s bez aktywności. Pierwsze naciśnięcie po uśpieniu budzi token, a połączenie wraca w około sekundę."
+          }
+        }
+      }
+    },
+    "battery_low": {
+      "title": "{name}: wymień baterię",
+      "description": "Bateria CR2032 w {name} pokazała {level} % w spoczynku. Słaba bateria przysiada przy nadawaniu i może zawiesić token: przestaje się rozgłaszać, a przycisk nie działa, dopóki baterii się nie wyjmie. Wymień baterię; to powiadomienie zniknie po pomiarze nowej."
     }
   }
 }
