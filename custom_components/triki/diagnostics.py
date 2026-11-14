@@ -36,6 +36,7 @@ async def async_get_config_entry_diagnostics(
             "battery": dev.battery,
             "battery_rest": dev.battery_rest,
             "battery_saver": dev.battery_saver,
+            "unresponsive": dev.unresponsive,
             "sleep_timeout": dev.sleep_timeout,
             "rssi": dev.rssi,
             "led_on": dev.led_on,

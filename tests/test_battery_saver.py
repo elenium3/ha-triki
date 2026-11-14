@@ -1,5 +1,7 @@
 """A link held forever drains the cell: the battery saver and the repair issues."""
 
+from unittest.mock import AsyncMock, patch
+
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -9,10 +11,11 @@ from custom_components.triki.const import (
     DEFAULT_SLEEP_TIMEOUT,
     DOMAIN,
     ISSUE_BATTERY_LOW,
+    ISSUE_NOT_RESPONDING,
     ISSUE_SLEEP_NEVER,
 )
 
-from .conftest import ADDRESS, NAME, connect, settle
+from .conftest import ADDRESS, ESTABLISH, NAME, connect, make_client, service_info, settle
 from .test_device_errors import answer_stop_with_battery
 
 
@@ -123,3 +126,72 @@ async def test_removing_the_entry_clears_its_issues(hass: HomeAssistant, mock_bl
     assert await hass.config_entries.async_remove(entry.entry_id)
     await hass.async_block_till_done()
     assert not [i for i in ir.async_get(hass).issues if i[0] == DOMAIN]
+
+
+async def test_low_battery_issue_threshold(hass: HomeAssistant, setup) -> None:
+    """Tokens locked up at 18-21 % at rest: the notice comes at 30 %, goes at 40 %."""
+    dev = setup.runtime_data
+    issue_id = f"{ISSUE_BATTERY_LOW}_{setup.entry_id}"
+    registry = ir.async_get(hass)
+    client, _ = await connect(hass, setup)
+
+    await _measure(hass, dev, client, 31)
+    assert registry.async_get_issue(DOMAIN, issue_id) is None
+    await _measure(hass, dev, client, 30)
+    assert registry.async_get_issue(DOMAIN, issue_id) is not None
+    await _measure(hass, dev, client, 39)
+    assert registry.async_get_issue(DOMAIN, issue_id) is not None
+    await _measure(hass, dev, client, 40)
+    assert registry.async_get_issue(DOMAIN, issue_id) is None
+
+
+async def test_silent_token_after_a_drop_raises_an_issue(hass: HomeAssistant, setup) -> None:
+    """A link that drops on its own and a token that never advertises again."""
+    dev = setup.runtime_data
+    issue_id = f"{ISSUE_NOT_RESPONDING}_{setup.entry_id}"
+    registry = ir.async_get(hass)
+    await connect(hass, setup)
+
+    dev._handle_disconnected()
+    await hass.async_block_till_done()
+    assert dev._unsub_silence is not None and not dev.unresponsive
+
+    dev._check_silent_after_drop(None)
+    issue = registry.async_get_issue(DOMAIN, issue_id)
+    assert dev.unresponsive and dev._unsub_silence is None
+    assert issue is not None and not issue.is_fixable
+    assert issue.translation_placeholders == {"name": NAME, "level": f"{dev.battery} %"}
+
+    # the cell was pulled and put back: the token advertises again
+    dev._last_attempt = 0
+    with patch(ESTABLISH, AsyncMock(return_value=make_client())):
+        dev._on_advertisement(service_info(), None)
+        await hass.async_block_till_done()
+    assert not dev.unresponsive
+    assert registry.async_get_issue(DOMAIN, issue_id) is None
+
+
+async def test_token_heard_after_a_drop_is_not_flagged(hass: HomeAssistant, setup) -> None:
+    """A healthy token advertises for minutes after a drop: no notice."""
+    dev = setup.runtime_data
+    await connect(hass, setup)
+    dev._handle_disconnected()
+    await hass.async_block_till_done()
+
+    with patch(
+        "custom_components.triki.device.bluetooth.async_last_service_info",
+        return_value=service_info(),
+    ):
+        dev._check_silent_after_drop(None)
+    assert not dev.unresponsive
+    assert not [i for i in ir.async_get(hass).issues if i[1].startswith(ISSUE_NOT_RESPONDING)]
+
+
+async def test_idle_disconnect_does_not_arm_the_silence_check(hass: HomeAssistant, setup) -> None:
+    """Dropping the link ourselves is not a token that went silent."""
+    dev = setup.runtime_data
+    await connect(hass, setup)
+    dev._last_activity -= DEFAULT_SLEEP_TIMEOUT
+    dev._idle_check(None)
+    await hass.async_block_till_done()
+    assert dev.connected is False and dev._unsub_silence is None

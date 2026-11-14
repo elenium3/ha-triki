@@ -54,7 +54,7 @@ week instead of months. On the development unit, held around the clock, the
 level measured in the stream pauses went from 25 % to 16 % over two days, and
 twice, at the end of a 7 and a 21 hour link, the token locked up: no
 advertising, the button dead, until the cell was pulled out
-([Troubleshooting](troubleshooting.md#the-token-vanishes-after-a-night-and-only-a-battery-pull-brings-it-back)).
+([Troubleshooting](troubleshooting.md#the-token-stops-responding-and-only-a-battery-pull-brings-it-back)).
 So the integration guards the setting:
 
 - With the sleep timeout at 0 a repair issue is raised (*Settings → System →
@@ -62,8 +62,13 @@ So the integration guards the setting:
 - **Battery saver:** once a stream pause measures 30 % or less, 0 acts as
   300 s until Home Assistant restarts or the entry reloads, so the token
   sleeps between uses. The log says so once at info level.
-- At 20 % or less a second repair issue asks for a new cell. It clears once a
-  pause measures 30 % or more.
+- At 30 % or less at rest a second repair issue asks for a new cell. It clears
+  once a pause measures 40 % or more. The threshold is this high because a
+  cell at 18–21 % locked tokens up within seconds of connecting, also with the
+  default sleep timeout.
+- A token whose link drops on its own and that is not heard for a minute gets
+  a third repair issue, *stopped responding*, with what to do. It clears when
+  the token advertises again.
 
 **Battery figure on a held link.** The token measures its cell under the load of
 the open link. After a night asleep it reported 82 %; after 17 hours of a held

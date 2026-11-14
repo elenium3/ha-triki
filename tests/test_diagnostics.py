@@ -17,6 +17,7 @@ async def test_diagnostics(hass: HomeAssistant, setup, hass_client: ClientSessio
     assert diag["link"]["connects"] == 0
     assert diag["device"]["battery_rest"] is None
     assert diag["device"]["battery_saver"] is False
+    assert diag["device"]["unresponsive"] is False
 
     client, notify = await connect(hass, setup)
     notify(None, bytearray(frame() * 2))

@@ -124,6 +124,10 @@
     "battery_low": {
       "title": "{name}: wymień baterię",
       "description": "Bateria CR2032 w {name} pokazała {level} % w spoczynku. Słaba bateria przysiada przy nadawaniu i może zawiesić token: przestaje się rozgłaszać, a przycisk nie działa, dopóki baterii się nie wyjmie. Wymień baterię; to powiadomienie zniknie po pomiarze nowej."
+    },
+    "not_responding": {
+      "title": "{name} przestał odpowiadać",
+      "description": "Połączenie z {name} zerwało się samo i od tego czasu token się nie odzywa. Sprawny token po zerwaniu połączenia rozgłasza się jeszcze przez około trzy minuty.\n\nNaciśnij go raz obok odbiornika Bluetooth. Jeśli nic się nie dzieje, token się zawiesił: wyjmij baterię CR2032 na kilka sekund i włóż ją z powrotem. Zdarza się to przy słabej baterii (ostatni pomiar: {level}), dlatego lepiej ją wymienić niż używać dalej.\n\nTo powiadomienie zniknie, gdy token znów się odezwie."
     }
   }
 }

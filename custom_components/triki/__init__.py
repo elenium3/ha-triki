@@ -17,6 +17,7 @@ from .const import (
     DEFAULT_SLEEP_TIMEOUT,
     DOMAIN,
     ISSUE_BATTERY_LOW,
+    ISSUE_NOT_RESPONDING,
     ISSUE_SLEEP_NEVER,
     MANUFACTURER,
     MODEL,
@@ -99,7 +100,7 @@ def _async_update_sleep_issue(
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> None:
-    for issue in (ISSUE_SLEEP_NEVER, ISSUE_BATTERY_LOW):
+    for issue in (ISSUE_SLEEP_NEVER, ISSUE_BATTERY_LOW, ISSUE_NOT_RESPONDING):
         ir.async_delete_issue(hass, DOMAIN, f"{issue}_{entry.entry_id}")
 
 
