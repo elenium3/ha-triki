@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.5] - 2026-11-14
+
 ### Added
 - Battery saver: with *Disconnect after idle* at 0, once a stream pause measures
   30 % or less the link is dropped after 300 s idle anyway, so the token can
@@ -228,7 +230,8 @@ and a Raspberry Pi 5 built-in adapter.
 - Duplicate BlueZ notifications counted as separate frames.
 - Wake reported again on a quick resume after a weak-signal drop.
 
-[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.2.4...HEAD
+[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/elenium3/ha-triki/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/elenium3/ha-triki/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/elenium3/ha-triki/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/elenium3/ha-triki/compare/v0.2.1...v0.2.2
