@@ -14,6 +14,10 @@ All notable changes to this project are documented here. The format follows
 - Repair issues: one while *Disconnect after idle* is 0, with a fix that sets it
   to 300 s; one asking for a new cell at 20 % or less at rest.
 
+### Changed
+- Docs: install by searching the default HACS catalog for *Żabka Triki*; the
+  custom repository route is the fallback.
+
 ## [0.2.4] - 2026-10-30
 
 ### Fixed
