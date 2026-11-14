@@ -2,5 +2,5 @@
 # Assistant version the tests run against; bleak comes with it.
 pytest-homeassistant-custom-component==0.13.375
 pytest-cov==7.1.0
-mypy==2.4.0
+mypy==2.4.1
 ruff==0.17.3

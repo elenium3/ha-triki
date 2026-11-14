@@ -12,7 +12,7 @@
 <p align="center">
   <a href="https://github.com/elenium3/ha-triki/actions/workflows/ci.yml"><img src="https://github.com/elenium3/ha-triki/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/elenium3/ha-triki/releases"><img src="https://img.shields.io/github/v/release/elenium3/ha-triki?include_prereleases" alt="Release"></a>
-  <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-custom-41BDF5.svg" alt="HACS custom"></a>
+  <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-default-41BDF5.svg" alt="HACS default"></a>
   <img src="https://img.shields.io/badge/Home%20Assistant-2025.8%2B-blue" alt="Home Assistant 2025.8+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT"></a>
 </p>
@@ -43,9 +43,8 @@ wall switch. More: [The token](docs/hardware.md).
 
 [![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=elenium3&repository=ha-triki&category=integration)
 
-1. In [HACS](https://www.hacs.xyz/docs/use/) add this repository as a
-   [custom repository](https://www.hacs.xyz/docs/faq/custom_repositories/)
-   (`https://github.com/elenium3/ha-triki`, type *Integration*), install it and
+1. In [HACS](https://www.hacs.xyz/docs/use/) search for *Żabka Triki* (typing
+   `zabka` or `triki` finds it), download it and
    [restart Home Assistant](https://www.home-assistant.io/docs/configuration/#reloading-changes).
 2. Press the token. It shows up as *Żabka Triki* under *Discovered* in
    [Settings → Devices & services](https://my.home-assistant.io/redirect/integrations/);
