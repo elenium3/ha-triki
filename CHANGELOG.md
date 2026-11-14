@@ -17,6 +17,8 @@ All notable changes to this project are documented here. The format follows
 ### Changed
 - Docs: install by searching the default HACS catalog for *Żabka Triki*; the
   custom repository route is the fallback.
+- Docs: the README and Troubleshooting no longer recommend a sleep timeout of 0;
+  they describe the trade-off between reacting at any time and battery life.
 
 ## [0.2.4] - 2026-10-30
 
