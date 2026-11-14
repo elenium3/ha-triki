@@ -16,11 +16,18 @@
 
 1. [Install HACS](https://www.hacs.xyz/docs/use/download/download/) if you do
    not have it.
-2. HACS → ⋮ → *Custom repositories*
-   ([how](https://www.hacs.xyz/docs/faq/custom_repositories/)): repository
-   `https://github.com/elenium3/ha-triki`, type *Integration*.
-3. Download *Żabka Triki* and
+2. Open HACS and search for *Żabka Triki*. The integration is in the default
+   HACS catalog; typing `zabka` or `triki` finds it, no Polish keyboard needed.
+   Or use this button:
+
+   [![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=elenium3&repository=ha-triki&category=integration)
+3. Download it and
    [restart Home Assistant](https://www.home-assistant.io/docs/configuration/#reloading-changes).
+
+If it does not show up in the search (a HACS install that has not refreshed its
+catalog yet), add `https://github.com/elenium3/ha-triki` as a
+[custom repository](https://www.hacs.xyz/docs/faq/custom_repositories/) of type
+*Integration*.
 
 ## Manual
 
