@@ -45,9 +45,13 @@ time and then refuses to reconnect until the token has stopped advertising for
 restarts that window, so presses in that period do nothing. The log shows
 `not connecting: waiting for the token to sleep after an idle disconnect`.
 
-Workaround: set *Disconnect after idle* to 0. A proper fix needs a way to tell a
-press from post-drop advertising, which the token's advertisement does not
-provide.
+Wait until the token sleeps (a few minutes without presses); the next press
+then wakes it and connects. Setting *Disconnect after idle* to 0 avoids the
+window altogether, but the link is then held around the clock and a CR2032
+lasts about a week instead of months; the integration raises a repair issue for
+0 (see [Configuration](configuration.md#idle-and-sleep-how-the-link-behaves)).
+A proper fix needs a way to tell a press from post-drop advertising, which the
+token's advertisement does not provide.
 
 ## A press produces rotate events
 

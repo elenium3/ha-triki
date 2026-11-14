@@ -125,8 +125,12 @@ Every gesture is also fired on the bus as `triki_event` with `device_id`,
 
 ## Known limitations
 
-- With a sleep timeout set, presses in the minutes after a sleep disconnect are
-  ignored while the token still advertises. Keep the sleep timeout at 0.
+- With a sleep timeout set (the default is 300 s), presses in the minutes after
+  a sleep disconnect are ignored while the token still advertises; once it
+  sleeps, a press wakes it. A sleep timeout of 0 makes it react at any time but
+  holds the link around the clock, which empties a CR2032 in about a week, so
+  the integration raises a repair issue for it. See
+  [Configuration](docs/configuration.md#idle-and-sleep-how-the-link-behaves).
 - Shake needs about a second of hard swinging. Picking the token up and turning
   it in the same move counts as a turn. Tap needs the token at rest: a knock
   made while moving it is not one. Tap, throw and flip were tuned on a single
