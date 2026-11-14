@@ -30,6 +30,9 @@ All notable changes to this project are documented here. The format follows
   four times with the default settings, 20–27 s into a session; neither token
   did it on a fresh cell.
 
+- Docs: the README and the install guide say that the knob, double and triple
+  press and shake are off until turned on in the options.
+
 ### Upgrade notice
 - 0.2.4 and earlier told you to keep *Disconnect after idle* at 0. That holds
   the link around the clock and empties a CR2032 in about a week, and a weak

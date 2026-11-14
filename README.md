@@ -36,6 +36,10 @@ integration turns it into a small remote for Home Assistant:
 - **Turn it on the table** like a knob to dim a light or change the volume.
 - **Every gesture is an event**, so it can start anything an automation can.
 
+Out of the box only press and long press are on. The knob, double and triple
+press and shake are switches in the integration's options; turn on the ones you
+use ([Configuration](docs/configuration.md)).
+
 It sleeps when still and wakes on the first press, so it is a remote, not a
 wall switch. More: [The token](docs/hardware.md).
 
@@ -69,7 +73,8 @@ The token runs on one CR2032 and the integration decides how fast it empties.
    [restart Home Assistant](https://www.home-assistant.io/docs/configuration/#reloading-changes).
 2. Press the token. It shows up as *Żabka Triki* under *Discovered* in
    [Settings → Devices & services](https://my.home-assistant.io/redirect/integrations/);
-   confirm.
+   confirm. Press and long press work right away; for the knob, double and
+   triple press or shake open *Configure* on the integration and turn them on.
 3. Automate on the [event entity](https://www.home-assistant.io/integrations/event/)
    `event.<name>_action` with a
    [state trigger](https://www.home-assistant.io/docs/automation/trigger/#state-trigger):
