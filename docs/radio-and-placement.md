@@ -18,7 +18,7 @@ load, not the temperature of the host.
 | −68 … −72 dBm | Stable for an hour or more, occasional retransmits. |
 | −75 dBm and below | Drops after seconds to a minute, regardless of settings. |
 
-RSSI is shown on the device page once the `sensor.<name>_rssi` entity is enabled.
+RSSI is shown on the device page once the `sensor.<name>_signal_strength` entity is enabled.
 The *Diagnostics* download also contains the RSSI of the last advertisement.
 
 ## Recommended: an ESPHome Bluetooth proxy at the usage spot
