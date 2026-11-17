@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- A token in its firmware-update bootloader (advertising as `TrikiDfu…`) is
+  no longer offered as a new device.
+
 ## [0.2.5] - 2026-11-14
 
 ### Added
