@@ -448,12 +448,28 @@ def test_faster_stream_than_requested_keeps_the_clock():
     # nominal period per frame would run the clock almost twice as fast
     d = GestureDetector(52, startup_discard=0)
     t = 50.0
-    for _ in range(300):  # 3 s at 100 Hz
+    for _ in range(500):  # 5 s at 100 Hz: the rate is known after RATE_MIN_SPAN_S
         t += 0.01
         d.update(Sample.from_frame(frame()), t)
     assert d.measured_rate == pytest.approx(100.0, rel=0.02)
-    # only the first RATE_MIN_SPAN_S runs at the nominal period (it was 5.7 s)
-    assert 3.0 <= d.t <= 3.35
+    t_known = d.t
+    for _ in range(400):  # 4 more seconds
+        t += 0.01
+        d.update(Sample.from_frame(frame()), t)
+    assert d.t - t_known == pytest.approx(4.0, abs=0.1)  # 7.7 s at the nominal period
+
+
+def test_bursty_delivery_keeps_the_nominal_period():
+    # a congested link: 17 frames at once every 0.33 s, nothing lost. The bursts
+    # must not read as a faster stream (it shrank the knob angle by 10-20 %)
+    # (one frame per notification, the notifications 2 ms apart)
+    d = GestureDetector(52, startup_discard=0)
+    t = 0.0
+    for _ in range(30):
+        t += 17 / 52
+        for i in range(17):
+            d.update(Sample.from_frame(frame()), t + i * 0.002)
+    assert d.frame_period == pytest.approx(1 / 52)
 
 
 def test_gyro_bias_learned_at_rest_and_kept_over_reset():

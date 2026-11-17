@@ -104,8 +104,13 @@ GRAVITY_ALPHA = 0.08  # low-pass for the gravity estimate
 # Frames per second actually received, over this much wall time. Some firmware
 # ignores the requested rate (find-my-triki's game mode always streams ~100 Hz);
 # a sample period taken from the request would then run the clock fast.
-RATE_WINDOW_S = 2.0
-RATE_MIN_SPAN_S = 0.3  # soon after start: only a faster stream lowers the period
+# A congested link delivers in bursts (17-27 frames every 0.3 s on 2026-11-17)
+# that drain a backlog faster than real time, so a short window over-reads the
+# rate; only a long window well above the requested rate counts as a faster
+# stream.
+RATE_WINDOW_S = 5.0
+RATE_MIN_SPAN_S = 3.0
+FAST_STREAM_FACTOR = 1.5
 # Gyro zero offset, learned while the token lies still. The development unit
 # reads (0.3, -2.5, -0.6) °/s at rest with 0.03-0.1 °/s of noise, stable over
 # a whole session; uncorrected, -0.6 °/s about z is 36° per minute of yaw.
@@ -247,7 +252,9 @@ class GestureDetector:
         A lossy link measures slower than nominal and keeps the nominal one.
         """
         rate = self.measured_rate
-        return self.dt if rate is None else min(self.dt, 1.0 / rate)
+        if rate is None or rate * self.dt < FAST_STREAM_FACTOR:
+            return self.dt
+        return 1.0 / rate
 
     @property
     def pitch_roll(self) -> tuple[float, float] | None:
