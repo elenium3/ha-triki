@@ -31,6 +31,8 @@ async def async_get_config_entry_diagnostics(
         "device": {
             "connected": dev.connected,
             "stream_rate": dev.stream_rate if dev.connected else None,
+            "measured_rate": dev.measured_rate,
+            "gyro_bias": dev.gyro_bias,
             "firmware": dev.firmware,
             "hardware": dev.hardware,
             "battery": dev.battery,

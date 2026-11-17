@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+- Knob turns are integrated over the frames' arrival times instead of one
+  sample period per frame. On a link that loses frames the knob used to
+  report too few steps: with half the frames lost, half the steps.
+- The gyro's zero offset is learned while the token lies still and
+  subtracted from knob turns; it is kept across reconnects.
+- Firmware that streams faster than requested no longer speeds up gesture
+  timing (multi-press window, long press).
+
+### Added
+- Diagnostics: `measured_rate` (frames per second actually received) and
+  `gyro_bias`.
+
 ## [0.2.5] - 2026-11-14
 
 ### Added
