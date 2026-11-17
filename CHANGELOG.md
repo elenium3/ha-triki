@@ -22,6 +22,9 @@ All notable changes to this project are documented here. The format follows
 ### Fixed
 - A token in its firmware-update bootloader (advertising as `TrikiDfu…`) is
   no longer offered as a new device.
+- The LED switch keeps its last known state across Home Assistant restarts. It
+  read unknown until the token next woke, which could take hours; Watchman
+  listed it as a broken reference.
 
 ## [0.2.5] - 2026-11-14
 
