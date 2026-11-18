@@ -14,11 +14,8 @@ Calibration (kept per token by the integration):
 - ``mount``: the PCB is not exactly parallel to the cap face and a table is not
   exactly level. Lying flat, the measured gravity is rotated onto the cap's axis,
   so the token reads level on the table it was calibrated on.
-- ``logo``: the angle, in the cap frame, of the edge the metal-side logo points
-  to. The logo is printed on the crown, which is crimped on at any angle, so it
-  is measured: with one edge lifted, gravity tells which way that edge lies.
-- The heading reset then turns the pose so that this edge points away from the
-  viewer (yaw 0 = "logo upright towards me").
+- Front: the dot above the Żabka Z on the PCB, sensor -y. The heading reset
+  turns the pose so that the front lies along world -y, the same as yaw 0.
 """
 
 from __future__ import annotations
@@ -41,11 +38,10 @@ MAX_DT_S = 0.5
 # or a tap it measures motion, not gravity.
 ACCEL_TRUST_G = (0.75, 1.25)
 # Calibration needs the token at rest: gravity within this of 1 g, little spin.
-# The edge step is held by hand: allow its tremor, refuse a real turn.
+# Lying on a table touched by a hand: allow a tremor, refuse a real turn.
 CAL_ACCEL_TOL_G = 0.12
 CAL_GYRO_MAX_DPS = 25.0
 CAL_FLAT_MAX_DEG = 15.0  # "lying flat" must be roughly flat
-CAL_EDGE_MIN_DEG = 8.0  # a lifted edge must tilt the token at least this much
 LP_ALPHA = 0.08  # low-pass on the accelerometer and spin for calibration
 
 type Quat = tuple[float, float, float, float]  # w, x, y, z
@@ -108,13 +104,15 @@ def _normalized(q: Quat) -> Quat:
     return (q[0] / n, q[1] / n, q[2] / n, q[3] / n)
 
 
+FRONT = (0.0, -1.0, 0.0)  # the dot above the Z, in the cap frame
+
+
 class Orientation:
     """Madgwick IMU fusion over the token's frames."""
 
     def __init__(self, beta: float = BETA) -> None:
         self.beta = beta
         self.mount: Quat = (1.0, 0.0, 0.0, 0.0)  # cap frame -> sensor frame
-        self.logo: float | None = None  # radians, in the cap frame
         self.reset()
 
     def reset(self) -> None:
@@ -143,15 +141,15 @@ class Orientation:
     def reset_heading(self) -> None:
         """Make the current heading 0; tilt is untouched.
 
-        With a known logo angle, heading 0 means the logo's marked edge points
-        to world +y (away from the viewer); otherwise it is the sensor's yaw.
+        Heading 0 means the front (the dot above the Z, cap -y) lies along world
+        -y. With the front pointing up or down that is undefined; then the
+        sensor's yaw is zeroed instead.
         """
         pose = quat_mul(self._q, self.mount)
-        if self.logo is not None:
-            wx, wy, _ = quat_rotate(pose, (math.cos(self.logo), math.sin(self.logo), 0.0))
-            if math.hypot(wx, wy) > 0.3:  # the edge is not pointing up or down
-                self._heading = quat_about_z(math.pi / 2 - math.atan2(wy, wx))
-                return
+        wx, wy, _ = quat_rotate(pose, FRONT)
+        if math.hypot(wx, wy) > 0.3:
+            self._heading = quat_about_z(-math.pi / 2 - math.atan2(wy, wx))
+            return
         _, _, yaw = euler_deg(pose)
         self._heading = quat_about_z(-math.radians(yaw))
 
@@ -172,14 +170,6 @@ class Orientation:
         if math.degrees(math.acos(min(1.0, abs(g[2])))) > CAL_FLAT_MAX_DEG:
             raise CalibrationError("not_flat")
         self.mount = quat_between(up, g)
-
-    def calibrate_edge(self) -> None:
-        """One edge lifted: record which way it lies in the cap frame."""
-        gx, gy, _ = quat_rotate(quat_conj(self.mount), self._at_rest())
-        if math.degrees(math.asin(min(1.0, math.hypot(gx, gy)))) < CAL_EDGE_MIN_DEG:
-            raise CalibrationError("not_tilted")
-        # gravity (up) leans away from the lifted edge
-        self.logo = math.atan2(-gy, -gx)
 
     def update(
         self,

@@ -310,13 +310,6 @@ class TrikiDevice:
                 float(mount[2]),
                 float(mount[3]),
             )
-        logo = cal.get("logo")
-        self._orientation.logo = float(logo) if isinstance(logo, (int, float)) else None
-
-    @property
-    def logo_angle(self) -> float | None:
-        """Radians, in the cap frame: which way the metal logo's marked edge lies."""
-        return self._orientation.logo
 
     @property
     def calibrated(self) -> bool:
@@ -324,24 +317,24 @@ class TrikiDevice:
 
     @callback
     def calibrate(self, step: str) -> None:
-        """One step of the card's calibration: ``flat``, ``edge`` or ``clear``.
+        """The card's calibration: ``flat`` (lying on the table) or ``clear``.
 
-        Raises :class:`CalibrationError` when the token is not in the pose the
-        step needs. The result is kept in the config entry's data.
+        ``flat`` levels the cap on that table and zeroes the heading so the
+        front points away from the viewer. Raises :class:`CalibrationError` when
+        the token is not lying still. The mount is kept in the config entry's data.
         """
         o = self._orientation
         if step == "clear":
-            o.mount, o.logo = (1.0, 0.0, 0.0, 0.0), None
+            o.mount = (1.0, 0.0, 0.0, 0.0)
         elif not self.streaming:
             raise CalibrationError("asleep")
         elif step == "flat":
             o.calibrate_flat()
-        elif step == "edge":
-            o.calibrate_edge()
+            o.reset_heading()
         else:
             raise CalibrationError("unknown_step")
         data = dict(self.entry.data)
-        data[CALIBRATION_KEY] = {"mount": [round(c, 6) for c in o.mount], "logo": o.logo}
+        data[CALIBRATION_KEY] = {"mount": [round(c, 6) for c in o.mount]}
         self.hass.config_entries.async_update_entry(self.entry, data=data)
         self._notify()
 

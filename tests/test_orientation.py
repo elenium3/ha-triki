@@ -149,47 +149,25 @@ def test_calibration_refuses_motion_and_tilt() -> None:
     run(o, sample(ay=math.sin(math.radians(40)), az=math.cos(math.radians(40))), 2.0)
     with pytest.raises(CalibrationError, match="not_flat"):
         o.calibrate_flat()
-    with pytest.raises(CalibrationError, match="not_tilted"):
-        _flat_then_edge(o, 0.0)
 
 
-def _flat_then_edge(o: Orientation, deg: float) -> None:
-    o.reset()
-    run(o, sample(), 2.0)
-    o.calibrate_flat()
-    a = math.radians(deg)
-    o.reset()
-    run(o, sample(ax=math.sin(a), az=math.cos(a)), 2.0)
-    o.calibrate_edge()
-
-
-@pytest.mark.parametrize(("lift", "expected"), [("+x", 0.0), ("-y", -90.0), ("+y", 90.0)])
-def test_edge_calibration_finds_the_lifted_side(lift: str, expected: float) -> None:
-    """Lifting the +x edge leans gravity towards -x; the logo angle is +x (0 deg)."""
-    o = Orientation()
-    run(o, sample(), 2.0)
-    o.calibrate_flat()
-    a = math.radians(25)
-    g = {"+x": (-math.sin(a), 0.0), "-y": (0.0, math.sin(a)), "+y": (0.0, -math.sin(a))}[lift]
-    o.reset()
-    run(o, sample(ax=g[0], ay=g[1], az=math.cos(a)), 2.0)
-    o.calibrate_edge()
-    assert o.logo is not None
-    assert math.degrees(o.logo) == pytest.approx(expected, abs=1)
-
-
-def test_heading_reset_points_the_logo_away() -> None:
-    """After the reset the logo's edge points to world +y, whatever the yaw was."""
-    from custom_components.triki.orientation import quat_rotate
+@pytest.mark.parametrize("az", [1.0, -1.0])
+def test_heading_reset_points_the_front_to_minus_y(az: float) -> None:
+    """After the reset the front (the dot above the Z, cap -y) lies along world -y."""
+    from custom_components.triki.orientation import FRONT, quat_rotate
 
     o = Orientation()
-    o.logo = 0.0  # the marked edge is the cap's +x
-    t = run(o, sample(), 1.0)
-    run(o, sample(gz=50.0), 1.0, t0=t)  # turn ~50 degrees
+    t = run(o, sample(az=az), 1.0)
+    t = run(o, sample(gz=50.0 * az, az=az), 1.0, t0=t)  # turn ~50 degrees on the table
+    run(o, sample(az=az), 1.0, t0=t)  # and let go
+    o.calibrate_flat()
     o.reset_heading()
-    wx, wy, _ = quat_rotate(o.quaternion, (1.0, 0.0, 0.0))
+    wx, wy, wz = quat_rotate(o.quaternion, FRONT)
     assert wx == pytest.approx(0.0, abs=0.02)
-    assert wy == pytest.approx(1.0, abs=0.02)
+    assert wy == pytest.approx(-1.0, abs=0.02)
+    roll, pitch, _ = o.euler
+    assert abs(pitch) < 1
+    assert abs(abs(roll) - (0 if az > 0 else 180)) < 1
 
 
 def test_replayed_full_turns_read_one_revolution() -> None:

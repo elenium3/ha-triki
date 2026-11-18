@@ -28,14 +28,12 @@ and one per token, each with a dot that is green while the token streams. Auto
 shows whichever token wakes up; a token's tab pins that one. The choice is kept
 per browser. With `device_id` set the card shows that token only and no tabs.
 
-**Calibration.** Press **Calibrate** with the token awake and follow three steps:
-lay it flat with the metal side (the grey crown with the black sign) up, so it
-reads level on that table; lift the edge the arrow points at in the picture of
-the sign (the crown is crimped on at any angle, so the sign's angle is
-measured); put it back metal side up with that edge pointing away from you
-(heading 0).
-The result is kept per token in its config entry. `triki/calibrate` with
-`step: clear` forgets it.
+**Calibration.** The front of the token is the dot above the Żabka Z on the
+PCB (sensor -y). Lay the token flat on the table, either side up, front away
+from you, and press **Calibrate**. That levels it on this table (the cap then
+shows edge-on, the camera is at table height) and zeroes the heading with the
+front away from the viewer. The result is kept per token in its config entry;
+`triki/calibrate` with `step: clear` forgets it.
 
 **Models.** `model: cap` (the default) is a procedural model built from calipered
 dimensions, in the sensor frame; its resin glows while the LED is on and sinks

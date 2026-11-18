@@ -57,7 +57,6 @@ def status(dev: TrikiDevice) -> dict[str, Any]:
         "unresponsive": dev.unresponsive,
         "waiting_for_sleep": dev.waiting_for_sleep,
         "calibrated": dev.calibrated,
-        "logo_angle": dev.logo_angle,
         "battery": dev.battery,
         "rssi": dev.rssi,
         "rate": dev.stream_rate if dev.connected else None,
@@ -145,7 +144,7 @@ def ws_reset_heading(
 _CALIBRATE_SCHEMA: dict[Any, Any] = {
     vol.Required("type"): f"{DOMAIN}/calibrate",
     vol.Optional("device_id"): str,
-    vol.Required("step"): vol.In(["flat", "edge", "clear"]),
+    vol.Required("step"): vol.In(["flat", "clear"]),
 }
 
 
@@ -154,7 +153,7 @@ _CALIBRATE_SCHEMA: dict[Any, Any] = {
 def ws_calibrate(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
-    """flat: lying still; edge: the logo's marked edge lifted; clear: forget both."""
+    """flat: lying still on the table (levels it, zeroes the heading); clear: forget."""
     dev = _find(hass, msg.get("device_id"))
     if dev is None:
         connection.send_error(msg["id"], "not_found", "No such Triki token")
@@ -164,6 +163,4 @@ def ws_calibrate(
     except CalibrationError as err:
         connection.send_error(msg["id"], str(err), f"Calibration step not possible: {err}")
         return
-    if msg["step"] == "edge":
-        dev.reset_heading()
-    connection.send_result(msg["id"], {"logo_angle": dev.logo_angle})
+    connection.send_result(msg["id"])

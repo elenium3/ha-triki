@@ -11,7 +11,7 @@
 // Textures are the owner's photos: the metal face with the logo taken from the photo as a
 // mask, and the PCB under the resin as photographed.
 //
-// Returns a promise of { group, setLed(on), setPressed(on), setLogoAngle(rad) }.
+// Returns a promise of { group, setLed(on), setPressed(on) }.
 
 const FLUTES = 21;
 const H = 6.8; // crown face at z = 0, rim at z = H
@@ -76,6 +76,9 @@ function shellGeometry(T) {
 // +y towards its foot), so the photo's top is sensor -y.
 export const RESIN_PHOTO_UP = -Math.PI / 2;
 
+// Turn of the metal logo about the cap axis, radians, against the PCB photo.
+export const LOGO_ANGLE = 0;
+
 function loadTexture(T, url) {
   return new Promise((resolve, reject) => {
     new T.TextureLoader().load(url, (t) => {
@@ -99,11 +102,13 @@ export async function buildCap(T, urls) {
   inner.add(new T.Mesh(shellGeometry(T), metal));
 
   // the metal face: photographed from outside; after the half turn about x the
-  // photo's top points to -y, and the logo group turns it to the measured angle
+  // photo's top points to -y. The crown is crimped on at any angle, so the logo's
+  // angle against the PCB differs from cap to cap; LOGO_ANGLE is the owner's cap.
   const faceMat = new T.MeshStandardMaterial({ map: metalMap, metalness: 0.9, roughness: 0.36 });
   const face = new T.Mesh(new T.CircleGeometry(R_FACE + 0.02, 96), faceMat);
   face.rotation.x = Math.PI; // faces -z
   const logo = new T.Group();
+  logo.rotation.z = LOGO_ANGLE;
   logo.add(face);
   inner.add(logo);
 
@@ -138,10 +143,6 @@ export async function buildCap(T, urls) {
     },
     setPressed(on) {
       resin.position.z = on ? -0.45 : 0;
-    },
-    // the logo's marked edge (the photo's top) at this angle in the cap frame
-    setLogoAngle(rad) {
-      logo.rotation.z = rad == null ? 0 : rad + Math.PI / 2;
     },
   };
 }

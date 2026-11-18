@@ -126,7 +126,6 @@ async def test_calibrate_flat_is_stored(hass: HomeAssistant, setup, hass_ws_clie
     assert msg["success"], msg
     assert dev.calibrated
     stored = setup.data["calibration"]
-    assert stored["logo"] is None
     assert abs(stored["mount"][2]) > 0.03  # a rotation about y
 
     await ws.send_json({"id": 3, "type": "triki/calibrate", "step": "clear"})
