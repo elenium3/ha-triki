@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import time
 from collections import deque
 from collections.abc import Callable, Coroutine
@@ -315,7 +316,11 @@ class TrikiDevice:
         if not self.connected or not source:
             return None
         scanner = bluetooth.async_scanner_by_source(self.hass, source)
-        return getattr(scanner, "name", None) or source
+        name = getattr(scanner, "name", None)
+        if not name:
+            return None  # an address alone says nothing to a person, and it is private
+        # HA names scanners "hm-ble-esp32 (D0:EF:76:33:5A:0E)": keep the name only
+        return re.sub(r"\s*\((?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\)\s*$", "", name) or None
 
     # ------------------------------------------------------------ guided check
     @property

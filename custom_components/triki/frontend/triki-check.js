@@ -45,6 +45,10 @@ export function buildSteps(options = {}) {
 
 const opposite = { cap_up: "pcb_up", pcb_up: "cap_up" };
 
+// a scanner's name without the " (D0:EF:76:33:5A:0E)" HA appends: the report is shared
+export const stripAddress = (name) =>
+  name ? name.replace(/\s*\((?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}\)\s*$/i, "") || null : null;
+
 function rotate(q, v) {
   // q = [w, x, y, z] applied to vector v
   const [w, x, y, z] = q;
@@ -386,7 +390,7 @@ export class CheckRun {
     const loss = Math.max(0, 1 - got / (rate * ODR_FACTOR));
     const noise = Math.sqrt(st.sq / st.n);
     const values = { rate: +got.toFixed(1), asked: rate, loss_pct: Math.round(loss * 100),
-      noise_dps: +noise.toFixed(1), via: this.status?.via || null, rssi: this.status?.rssi ?? null };
+      noise_dps: +noise.toFixed(1), via: stripAddress(this.status?.via), rssi: this.status?.rssi ?? null };
     if (loss > 0.3) return { status: "fail", reason: "loss", values };
     if (loss > 0.1 || noise > 3) return { status: "warn", reason: loss > 0.1 ? "loss" : "noise", values };
     return { status: "pass", values };

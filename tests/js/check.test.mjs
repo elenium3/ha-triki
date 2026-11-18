@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { CheckRun } from "../../custom_components/triki/frontend/triki-check.js";
+import { CheckRun, stripAddress } from "../../custom_components/triki/frontend/triki-check.js";
 
 const LIVE = { connected: true, streaming: true, rate: 52, face: "cap_up", via: "hm-ble-esp32", rssi: -60 };
 const OPTS = { knob: true, knob_step: 30, invert_rotation: false, motion_gestures: true, multi_press: true, shake: true };
@@ -336,4 +336,21 @@ test("a gesture nobody asked for is reported as a false alarm", () => {
   run.done();
   assert.equal(run.results.turn_cw.status, "warn");
   assert.match(run.report(), /turn_cw: warn \(extra\).*extra=shake×1/);
+});
+
+test("the receiver's address never reaches the report", () => {
+  assert.equal(stripAddress("hm-ble-esp32 (D0:EF:76:33:5A:0E)"), "hm-ble-esp32");
+  assert.equal(stripAddress("xiao-c5"), "xiao-c5");
+  assert.equal(stripAddress(null), null);
+  let t = 0;
+  const run = new CheckRun({ options: OPTS, now: () => t });
+  run.feedStatus({ ...LIVE, via: "hm-ble-esp32 (D0:EF:76:33:5A:0E)", options: OPTS });
+  run.start();
+  let frames = 0;
+  for (let i = 0; i <= 310; i++) {
+    run.feedMotion({ quaternion: FLAT_Q, euler: [0, 0, 0], gyro: [0, 0, 0], accel: [0, 0, -1], frames: Math.round(frames), rate: 52, ts: t / 1000 });
+    t += 1000 / 30; frames += 53 / 30; run.tick();
+  }
+  assert.equal(run.results.rest.values.via, "hm-ble-esp32");
+  assert.doesNotMatch(run.report(), /[0-9A-F]{2}(:[0-9A-F]{2}){5}/i);
 });

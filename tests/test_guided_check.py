@@ -138,3 +138,17 @@ async def test_status_tells_the_card_what_to_expect(
         "shake": False,
     }
     assert "face" in status
+
+
+async def test_link_source_name_drops_the_address(hass: HomeAssistant, setup) -> None:
+    dev = setup.runtime_data
+    await connect(hass, setup)
+    dev.stats.last_source = "D0:EF:76:33:5A:0E"
+
+    class Scanner:
+        name = "hm-ble-esp32 (D0:EF:76:33:5A:0E)"
+
+    with patch.object(device_mod.bluetooth, "async_scanner_by_source", return_value=Scanner()):
+        assert dev.link_source_name == "hm-ble-esp32"
+    with patch.object(device_mod.bluetooth, "async_scanner_by_source", return_value=None):
+        assert dev.link_source_name is None  # never the bare address
