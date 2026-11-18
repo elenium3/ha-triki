@@ -58,6 +58,7 @@ from .const import (
 )
 from .gestures import GestureDetector
 from .models import TrikiOptions
+from .orientation import Orientation
 from .protocol import (
     BATTERY_LEVEL_UUID,
     CTRL_UUID,
@@ -129,6 +130,8 @@ _BATTERY_CHECK_S = 60.0  # how often to look for an idle moment once a refresh i
 # cell: nothing until the cell is pulled) or was carried out of range.
 _SILENT_AFTER_DROP_S = 60.0
 _BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before pausing
+# Live motion for the card: at most this often, and only while someone listens.
+LIVE_INTERVAL_S = 1 / 30
 
 
 @dataclass(slots=True)
@@ -223,6 +226,11 @@ class TrikiDevice:
 
         self._state_listeners: list[Callable[[], None]] = []
         self._event_listeners: list[Callable[[str, dict[str, Any]], None]] = []
+        # live motion (the Lovelace card): called at most every LIVE_INTERVAL_S
+        self._motion_listeners: list[Callable[[dict[str, Any]], None]] = []
+        self._orientation = Orientation()
+        self._last_sample: Sample | None = None
+        self._last_live_pub = 0.0
 
         # public state
         self.connected = False
@@ -267,6 +275,37 @@ class TrikiDevice:
     def async_add_event_listener(self, cb: Callable[[str, dict[str, Any]], None]) -> CALLBACK_TYPE:
         self._event_listeners.append(cb)
         return lambda: self._event_listeners.remove(cb)
+
+    @callback
+    def async_add_motion_listener(self, cb: Callable[[dict[str, Any]], None]) -> CALLBACK_TYPE:
+        """Live motion snapshots (see :meth:`motion_snapshot`) while frames arrive."""
+        self._motion_listeners.append(cb)
+        return lambda: self._motion_listeners.remove(cb)
+
+    def motion_snapshot(self) -> dict[str, Any] | None:
+        """Pose and the last frame, for the live card; None before any frame."""
+        s = self._last_sample
+        if s is None or not self._orientation.ready:
+            return None
+        bias = self._detector.gyro_bias or (0.0, 0.0, 0.0)
+        roll, pitch, yaw = self._orientation.euler
+        return {
+            "quaternion": [round(c, 5) for c in self._orientation.quaternion],
+            "euler": [round(roll, 1), round(pitch, 1), round(yaw, 1)],
+            "gyro": [round(s.gx - bias[0], 1), round(s.gy - bias[1], 1), round(s.gz - bias[2], 1)],
+            "accel": [round(s.ax, 3), round(s.ay, 3), round(s.az, 3)],
+            "button": s.button,
+        }
+
+    @property
+    def streaming(self) -> bool:
+        """Frames are arriving on the current link."""
+        return self._streaming
+
+    @callback
+    def reset_heading(self) -> None:
+        """Make the token's current heading yaw 0 (it drifts: there is no compass)."""
+        self._orientation.reset_heading()
 
     @callback
     def _notify(self) -> None:
@@ -748,6 +787,10 @@ class TrikiDevice:
         self._battery_event.set()  # do not keep a stream pause waiting on a dead link
         was_connected = self.connected
         self.connected = False
+        # the next link starts from the accelerometer again: the token may have
+        # been moved while asleep, so the old pose and heading mean nothing
+        self._orientation.reset()
+        self._last_sample = None
         for attr in ("_unsub_idle", "_unsub_battery", "_unsub_watchdog"):
             self._cancel_timer(attr)
         for ev in self._detector.flush():
@@ -839,7 +882,10 @@ class TrikiDevice:
             sample = Sample.from_frame(frame)
             # frames of one notification arrived together: spread them one
             # sample period apart, ending at the arrival time
-            for ev in self._detector.update(sample, now - (len(frames) - 1 - i) * dt):
+            t_frame = now - (len(frames) - 1 - i) * dt
+            self._orientation.update(sample, t_frame, self._detector.gyro_bias)
+            self._last_sample = sample
+            for ev in self._detector.update(sample, t_frame):
                 active = True
                 self._emit(ev.type, ev.data)
             if sample.button != self.button:
@@ -871,6 +917,12 @@ class TrikiDevice:
             self._last_tilt_pub = now
         if changed:
             self._notify()
+        if self._motion_listeners and now - self._last_live_pub >= LIVE_INTERVAL_S:
+            self._last_live_pub = now
+            snap = self.motion_snapshot()
+            if snap is not None:
+                for cb in list(self._motion_listeners):
+                    cb(snap)
 
     # ------------------------------------------------------------ timers
     @callback

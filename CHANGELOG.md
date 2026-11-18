@@ -23,6 +23,13 @@ All notable changes to this project are documented here. The format follows
   or `edge`), set once it has lain still for 0.3 s and kept while it sleeps.
 - `speed` (°/s) in `rotate_cw` / `rotate_ccw` events, so a fast turn can do
   more than a slow one.
+- Live 3D card, `custom:triki-card`, served and registered by the
+  integration: a 3D model of the token that follows it, roll, pitch and yaw,
+  gyro and accelerometer readings with a 10 s graph, button, battery, signal,
+  rate and gesture labels. Orientation is computed in the integration
+  (Madgwick filter); motion goes over a websocket subscription
+  (`triki/subscribe`, `triki/reset_heading`, `triki/devices`), not into entity
+  states. The model is Flopsstuff's (MIT). See docs/live-card.md.
 - Diagnostics: `measured_rate` (frames per second actually received) and
   `gyro_bias`.
 

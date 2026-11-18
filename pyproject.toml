@@ -19,7 +19,7 @@ ignore = [
 "tests/*" = ["PLR0917", "N802", "PLC0415", "RUF059", "S101"]  # local imports, unused unpacks, asserts
 
 [tool.codespell]
-skip = "./.venv,./.git,./captures,*.jsonl,*.svg,*.png,*.jpg"
+skip = "./.venv,./.git,./captures,*.jsonl,*.svg,*.png,*.jpg,*.glb,triki-three.js"
 # hass: Home Assistant's own name for its core object; the rest are Polish words
 ignore-words-list = "hass,ser,nd,te,ans,retuned"
 

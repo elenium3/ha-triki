@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from bleak_retry_connector import close_stale_connections_by_address
 from homeassistant.components import bluetooth
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_integration
 
 from .const import (
     CONF_IDLE_TIMEOUT,
@@ -24,6 +31,7 @@ from .const import (
 )
 from .device import TrikiDevice
 from .models import TrikiOptions
+from .websocket import async_register as async_register_websocket
 
 PLATFORMS = [
     Platform.BINARY_SENSOR,
@@ -33,6 +41,24 @@ PLATFORMS = [
 ]
 
 type TrikiConfigEntry = ConfigEntry[TrikiDevice]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+# The live card (custom:triki-card) and its 3D model, served by the integration.
+FRONTEND_URL = f"/{DOMAIN}_frontend"
+FRONTEND_DIR = Path(__file__).parent / "frontend"
+
+
+async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
+    async_register_websocket(hass)
+    integration = await async_get_integration(hass, DOMAIN)
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(FRONTEND_URL, str(FRONTEND_DIR), cache_headers=True)]
+    )
+    if "frontend" in hass.config.components:
+        # the version in the URL makes browsers fetch the card again after an update
+        add_extra_js_url(hass, f"{FRONTEND_URL}/triki-card.js?v={integration.version}")
+    return True
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> bool:

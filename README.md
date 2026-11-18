@@ -133,6 +133,12 @@ automation:
 Every gesture is also fired on the bus as `triki_event` with `device_id`,
 `address` and `type`.
 
+## Live 3D card
+
+The integration also ships a dashboard card, `custom:triki-card`: a 3D model of
+the token that moves with it, with live gyro and accelerometer readings. Add
+**Triki live 3D** from the card picker; see [Live 3D card](docs/live-card.md).
+
 ## Documentation
 
 | Page | |
@@ -141,6 +147,7 @@ Every gesture is also fired on the bus as `triki_event` with `device_id`,
 | [Installation](docs/installation.md) | HACS, manual, adding the token, first check |
 | [Configuration](docs/configuration.md) | every option, idle and sleep behaviour |
 | [Events and automations](docs/events-and-automations.md) | event reference, gesture status, worked examples |
+| [Live 3D card](docs/live-card.md) | the 3D card, orientation, websocket API |
 | [Bluetooth proxy for beginners](docs/bluetooth-proxy.md) | which ESP32, how to flash, the YAML, how to check |
 | [Radio and placement](docs/radio-and-placement.md) | measured link behaviour versus signal |
 | [Troubleshooting](docs/troubleshooting.md) | symptoms, causes, what to attach to a bug report |
@@ -171,7 +178,7 @@ Every gesture is also fired on the bus as `triki_event` with `device_id`,
 
 The protocol is community work. This integration stands on
 [Flopsstuff/triki](https://github.com/Flopsstuff/triki) (Flopsstuff, MIT:
-protocol, IMU, hardware, photos),
+protocol, IMU, hardware, photos, the 3D model used by the live card),
 [Maku-hub/TrikiScope](https://github.com/Maku-hub/TrikiScope) and
 [TrikiEmu](https://github.com/Maku-hub/TrikiEmu) (Mateusz "Maku" Mączewski,
 MIT: button flag, app snoop analysis),
@@ -182,7 +189,8 @@ MIT: button flag, app snoop analysis),
 [koksny/TRIKI-Control](https://github.com/koksny/TRIKI-Control) (Wojciech
 Górny, MIT) and
 [orionas97/triki_unofficial](https://github.com/orionas97/triki_unofficial)
-(MIT, another Home Assistant integration). Built on Home Assistant's
+(MIT, another Home Assistant integration). The live card renders with
+[three.js](https://threejs.org/) (MIT). Built on Home Assistant's
 [Bluetooth stack](https://www.home-assistant.io/integrations/bluetooth/),
 [bleak](https://github.com/hbldh/bleak) and
 [bleak-retry-connector](https://github.com/Bluetooth-Devices/bleak-retry-connector).
