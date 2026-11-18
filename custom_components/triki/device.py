@@ -130,6 +130,7 @@ _BATTERY_CHECK_S = 60.0  # how often to look for an idle moment once a refresh i
 # cell: nothing until the cell is pulled) or was carried out of range.
 _SILENT_AFTER_DROP_S = 60.0
 CALIBRATION_KEY = "calibration"
+_CHECK_TTL_S = 30.0  # a guided check ends unless its card renews it this often
 _BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before pausing
 # Live motion for the card: at most this often, and only while someone listens.
 LIVE_INTERVAL_S = 1 / 30
@@ -236,7 +237,13 @@ class TrikiDevice:
         self._streaming = False
 
         self._state_listeners: list[Callable[[], None]] = []
-        self._event_listeners: list[Callable[[str, dict[str, Any]], None]] = []
+        # (callback, also while a guided check runs)
+        self._event_listeners: list[tuple[Callable[[str, dict[str, Any]], None], bool]] = []
+        # a guided check from the card: gestures reach only that card, the stream
+        # stays at full rate and the link is not dropped as idle
+        self._check_owner: str | None = None
+        self._check_until = 0.0
+        self._unsub_check: CALLBACK_TYPE | None = None
         # live motion (the Lovelace card): called at most every LIVE_INTERVAL_S
         self._motion_listeners: list[Callable[[dict[str, Any]], None]] = []
         self._orientation = Orientation()
@@ -288,9 +295,84 @@ class TrikiDevice:
         return lambda: self._state_listeners.remove(cb)
 
     @callback
-    def async_add_event_listener(self, cb: Callable[[str, dict[str, Any]], None]) -> CALLBACK_TYPE:
-        self._event_listeners.append(cb)
-        return lambda: self._event_listeners.remove(cb)
+    def async_add_event_listener(
+        self, cb: Callable[[str, dict[str, Any]], None], *, during_check: bool = False
+    ) -> CALLBACK_TYPE:
+        """Gestures as they are recognised.
+
+        While a guided check runs (see :meth:`start_check`) only listeners added
+        with ``during_check`` hear them, and nothing goes on the bus: turning the
+        token for the check must not dim the lights.
+        """
+        item = (cb, during_check)
+        self._event_listeners.append(item)
+        return lambda: self._event_listeners.remove(item)
+
+    @property
+    def link_source_name(self) -> str | None:
+        """The name of the scanner (adapter or proxy) the current link went through."""
+        source = self.stats.last_source
+        if not self.connected or not source:
+            return None
+        scanner = bluetooth.async_scanner_by_source(self.hass, source)
+        return getattr(scanner, "name", None) or source
+
+    # ------------------------------------------------------------ guided check
+    @property
+    def checking(self) -> bool:
+        return self._check_owner is not None and time.monotonic() < self._check_until
+
+    @property
+    def check_owner(self) -> str | None:
+        return self._check_owner if self.checking else None
+
+    @callback
+    def start_check(self, owner: str) -> bool:
+        """Start or renew a guided check for ``owner`` (one card session).
+
+        Returns False when another session holds a check that has not expired.
+        A check ends by itself ``_CHECK_TTL_S`` after the last renewal, so a
+        closed browser tab cannot leave the token silent.
+        """
+        if self.checking and self._check_owner != owner:
+            return False
+        started = not self.checking
+        self._check_owner = owner
+        self._check_until = time.monotonic() + _CHECK_TTL_S
+        self._cancel_timer("_unsub_check")
+        self._unsub_check = async_call_later(self.hass, _CHECK_TTL_S, self._check_expired)
+        if started:
+            _LOGGER.debug("%s: guided check started", self.name)
+            self._last_activity = time.monotonic()
+            if (
+                self.connected
+                and self.stream_rate != self.options.rate
+                and not self._rate_write_pending
+            ):
+                self._create_task(self._async_set_rate(self.options.rate), "checkrate")
+            self._notify()
+        return True
+
+    @callback
+    def stop_check(self, owner: str) -> None:
+        if self._check_owner != owner:
+            return
+        self._end_check()
+
+    @callback
+    def _check_expired(self, _now: Any) -> None:
+        self._unsub_check = None
+        if self._check_owner is not None and time.monotonic() >= self._check_until:
+            _LOGGER.debug("%s: guided check expired", self.name)
+            self._end_check()
+
+    @callback
+    def _end_check(self) -> None:
+        self._cancel_timer("_unsub_check")
+        self._check_owner = None
+        self._check_until = 0.0
+        self._last_activity = time.monotonic()  # idle timers count from the end of the check
+        self._notify()
 
     @callback
     def async_add_motion_listener(self, cb: Callable[[dict[str, Any]], None]) -> CALLBACK_TYPE:
@@ -406,8 +488,12 @@ class TrikiDevice:
         _LOGGER.debug("%s: event %s %s", self.name, kind, data)
         if self._capture:
             self._capture.write({"event": kind, "data": data})
-        for cb in list(self._event_listeners):
-            cb(kind, data)
+        checking = self.checking
+        for cb, during_check in list(self._event_listeners):
+            if during_check or not checking:
+                cb(kind, data)
+        if checking:
+            return
         self.hass.bus.async_fire(
             BUS_EVENT,
             {
@@ -442,6 +528,7 @@ class TrikiDevice:
 
     async def async_stop(self) -> None:
         self._stopping = True
+        self._cancel_timer("_unsub_check")
         self._cancel_timer("_unsub_silence")
         for attr in ("_unsub_adv", "_unsub_poll"):
             unsub = getattr(self, attr)
@@ -1075,7 +1162,7 @@ class TrikiDevice:
         self._cancel_timer("_unsub_idle")
         if not self.connected:
             return
-        idle = 0.0 if self.button else time.monotonic() - self._last_activity
+        idle = 0.0 if self.button or self.checking else time.monotonic() - self._last_activity
         sleep_timeout, idle_timeout = self.sleep_timeout, self.options.idle_timeout
         if 0 < sleep_timeout <= idle:
             _LOGGER.debug("%s: idle for %ss, disconnecting", self.name, sleep_timeout)
@@ -1259,6 +1346,7 @@ class TrikiDevice:
         if (
             self._battery_refresh_due()
             and not self.button
+            and not self.checking
             and idle >= _BATTERY_IDLE_FOR_REFRESH_S
             and not self._rate_write_pending
         ):

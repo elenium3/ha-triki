@@ -31,6 +31,7 @@ def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_subscribe)
     websocket_api.async_register_command(hass, ws_reset_heading)
     websocket_api.async_register_command(hass, ws_calibrate)
+    websocket_api.async_register_command(hass, ws_check)
 
 
 def _devices(hass: HomeAssistant) -> list[TrikiDevice]:
@@ -65,6 +66,15 @@ def status(dev: TrikiDevice) -> dict[str, Any]:
         "button": dev.button,
         "led": dev.led_on,
         "firmware": dev.firmware,
+        "face": dev.face,
+        "via": dev.link_source_name,
+        "checking": dev.checking,
+        "options": {
+            "knob": dev.options.knob,
+            "knob_step": dev.options.knob_step,
+            "invert_rotation": dev.options.invert_rotation,
+            "motion_gestures": dev.options.motion_gestures,
+        },
     }
 
 
@@ -111,7 +121,7 @@ def ws_subscribe(
     unsubs = [
         dev.async_add_listener(on_state),
         dev.async_add_motion_listener(on_motion),
-        dev.async_add_event_listener(on_event),
+        dev.async_add_event_listener(on_event, during_check=True),
     ]
 
     @callback
@@ -150,6 +160,7 @@ _CALIBRATE_SCHEMA: dict[Any, Any] = {
 }
 
 
+@websocket_api.require_admin
 @websocket_api.websocket_command(_CALIBRATE_SCHEMA)
 @callback
 def ws_calibrate(
@@ -165,5 +176,34 @@ def ws_calibrate(
         dev.calibrate(msg["step"], msg.get("angle"))
     except CalibrationError as err:
         connection.send_error(msg["id"], str(err), f"Calibration step not possible: {err}")
+        return
+    connection.send_result(msg["id"])
+
+
+_CHECK_SCHEMA: dict[Any, Any] = {
+    vol.Required("type"): f"{DOMAIN}/check",
+    vol.Optional("device_id"): str,
+    vol.Required("action"): vol.In(["start", "stop"]),
+    vol.Required("session"): vol.All(str, vol.Length(min=8, max=64)),
+}
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(_CHECK_SCHEMA)
+@callback
+def ws_check(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """The card's guided check. ``start`` begins or renews it (the card renews
+    every few seconds; it lapses on its own otherwise), ``stop`` ends it. While it
+    runs, gestures reach the card only, not automations."""
+    dev = _find(hass, msg.get("device_id"))
+    if dev is None:
+        connection.send_error(msg["id"], "not_found", "No such Triki token")
+        return
+    if msg["action"] == "stop":
+        dev.stop_check(msg["session"])
+    elif not dev.start_check(msg["session"]):
+        connection.send_error(msg["id"], "busy", "Another check of this token is running")
         return
     connection.send_result(msg["id"])
