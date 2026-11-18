@@ -12,7 +12,7 @@ from .helpers import frame
 
 
 async def test_frontend_files_are_shipped() -> None:
-    for name in ("triki-card.js", "triki-cap.js", "triki-three.js", "triki.glb"):
+    for name in triki.FRONTEND_FILES:
         assert (triki.FRONTEND_DIR / name).is_file()
 
 
@@ -108,3 +108,27 @@ async def test_status_reports_the_wait_for_sleep(hass: HomeAssistant, setup) -> 
     assert status(dev)["waiting_for_sleep"] is False
     dev._await_sleep = True
     assert status(dev)["waiting_for_sleep"] is True
+
+
+async def test_calibrate_flat_is_stored(hass: HomeAssistant, setup, hass_ws_client) -> None:
+    dev = setup.runtime_data
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "triki/calibrate", "step": "flat"})
+    msg = await ws.receive_json()
+    assert not msg["success"]
+    assert msg["error"]["code"] == "asleep"
+
+    _client, notify = await connect(hass, setup)
+    for i in range(60):
+        notify(None, bytearray(frame(ax=-0.087 + i * 1e-5, az=0.996)))  # 5 degrees off
+    await ws.send_json({"id": 2, "type": "triki/calibrate", "step": "flat"})
+    msg = await ws.receive_json()
+    assert msg["success"], msg
+    assert dev.calibrated
+    stored = setup.data["calibration"]
+    assert stored["logo"] is None
+    assert abs(stored["mount"][2]) > 0.03  # a rotation about y
+
+    await ws.send_json({"id": 3, "type": "triki/calibrate", "step": "clear"})
+    assert (await ws.receive_json())["success"]
+    assert not dev.calibrated

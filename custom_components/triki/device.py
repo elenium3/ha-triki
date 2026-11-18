@@ -58,7 +58,7 @@ from .const import (
 )
 from .gestures import GestureDetector
 from .models import TrikiOptions
-from .orientation import Orientation
+from .orientation import CalibrationError, Orientation
 from .protocol import (
     BATTERY_LEVEL_UUID,
     CTRL_UUID,
@@ -129,6 +129,7 @@ _BATTERY_CHECK_S = 60.0  # how often to look for an idle moment once a refresh i
 # minutes. One that stays silent this long has locked up (seen with a weak
 # cell: nothing until the cell is pulled) or was carried out of range.
 _SILENT_AFTER_DROP_S = 60.0
+CALIBRATION_KEY = "calibration"
 _BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before pausing
 # Live motion for the card: at most this often, and only while someone listens.
 LIVE_INTERVAL_S = 1 / 30
@@ -229,6 +230,7 @@ class TrikiDevice:
         # live motion (the Lovelace card): called at most every LIVE_INTERVAL_S
         self._motion_listeners: list[Callable[[dict[str, Any]], None]] = []
         self._orientation = Orientation()
+        self._load_calibration()
         self._last_sample: Sample | None = None
         self._last_live_pub = 0.0
 
@@ -296,6 +298,52 @@ class TrikiDevice:
             "accel": [round(s.ax, 3), round(s.ay, 3), round(s.az, 3)],
             "button": s.button,
         }
+
+    # ------------------------------------------------------------ calibration
+    def _load_calibration(self) -> None:
+        cal = self.entry.data.get(CALIBRATION_KEY) or {}
+        mount = cal.get("mount")
+        if isinstance(mount, list) and len(mount) == 4:
+            self._orientation.mount = (
+                float(mount[0]),
+                float(mount[1]),
+                float(mount[2]),
+                float(mount[3]),
+            )
+        logo = cal.get("logo")
+        self._orientation.logo = float(logo) if isinstance(logo, (int, float)) else None
+
+    @property
+    def logo_angle(self) -> float | None:
+        """Radians, in the cap frame: which way the metal logo's marked edge lies."""
+        return self._orientation.logo
+
+    @property
+    def calibrated(self) -> bool:
+        return self._orientation.mount != (1.0, 0.0, 0.0, 0.0)
+
+    @callback
+    def calibrate(self, step: str) -> None:
+        """One step of the card's calibration: ``flat``, ``edge`` or ``clear``.
+
+        Raises :class:`CalibrationError` when the token is not in the pose the
+        step needs. The result is kept in the config entry's data.
+        """
+        o = self._orientation
+        if step == "clear":
+            o.mount, o.logo = (1.0, 0.0, 0.0, 0.0), None
+        elif not self.streaming:
+            raise CalibrationError("asleep")
+        elif step == "flat":
+            o.calibrate_flat()
+        elif step == "edge":
+            o.calibrate_edge()
+        else:
+            raise CalibrationError("unknown_step")
+        data = dict(self.entry.data)
+        data[CALIBRATION_KEY] = {"mount": [round(c, 6) for c in o.mount], "logo": o.logo}
+        self.hass.config_entries.async_update_entry(self.entry, data=data)
+        self._notify()
 
     @property
     def waiting_for_sleep(self) -> bool:

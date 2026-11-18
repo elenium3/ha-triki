@@ -28,6 +28,13 @@ and one per token, each with a dot that is green while the token streams. Auto
 shows whichever token wakes up; a token's tab pins that one. The choice is kept
 per browser. With `device_id` set the card shows that token only and no tabs.
 
+**Calibration.** Press **Calibrate** with the token awake and follow three steps:
+lay it flat logo up (the token then reads level on that table), lift the edge
+the arrow points at (the logo is crimped on at any angle, so its angle is
+measured), and put it back with the arrow pointing away from you (heading 0).
+The result is kept per token in its config entry. `triki/calibrate` with
+`step: clear` forgets it.
+
 **Models.** `model: cap` (the default) is a procedural model built from calipered
 dimensions, in the sensor frame; its resin glows while the LED is on and sinks
 while the button is held. `model: glb` uses Flopsstuff's textured model.

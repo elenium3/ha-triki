@@ -8,6 +8,17 @@ the gyro's residual offset, so it can be zeroed with :meth:`reset_heading`.
 
 The gyro offset the gesture detector learns at rest is subtracted before the
 update; the filter does not estimate its own.
+
+Calibration (kept per token by the integration):
+
+- ``mount``: the PCB is not exactly parallel to the cap face and a table is not
+  exactly level. Lying flat, the measured gravity is rotated onto the cap's axis,
+  so the token reads level on the table it was calibrated on.
+- ``logo``: the angle, in the cap frame, of the edge the metal-side logo points
+  to. The logo is printed on the crown, which is crimped on at any angle, so it
+  is measured: with one edge lifted, gravity tells which way that edge lies.
+- The heading reset then turns the pose so that this edge points away from the
+  viewer (yaw 0 = "logo upright towards me").
 """
 
 from __future__ import annotations
@@ -27,6 +38,12 @@ MAX_DT_S = 0.1
 # The accelerometer only corrects tilt while it reads about 1 g; during a swing
 # or a tap it measures motion, not gravity.
 ACCEL_TRUST_G = (0.75, 1.25)
+# Calibration needs the token at rest: gravity within this of 1 g, little spin.
+CAL_ACCEL_TOL_G = 0.08
+CAL_GYRO_MAX_DPS = 8.0
+CAL_FLAT_MAX_DEG = 15.0  # "lying flat" must be roughly flat
+CAL_EDGE_MIN_DEG = 8.0  # a lifted edge must tilt the token at least this much
+LP_ALPHA = 0.15  # low-pass on the accelerometer for calibration
 
 type Quat = tuple[float, float, float, float]  # w, x, y, z
 
@@ -56,6 +73,31 @@ def euler_deg(q: Quat) -> tuple[float, float, float]:
     return math.degrees(roll), math.degrees(pitch), math.degrees(yaw)
 
 
+def quat_conj(q: Quat) -> Quat:
+    return (q[0], -q[1], -q[2], -q[3])
+
+
+def quat_rotate(q: Quat, v: tuple[float, float, float]) -> tuple[float, float, float]:
+    _, x, y, z = quat_mul(quat_mul(q, (0.0, *v)), quat_conj(q))
+    return (x, y, z)
+
+
+def quat_between(a: tuple[float, float, float], b: tuple[float, float, float]) -> Quat:
+    """The shortest rotation taking unit vector ``a`` onto unit vector ``b``."""
+    ax, ay, az = a
+    bx, by, bz = b
+    dot = ax * bx + ay * by + az * bz
+    if dot < -0.999999:  # opposite: any axis perpendicular to a
+        axis = (0.0, -az, ay) if abs(ax) < 0.9 else (-az, 0.0, ax)
+        return _normalized((0.0, *axis))
+    cx, cy, cz = ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx
+    return _normalized((1.0 + dot, cx, cy, cz))
+
+
+class CalibrationError(Exception):
+    """The token is not in the pose a calibration step needs."""
+
+
 def _normalized(q: Quat) -> Quat:
     n = math.sqrt(sum(c * c for c in q))
     if n == 0:
@@ -68,6 +110,8 @@ class Orientation:
 
     def __init__(self, beta: float = BETA) -> None:
         self.beta = beta
+        self.mount: Quat = (1.0, 0.0, 0.0, 0.0)  # cap frame -> sensor frame
+        self.logo: float | None = None  # radians, in the cap frame
         self.reset()
 
     def reset(self) -> None:
@@ -77,6 +121,8 @@ class Orientation:
         self._t: float | None = None
         self._started: float | None = None
         self.samples = 0
+        self._acc_lp: tuple[float, float, float] | None = None
+        self._gyro_lp = 0.0
 
     @property
     def ready(self) -> bool:
@@ -84,17 +130,53 @@ class Orientation:
 
     @property
     def quaternion(self) -> Quat:
-        """The pose with the heading reset applied, normalised."""
-        return _normalized(quat_mul(self._heading, self._q))
+        """The pose of the cap (mount applied) with the heading reset, normalised."""
+        return _normalized(quat_mul(quat_mul(self._heading, self._q), self.mount))
 
     @property
     def euler(self) -> tuple[float, float, float]:
         return euler_deg(self.quaternion)
 
     def reset_heading(self) -> None:
-        """Make the current heading yaw 0; tilt is untouched."""
-        _, _, yaw = euler_deg(self._q)
+        """Make the current heading 0; tilt is untouched.
+
+        With a known logo angle, heading 0 means the logo's marked edge points
+        to world +y (away from the viewer); otherwise it is the sensor's yaw.
+        """
+        pose = quat_mul(self._q, self.mount)
+        if self.logo is not None:
+            wx, wy, _ = quat_rotate(pose, (math.cos(self.logo), math.sin(self.logo), 0.0))
+            if math.hypot(wx, wy) > 0.3:  # the edge is not pointing up or down
+                self._heading = quat_about_z(math.pi / 2 - math.atan2(wy, wx))
+                return
+        _, _, yaw = euler_deg(pose)
         self._heading = quat_about_z(-math.radians(yaw))
+
+    def _at_rest(self) -> tuple[float, float, float]:
+        """The low-passed gravity direction (unit), if the token is still."""
+        a = self._acc_lp
+        if a is None:
+            raise CalibrationError("no_data")
+        n = math.sqrt(sum(c * c for c in a))
+        if abs(n - 1.0) > CAL_ACCEL_TOL_G or self._gyro_lp > CAL_GYRO_MAX_DPS:
+            raise CalibrationError("moving")
+        return (a[0] / n, a[1] / n, a[2] / n)
+
+    def calibrate_flat(self) -> None:
+        """Lying flat (either side up): take the measured gravity as the cap's axis."""
+        g = self._at_rest()
+        up = (0.0, 0.0, 1.0 if g[2] >= 0 else -1.0)
+        if math.degrees(math.acos(min(1.0, abs(g[2])))) > CAL_FLAT_MAX_DEG:
+            raise CalibrationError("not_flat")
+        self.mount = quat_between(up, g)
+
+    def calibrate_edge(self) -> None:
+        """One edge lifted: record which way it lies in the cap frame."""
+        gx, gy, _ = quat_rotate(quat_conj(self.mount), self._at_rest())
+        if math.degrees(math.asin(min(1.0, math.hypot(gx, gy)))) < CAL_EDGE_MIN_DEG:
+            raise CalibrationError("not_tilted")
+        # gravity (up) leans away from the lifted edge
+        self.logo = math.atan2(-gy, -gx)
 
     def update(
         self,
@@ -103,6 +185,19 @@ class Orientation:
         gyro_bias: list[float] | tuple[float, float, float] | None = None,
     ) -> None:
         """Fold in one frame taken at monotonic time ``t`` (seconds)."""
+        lp = self._acc_lp
+        self._acc_lp = (
+            (s.ax, s.ay, s.az)
+            if lp is None
+            else (
+                lp[0] + LP_ALPHA * (s.ax - lp[0]),
+                lp[1] + LP_ALPHA * (s.ay - lp[1]),
+                lp[2] + LP_ALPHA * (s.az - lp[2]),
+            )
+        )
+        bias = gyro_bias if gyro_bias is not None else (0.0, 0.0, 0.0)
+        spin = math.sqrt(sum((g - b) ** 2 for g, b in zip((s.gx, s.gy, s.gz), bias, strict=True)))
+        self._gyro_lp += LP_ALPHA * (spin - self._gyro_lp)
         if self._t is None or not 0 < t - self._t <= MAX_DT_S:
             # first frame or a gap: no integration step, just remember the time
             first = self._t is None

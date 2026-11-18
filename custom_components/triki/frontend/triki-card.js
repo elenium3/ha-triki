@@ -24,7 +24,9 @@ const STRINGS = {
     auto: "Auto", asleep: "Asleep", dozing: "Dozing off",
     dozeHint: "Disconnected after idling. Put the cap down: once it has slept (up to ~3 min) a press wakes it again", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
     wake: "Press or shake the cap to wake it", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
-    roll: "Roll", pitch: "Pitch", yaw: "Yaw", reset: "Zero heading", led: "LED",
+    roll: "Roll", pitch: "Pitch", yaw: "Yaw", reset: "Zero heading", led: "LED", calibrate: "Calibrate",
+    cal: { flat: "Lay the cap on the table, logo up, and let go.", edge: "Lift the edge the arrow points at by about 20–30° and hold it.", head: "Put it back down with the arrow pointing away from you.", next: "Done", cancel: "Cancel", saved: "Calibrated",
+      err: { moving: "It is moving: hold still for a second", not_flat: "It is not lying flat", not_tilted: "Lift the edge a little more", asleep: "The cap is asleep: wake it first", no_data: "No data yet: wake the cap" } },
     button: "Button", rate: "Hz", history: "Last 10 s", nodevice: "No Triki token found",
     gestures: {
       single_press: "Press", double_press: "Double press", triple_press: "Triple press",
@@ -36,7 +38,10 @@ const STRINGS = {
     auto: "Авто", asleep: "Спит", dozing: "Засыпает",
     dozeHint: "Отключился по простою. Положи крышку: когда уснёт (до ~3 мин), нажатие снова её разбудит", connected: "Подключён", streaming: "Онлайн", unresponsive: "Не отвечает",
     wake: "Нажми или встряхни крышку, чтобы разбудить", gyro: "Гироскоп, °/с",
-    accel: "Акселерометр, g", roll: "Крен", pitch: "Тангаж", yaw: "Курс", reset: "Обнулить курс",
+    accel: "Акселерометр, g", roll: "Крен", pitch: "Тангаж", yaw: "Курс", calibrate: "Калибровка",
+    cal: { flat: "Положи крышку на стол логотипом вверх и отпусти.", edge: "Приподними край, куда показывает стрелка, градусов на 20–30, и подержи.", head: "Положи обратно так, чтобы стрелка смотрела от тебя.", next: "Готово", cancel: "Отмена", saved: "Откалибровано",
+      err: { moving: "Крышка двигается: подержи секунду неподвижно", not_flat: "Крышка лежит не ровно", not_tilted: "Приподними край чуть сильнее", asleep: "Крышка спит: сначала разбуди её", no_data: "Нет данных: разбуди крышку" } },
+    reset: "Обнулить курс",
     led: "Диод", button: "Кнопка", rate: "Гц", history: "Последние 10 с",
     nodevice: "Трики не найден",
     gestures: {
@@ -51,6 +56,9 @@ const STRINGS = {
     dozeHint: "Rozłączony po bezczynności. Odłóż kapsel: gdy zaśnie (do ~3 min), naciśnięcie znów go obudzi", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
     wake: "Naciśnij lub potrząśnij kapslem, żeby go obudzić", gyro: "Żyroskop, °/s",
     accel: "Akcelerometr, g", roll: "Przechył", pitch: "Pochylenie", yaw: "Kurs",
+    calibrate: "Kalibracja",
+    cal: { flat: "Połóż kapsel na stole logo do góry i puść.", edge: "Unieś brzeg wskazany strzałką o około 20–30° i przytrzymaj.", head: "Odłóż go tak, by strzałka wskazywała od ciebie.", next: "Gotowe", cancel: "Anuluj", saved: "Skalibrowano",
+      err: { moving: "Kapsel się rusza: przytrzymaj chwilę nieruchomo", not_flat: "Kapsel nie leży płasko", not_tilted: "Unieś brzeg trochę wyżej", asleep: "Kapsel śpi: najpierw go obudź", no_data: "Brak danych: obudź kapsel" } },
     reset: "Wyzeruj kurs", led: "Dioda", button: "Przycisk", rate: "Hz", history: "Ostatnie 10 s",
     nodevice: "Nie znaleziono kapsla Triki",
     gestures: {
@@ -141,6 +149,20 @@ const CSS = `
     border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); }
   .actions button:disabled { opacity: .45; cursor: default; }
   .actions button.on { border-color: #66bb6a; color: #66bb6a; }
+  .wizard { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center;
+    justify-content: center; gap: 10px; padding: 16px; text-align: center;
+    background: color-mix(in srgb, var(--card-background-color, #1c1f23) 88%, transparent); }
+  .wizard.show { display: flex; }
+  .wizard p { margin: 0; max-width: 32em; }
+  .wizard .err { color: var(--error-color, #ef5350); min-height: 1.2em; font-size: .9em; }
+  .wizard .logo { position: relative; width: 96px; height: 96px; }
+  .wizard .logo img { width: 96px; height: 96px; border-radius: 50%; }
+  .wizard .logo::before { content: "▲"; position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+    color: var(--primary-color); font-size: 18px; }
+  .wizard .row { display: flex; gap: 8px; }
+  .wizard button { font: inherit; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); }
+  .wizard button.primary { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
   .empty { padding: 24px 16px; color: var(--secondary-text-color); }
 `;
 
@@ -202,10 +224,17 @@ class TrikiCard extends HTMLElement {
           <div class="btn-ind" id="btnInd"><div class="led"></div>${t.button}</div>
           <div class="toast" id="toast"></div>
           <div class="sleep" id="sleepText">${t.wake}</div>
+          <div class="wizard" id="wizard">
+            <div class="logo" id="wizLogo" hidden><img src="${asset("tex_metal.webp")}" alt=""></div>
+            <p id="wizText"></p>
+            <div class="err" id="wizErr"></div>
+            <div class="row"><button id="wizCancel">${t.cal.cancel}</button><button class="primary" id="wizNext">${t.cal.next}</button></div>
+          </div>
         </div>
         ${c.show_values ? `<div class="values"><div><h4>${t.gyro}</h4>${axisRows("g")}</div><div><h4>${t.accel}</h4>${axisRows("a")}</div></div>` : ""}
         ${c.show_history ? `<div class="chart"><small>${t.gyro} · ${t.history}</small><canvas class="hist" id="hist"></canvas></div>` : ""}
         <div class="actions">
+          <button id="cal" disabled>${t.calibrate}</button>
           <button id="reset" disabled>${t.reset}</button>
           <button id="led" disabled>${t.led}</button>
         </div>
@@ -216,6 +245,8 @@ class TrikiCard extends HTMLElement {
       rssi: $("rssi"), rssiChip: $("rssiChip"), batt: $("batt"), battChip: $("battChip"), battIcon: $("battIcon"),
       stage: $("stage"), gl: $("gl"), roll: $("roll"), pitch: $("pitch"), yaw: $("yaw"), btnInd: $("btnInd"),
       toast: $("toast"), tabs: $("tabs"), sleepText: $("sleepText"), hist: $("hist"), reset: $("reset"), led: $("led"),
+      cal: $("cal"), wizard: $("wizard"), wizLogo: $("wizLogo"), wizText: $("wizText"), wizErr: $("wizErr"),
+      wizNext: $("wizNext"), wizCancel: $("wizCancel"),
     };
     for (const p of ["g", "a"]) for (const a of ["x", "y", "z"]) {
       this._el[`${p}${a}`] = $(`${p}${a}`);
@@ -223,6 +254,9 @@ class TrikiCard extends HTMLElement {
     }
     this._el.reset.addEventListener("click", () => this._resetHeading());
     this._el.led.addEventListener("click", () => this._toggleLed());
+    this._el.cal.addEventListener("click", () => this._wizard("flat"));
+    this._el.wizCancel.addEventListener("click", () => this._wizard(null));
+    this._el.wizNext.addEventListener("click", () => this._wizardNext());
     this._history = [];
     this._built = true;
     this._io = new IntersectionObserver((entries) => {
@@ -356,6 +390,8 @@ class TrikiCard extends HTMLElement {
       el.battIcon.setAttribute("icon", step >= 100 ? "mdi:battery" : `mdi:battery-${step}`);
     }
     el.reset.disabled = !live;
+    el.cal.disabled = !live;
+    if (!live && this._wizStep) this._wizard(null);
     el.led.disabled = !s.connected;
     el.led.classList.toggle("on", !!s.led);
     el.btnInd.classList.toggle("on", !!s.button);
@@ -396,6 +432,13 @@ class TrikiCard extends HTMLElement {
   // the LED glow and the pressed button on the procedural model
   _setModelState(led, pressed) {
     if (!this._cap) return;
+    const logo = this._status?.logo_angle ?? null;
+    if (logo !== this._capLogo) {
+      this._capLogo = logo;
+      this._cap.setLogoAngle(logo);
+      this._needsFrame = true;
+      this._startRender();
+    }
     const key = `${!!led}${!!pressed}`;
     if (key === this._capState) return;
     this._capState = key;
@@ -422,6 +465,43 @@ class TrikiCard extends HTMLElement {
     el.classList.add("show");
     clearTimeout(this._toastTimer);
     this._toastTimer = setTimeout(() => el.classList.remove("show"), 1200);
+  }
+
+  // Calibration: flat (mount) -> edge (logo angle, heading) -> back down (heading).
+  _wizard(step) {
+    const el = this._el, t = this._t.cal;
+    this._wizStep = step;
+    el.wizard.classList.toggle("show", !!step);
+    el.wizErr.textContent = "";
+    if (!step) return;
+    el.wizText.textContent = t[step];
+    el.wizLogo.hidden = step !== "edge";
+  }
+
+  async _wizardNext() {
+    const step = this._wizStep;
+    const t = this._t.cal;
+    try {
+      if (step === "head") {
+        await this._resetHeading();
+        this._wizard(null);
+        this._toast(t.saved);
+        return;
+      }
+      await this._hass.connection.sendMessagePromise(
+        { type: "triki/calibrate", device_id: this._deviceId, step });
+      this._wizard(step === "flat" ? "edge" : "head");
+    } catch (err) {
+      this._el.wizErr.textContent = t.err[err?.code] || err?.message || String(err);
+    }
+  }
+
+  _toast(text) {
+    const el = this._el.toast;
+    el.textContent = text;
+    el.classList.add("show");
+    clearTimeout(this._toastTimer);
+    this._toastTimer = setTimeout(() => el.classList.remove("show"), 1500);
   }
 
   async _resetHeading() {
@@ -481,10 +561,11 @@ class TrikiCard extends HTMLElement {
         pivot.add(holder);
       } else {
         const { buildCap } = await loadCap();
-        this._cap = buildCap(T);
+        this._cap = await buildCap(T, { metal: asset("tex_metal.webp"), resin: asset("tex_resin.webp") });
         this._cap.group.scale.setScalar(0.078); // millimetres -> scene units
         pivot.add(this._cap.group);
         this._capState = null;
+        this._capLogo = undefined;
         if (this._status) this._setModelState(this._status.led, this._status.button);
       }
       Object.assign(this, { _renderer: renderer, _scene: scene, _camera: camera, _pivot: pivot });

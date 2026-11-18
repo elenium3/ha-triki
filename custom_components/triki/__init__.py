@@ -47,6 +47,14 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 # The live card (custom:triki-card) and its 3D model, served by the integration.
 FRONTEND_URL = f"/{DOMAIN}_frontend"
 FRONTEND_DIR = Path(__file__).parent / "frontend"
+FRONTEND_FILES = (
+    "triki-card.js",
+    "triki-cap.js",
+    "triki-three.js",
+    "triki.glb",
+    "tex_metal.webp",
+    "tex_resin.webp",
+)
 
 
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
@@ -107,7 +115,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> boo
 
 def _card_hash() -> str:
     digest = hashlib.sha256()
-    for name in ("triki-card.js", "triki-cap.js", "triki-three.js", "triki.glb"):
+    for name in FRONTEND_FILES:
         digest.update((FRONTEND_DIR / name).read_bytes())
     return digest.hexdigest()[:12]
 

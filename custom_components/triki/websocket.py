@@ -16,6 +16,7 @@ from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN
+from .orientation import CalibrationError
 
 # mypy sees voluptuous markers as a different type than the decorator's hint in
 # this environment; the schemas are the ones Home Assistant core uses.
@@ -29,6 +30,7 @@ def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_devices)
     websocket_api.async_register_command(hass, ws_subscribe)
     websocket_api.async_register_command(hass, ws_reset_heading)
+    websocket_api.async_register_command(hass, ws_calibrate)
 
 
 def _devices(hass: HomeAssistant) -> list[TrikiDevice]:
@@ -54,6 +56,8 @@ def status(dev: TrikiDevice) -> dict[str, Any]:
         "streaming": dev.connected and dev.streaming,
         "unresponsive": dev.unresponsive,
         "waiting_for_sleep": dev.waiting_for_sleep,
+        "calibrated": dev.calibrated,
+        "logo_angle": dev.logo_angle,
         "battery": dev.battery,
         "rssi": dev.rssi,
         "rate": dev.stream_rate if dev.connected else None,
@@ -136,3 +140,30 @@ def ws_reset_heading(
         return
     dev.reset_heading()
     connection.send_result(msg["id"])
+
+
+_CALIBRATE_SCHEMA: dict[Any, Any] = {
+    vol.Required("type"): f"{DOMAIN}/calibrate",
+    vol.Optional("device_id"): str,
+    vol.Required("step"): vol.In(["flat", "edge", "clear"]),
+}
+
+
+@websocket_api.websocket_command(_CALIBRATE_SCHEMA)
+@callback
+def ws_calibrate(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """flat: lying still; edge: the logo's marked edge lifted; clear: forget both."""
+    dev = _find(hass, msg.get("device_id"))
+    if dev is None:
+        connection.send_error(msg["id"], "not_found", "No such Triki token")
+        return
+    try:
+        dev.calibrate(msg["step"])
+    except CalibrationError as err:
+        connection.send_error(msg["id"], str(err), f"Calibration step not possible: {err}")
+        return
+    if msg["step"] == "edge":
+        dev.reset_heading()
+    connection.send_result(msg["id"], {"logo_angle": dev.logo_angle})
