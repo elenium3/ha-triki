@@ -19,6 +19,10 @@ All notable changes to this project are documented here. The format follows
 - Diagnostics: `measured_rate` (frames per second actually received) and
   `gyro_bias`.
 
+### Fixed
+- A token in its firmware-update bootloader (advertising as `TrikiDfu…`) is
+  no longer offered as a new device.
+
 ## [0.2.5] - 2026-11-14
 
 ### Added

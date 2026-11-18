@@ -95,6 +95,18 @@ async def test_bluetooth_discovery_rejects_other_devices(
     assert result["reason"] == "not_supported"
 
 
+async def test_bluetooth_discovery_rejects_dfu_bootloader(
+    hass: HomeAssistant, mock_bluetooth
+) -> None:
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": config_entries.SOURCE_BLUETOOTH},
+        data=service_info("TrikiDfu", "11:22:33:44:55:67"),
+    )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "not_supported"
+
+
 async def test_user_pick_already_configured(hass: HomeAssistant, mock_bluetooth) -> None:
     MockConfigEntry(domain=DOMAIN, unique_id=ADDRESS, data={CONF_ADDRESS: ADDRESS}).add_to_hass(
         hass
