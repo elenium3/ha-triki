@@ -21,7 +21,7 @@ const asset = (name) => `${BASE}${name}${VERSION ? `?v=${VERSION}` : ""}`;
 
 const STRINGS = {
   en: {
-    asleep: "Asleep", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
+    auto: "Auto", asleep: "Asleep", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
     wake: "Press or shake the cap to wake it", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
     roll: "Roll", pitch: "Pitch", yaw: "Yaw", reset: "Zero heading", led: "LED",
     button: "Button", rate: "Hz", history: "Last 10 s", nodevice: "No Triki token found",
@@ -32,7 +32,7 @@ const STRINGS = {
     },
   },
   ru: {
-    asleep: "Спит", connected: "Подключён", streaming: "Онлайн", unresponsive: "Не отвечает",
+    auto: "Авто", asleep: "Спит", connected: "Подключён", streaming: "Онлайн", unresponsive: "Не отвечает",
     wake: "Нажми или встряхни крышку, чтобы разбудить", gyro: "Гироскоп, °/с",
     accel: "Акселерометр, g", roll: "Крен", pitch: "Тангаж", yaw: "Курс", reset: "Обнулить курс",
     led: "Диод", button: "Кнопка", rate: "Гц", history: "Последние 10 с",
@@ -45,7 +45,7 @@ const STRINGS = {
     },
   },
   pl: {
-    asleep: "Śpi", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
+    auto: "Auto", asleep: "Śpi", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
     wake: "Naciśnij lub potrząśnij kapslem, żeby go obudzić", gyro: "Żyroskop, °/s",
     accel: "Akcelerometr, g", roll: "Przechył", pitch: "Pochylenie", yaw: "Kurs",
     reset: "Wyzeruj kurs", led: "Dioda", button: "Przycisk", rate: "Hz", history: "Ostatnie 10 s",
@@ -64,6 +64,7 @@ const HISTORY_S = 10;
 const GYRO_RANGE = 500; // °/s at full bar
 const ACCEL_RANGE = 2; // g at full bar
 
+const PICK_KEY = "triki-card-pick";
 let threePromise = null;
 let modelPromise = null;
 let capPromise = null;
@@ -88,6 +89,15 @@ const CSS = `
   .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85em; padding: 2px 8px;
     border-radius: 12px; background: var(--secondary-background-color); color: var(--secondary-text-color); }
   .chip[hidden] { display: none; }
+  .tabs { display: flex; gap: 6px; padding: 4px 16px 0; overflow-x: auto; scrollbar-width: none; }
+  .tabs[hidden] { display: none; }
+  .tab { display: inline-flex; align-items: center; gap: 6px; flex: none; font: inherit; font-size: .85em;
+    padding: 4px 10px; border-radius: 14px; cursor: pointer; border: 1px solid var(--divider-color);
+    background: none; color: var(--secondary-text-color); white-space: nowrap; }
+  .tab.sel { border-color: var(--primary-color); color: var(--primary-text-color);
+    background: rgba(var(--rgb-primary-color, 3,169,244), .12); }
+  .tab .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--disabled-text-color, #777); }
+  .tab .dot.live { background: #66bb6a; box-shadow: 0 0 6px #66bb6a; }
   .chip.live { background: rgba(102,187,106,.2); color: #66bb6a; }
   .chip.warn { background: rgba(255,152,0,.2); color: #ff9800; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
@@ -178,6 +188,7 @@ class TrikiCard extends HTMLElement {
           <div class="chip" id="rssiChip" hidden><ha-icon icon="mdi:bluetooth" style="--mdc-icon-size:14px"></ha-icon><span id="rssi"></span></div>
           <div class="chip" id="battChip" hidden><ha-icon id="battIcon" icon="mdi:battery" style="--mdc-icon-size:14px"></ha-icon><span id="batt"></span></div>
         </div>
+        <div class="tabs" id="tabs" hidden></div>
         <div class="stage asleep" id="stage">
           <canvas class="gl" id="gl"></canvas>
           <div class="angles">
@@ -201,7 +212,7 @@ class TrikiCard extends HTMLElement {
       name: $("name"), state: $("state"), stateText: $("stateText"), rate: $("rate"), rateChip: $("rateChip"),
       rssi: $("rssi"), rssiChip: $("rssiChip"), batt: $("batt"), battChip: $("battChip"), battIcon: $("battIcon"),
       stage: $("stage"), gl: $("gl"), roll: $("roll"), pitch: $("pitch"), yaw: $("yaw"), btnInd: $("btnInd"),
-      toast: $("toast"), hist: $("hist"), reset: $("reset"), led: $("led"),
+      toast: $("toast"), tabs: $("tabs"), hist: $("hist"), reset: $("reset"), led: $("led"),
     };
     for (const p of ["g", "a"]) for (const a of ["x", "y", "z"]) {
       this._el[`${p}${a}`] = $(`${p}${a}`);
@@ -230,12 +241,19 @@ class TrikiCard extends HTMLElement {
         const devices = await this._hass.connection.sendMessagePromise({ type: "triki/devices" });
         ids = devices.map((d) => d.device_id);
         if (!ids.length) { this._noDevice(); return; }
+        this._names = Object.fromEntries(devices.map((d) => [d.device_id, d.name]));
       }
+      this._ids = ids;
       this._statuses = {};
-      this._deviceId = this._deviceId && ids.includes(this._deviceId) ? this._deviceId : ids[0];
+      // the pick is per browser: "auto" follows the awake token, an id pins one
+      const stored = this._config?.device_id ? null : localStorage.getItem(PICK_KEY);
+      this._pick = stored && ids.includes(stored) ? stored : "auto";
+      this._deviceId = this._pick !== "auto" ? this._pick
+        : this._deviceId && ids.includes(this._deviceId) ? this._deviceId : ids[0];
       this._unsubs = await Promise.all(ids.map((id) => this._hass.connection.subscribeMessage(
         (msg) => this._onMessage(id, msg), { type: "triki/subscribe", device_id: id })));
       this._unsub = () => Promise.all(this._unsubs.map((u) => u()));
+      this._renderTabs();
     } catch (err) {
       console.warn("triki-card: subscribe failed", err);
       this._noDevice();
@@ -252,12 +270,45 @@ class TrikiCard extends HTMLElement {
 
   // Follow the awake token: switch when the shown one is not live and another is.
   _follow(id) {
-    if (id === this._deviceId || this._config?.device_id) return;
+    if (id === this._deviceId || this._config?.device_id || this._pick !== "auto") return;
     if (this._isLive(this._statuses[this._deviceId]) || !this._isLive(this._statuses[id])) return;
+    this._show(id);
+  }
+
+  _show(id) {
     this._deviceId = id;
     this._target = null;
     this._history = [];
-    this._showStatus(this._statuses[id]);
+    this._historyDirty = true;
+    if (this._statuses[id]) this._showStatus(this._statuses[id]);
+    this._renderTabs();
+  }
+
+  _choose(pick) {
+    this._pick = pick;
+    if (pick === "auto") localStorage.removeItem(PICK_KEY); else localStorage.setItem(PICK_KEY, pick);
+    if (pick !== "auto") { this._show(pick); return; }
+    const live = this._ids.find((id) => this._isLive(this._statuses[id]));
+    this._show(live || this._deviceId);
+  }
+
+  // One tab per token plus "Auto", only when there is more than one token.
+  _renderTabs() {
+    const el = this._el?.tabs;
+    if (!el) return;
+    const ids = this._ids || [];
+    el.hidden = ids.length < 2 || !!this._config?.device_id;
+    if (el.hidden) return;
+    const t = this._t || STRINGS.en;
+    const tab = (pick, label, live) => {
+      const sel = this._pick === pick;
+      return `<button class="tab${sel ? " sel" : ""}" data-pick="${pick}">${
+        live === undefined ? "" : `<span class="dot${live ? " live" : ""}"></span>`}${label}</button>`;
+    };
+    el.innerHTML = tab("auto", t.auto) + ids.map((id) => tab(
+      id, (this._statuses[id]?.name || this._names?.[id] || id).replace(/[<>&"]/g, ""),
+      this._isLive(this._statuses[id]))).join("");
+    for (const b of el.querySelectorAll(".tab")) b.addEventListener("click", () => this._choose(b.dataset.pick));
   }
 
   _noDevice() {
@@ -266,7 +317,12 @@ class TrikiCard extends HTMLElement {
   }
 
   _onMessage(id, msg) {
-    if (msg.type === "status") { this._statuses[id] = msg; this._follow(id); }
+    if (msg.type === "status") {
+      const was = this._isLive(this._statuses[id]);
+      this._statuses[id] = msg;
+      if (was !== this._isLive(msg) || !this._tabsDrawn) { this._tabsDrawn = true; this._renderTabs(); }
+      this._follow(id);
+    }
     else if (msg.type === "motion") this._follow(id);
     if (id !== this._deviceId) return;
     if (msg.type === "status") this._showStatus(msg);

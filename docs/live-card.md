@@ -23,6 +23,15 @@ show_history: true                            # 10 s gyro graph
 The token has to be awake for the model to move: press or shake it. While it
 sleeps the card shows the last state greyed out.
 
+**Several tokens.** Without `device_id` the card shows a row of tabs: **Auto**
+and one per token, each with a dot that is green while the token streams. Auto
+shows whichever token wakes up; a token's tab pins that one. The choice is kept
+per browser. With `device_id` set the card shows that token only and no tabs.
+
+**Models.** `model: cap` (the default) is a procedural model built from calipered
+dimensions, in the sensor frame; its resin glows while the LED is on and sinks
+while the button is held. `model: glb` uses Flopsstuff's textured model.
+
 ## How it works
 
 - **Orientation** is computed in the integration (`orientation.py`): a Madgwick
