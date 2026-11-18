@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Changed
+- Slow knob turns are counted: the knob now follows rotation from 10 °/s
+  (was 15 °/s) and keeps a partial turn through 1 s pauses (was 0.6 s). A slow
+  hand turn of one revolution used to report 8-10 of its 12 steps, now 11.
 - Knob turns are integrated over the frames' arrival times instead of one
   sample period per frame. On a link that loses frames the knob used to
   report too few steps: with half the frames lost, half the steps.
