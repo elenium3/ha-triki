@@ -1,4 +1,4 @@
-"""Sensors: battery (restored across sleep), RSSI, tilt."""
+"""Sensors: battery (restored across sleep), RSSI, face up, tilt."""
 
 from __future__ import annotations
 
@@ -23,13 +23,14 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import TrikiConfigEntry
 from .device import TrikiDevice
 from .entity import TrikiEntity
+from .gestures import FACES
 
 PARALLEL_UPDATES = 0  # push only
 
 
 @dataclass(frozen=True, kw_only=True)
 class TrikiSensorDescription(SensorEntityDescription):
-    value_fn: Callable[[TrikiDevice], float | int | None]
+    value_fn: Callable[[TrikiDevice], float | int | str | None]
     requires_connection: bool = True
     restore: bool = False
 
@@ -54,6 +55,15 @@ DESCRIPTIONS = (
         entity_registry_enabled_default=False,
         value_fn=lambda d: d.rssi,
         requires_connection=False,
+    ),
+    TrikiSensorDescription(
+        key="face",
+        translation_key="face",
+        device_class=SensorDeviceClass.ENUM,
+        options=list(FACES),
+        value_fn=lambda d: d.face,
+        requires_connection=False,
+        restore=True,
     ),
     TrikiSensorDescription(
         key="pitch",
@@ -88,7 +98,7 @@ class TrikiSensor(TrikiEntity, RestoreSensor):
     def __init__(self, device: TrikiDevice, description: TrikiSensorDescription) -> None:
         super().__init__(device, description)
         self._requires_connection = description.requires_connection
-        self._restored: float | int | None = None
+        self._restored: float | int | str | None = None
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -99,7 +109,7 @@ class TrikiSensor(TrikiEntity, RestoreSensor):
                 self.device.restore_battery(int(self._restored))
 
     @property
-    def native_value(self) -> float | int | None:
+    def native_value(self) -> float | int | str | None:
         value = self.entity_description.value_fn(self.device)
         if value is None and self.entity_description.restore:
             return self._restored

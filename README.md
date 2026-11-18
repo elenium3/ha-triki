@@ -122,11 +122,12 @@ automation:
 
 | Entity | Notes |
 |---|---|
-| `event.<name>_action` | `wake`, `press`, `double_press`, `triple_press` (`count`), `long_press`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`), `shake`, `tap`, `throw`, `flip` |
+| `event.<name>_action` | `wake`, `press`, `double_press`, `triple_press` (`count`), `long_press`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`, `speed`), `shake`, `tap`, `throw`, `flip` |
 | `binary_sensor.<name>_button` | live button state, off while asleep |
 | `binary_sensor.<name>_connected` | diagnostic |
 | `switch.<name>_led` | the green LED (configuration switch); changeable only while connected |
 | `sensor.<name>_battery` | measured by the token during a short stream pause while it is idle, at most every 30 min; a repair notice asks for a new cell at 30 % or less |
+| `sensor.<name>_face_up` | `cap_up` (metal side up), `pcb_up` (green side up) or `edge`, once the token has lain still for 0.3 s; kept while asleep |
 | `sensor.<name>_signal_strength`, `_pitch`, `_roll` | disabled by default |
 
 Every gesture is also fired on the bus as `triki_event` with `device_id`,

@@ -13,7 +13,7 @@ device-independent automations.
 | `press` | `count: 1`; `source: wake` for synthetic presses | Button released (immediately, or after the multi-press window if that option is on). |
 | `double_press`, `triple_press` | `count` | Multi-press option on. |
 | `long_press` | | Button held for 0.8 s. Reported while still held; the release does not produce a `press`. |
-| `rotate_cw`, `rotate_ccw` | `steps`, `degrees` | Turned around the vertical axis by at least one knob step, flat on a surface or held within 60° of level. Several steps can arrive in one event after a fast turn. Muted while the button is down and for 0.8 s after release, and for 0.5 s after a jolt, a shake or free fall. |
+| `rotate_cw`, `rotate_ccw` | `steps`, `degrees`, `speed` | Turned around the vertical axis by at least one knob step, flat on a surface or held within 60° of level. Several steps can arrive in one event after a fast turn. Muted while the button is down and for 0.8 s after release, and for 0.5 s after a jolt, a shake or free fall. |
 | `shake` | | Several quick back-and-forth swings. One event per episode. |
 | `tap` | | A jolt on a token that is at rest: a finger tap on the table, a light knock. Reported once the token is still again (up to 0.4 s). Motion gestures option. |
 | `throw` | | Free fall of at least 60 ms: a toss or a drop. Motion gestures option. |
@@ -43,7 +43,12 @@ data:
   type: rotate_cw
   steps: 1
   degrees: 30.0
+  speed: 42
 ```
+
+`speed` is the mean turning rate in °/s over the frames that made up the step,
+pauses left out. On hardware a slow hand turn reads 25-40, a normal one 40-150,
+a flick of the wrist several hundred.
 
 ## Example: button toggles a light, knob dims it, long press for full warm white
 
@@ -114,6 +119,44 @@ automation:
         data:
           brightness_pct: 100
           color_temp_kelvin: 2700
+```
+
+## Example: a fast turn changes the volume in bigger steps
+
+```yaml
+  - alias: "Triki: knob sets the volume"
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: event.triki_action
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.to_state.state not in ['unavailable', 'unknown']
+             and trigger.to_state.attributes.event_type in ['rotate_cw', 'rotate_ccw'] }}
+    actions:
+      - action: media_player.volume_set
+        target:
+          entity_id: media_player.kitchen
+        data:
+          volume_level: >-
+            {% set a = trigger.to_state.attributes %}
+            {% set step = 0.05 if a.speed | default(0) | int >= 150 else 0.01 %}
+            {% set delta = step * (a.steps | default(1) | int)
+               * (1 if a.event_type == 'rotate_cw' else -1) %}
+            {% set cur = state_attr('media_player.kitchen', 'volume_level') | float(0) %}
+            {{ [0, [1, cur + delta] | min] | max | round(2) }}
+```
+
+## Example: the side that is up picks the mode
+
+Lying green side up, the knob dims the bedroom; metal side up, the living room.
+Add a condition on `sensor.triki_face_up` to each knob automation:
+
+```yaml
+      - condition: state
+        entity_id: sensor.triki_face_up
+        state: pcb_up
 ```
 
 ## Example: double press cycles colour presets

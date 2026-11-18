@@ -19,6 +19,12 @@
       }
     },
     "sensor": {
+      "face": {
+        "default": "mdi:flip-vertical",
+        "state": {
+          "edge": "mdi:rotate-3d-variant"
+        }
+      },
       "pitch": {
         "default": "mdi:angle-acute"
       },

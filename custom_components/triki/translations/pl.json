@@ -101,6 +101,14 @@
       }
     },
     "sensor": {
+      "face": {
+        "name": "Strona do góry",
+        "state": {
+          "cap_up": "Metalem do góry",
+          "pcb_up": "Zieloną stroną do góry",
+          "edge": "Na krawędzi"
+        }
+      },
       "pitch": {
         "name": "Pochylenie"
       },

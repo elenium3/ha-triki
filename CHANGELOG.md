@@ -19,6 +19,10 @@ All notable changes to this project are documented here. The format follows
   timing (multi-press window, long press).
 
 ### Added
+- `sensor.<name>_face_up`: which side of the token is up (`cap_up`, `pcb_up`
+  or `edge`), set once it has lain still for 0.3 s and kept while it sleeps.
+- `speed` (°/s) in `rotate_cw` / `rotate_ccw` events, so a fast turn can do
+  more than a slow one.
 - Diagnostics: `measured_rate` (frames per second actually received) and
   `gyro_bias`.
 
