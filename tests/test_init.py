@@ -12,11 +12,12 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.exceptions import HomeAssistantError
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_capture_events,
+    mock_restore_cache,
 )
 
 from custom_components.triki.const import (
@@ -328,3 +329,19 @@ async def test_capture_stops_at_the_size_limit(
     assert "recording stopped" in caplog.text
     cap.stop()
     await hass.async_block_till_done()
+
+
+@pytest.mark.parametrize("restored", ["on", "off"])
+async def test_led_state_restored_while_asleep(
+    hass: HomeAssistant, mock_bluetooth, restored: str
+) -> None:
+    """After a restart the sleeping token's LED shows its last known state, not unknown."""
+    mock_restore_cache(hass, [State(LED, restored)])
+    entry = MockConfigEntry(
+        domain=DOMAIN, unique_id=ADDRESS, title=NAME, data={CONF_ADDRESS: ADDRESS}
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert hass.states.get(LED).state == restored
+    assert entry.runtime_data.led_on is (restored == "on")
