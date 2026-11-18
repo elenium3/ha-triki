@@ -80,12 +80,13 @@ token locked up: treat a low figure on a held link as a real warning.
 
 | Entity | Category | Notes |
 |---|---|---|
-| `event.<name>_action` | | Every gesture. Attributes: `event_type`, plus `steps` and `degrees` for rotation, `count` for presses, `source: wake` for synthetic presses. |
+| `event.<name>_action` | | Every gesture. Attributes: `event_type`, plus `steps`, `degrees` and `speed` for rotation, `count` for presses, `source: wake` for synthetic presses. |
 | `binary_sensor.<name>_button` | | Live button state. Off while the token sleeps. |
 | `binary_sensor.<name>_connected` | diagnostic | Link state. |
 | `switch.<name>_led` | Configuration | The green LED. Last known state while asleep; can only be changed while linked. |
 | `sensor.<name>_battery` | diagnostic | The token measures its battery only while it is not streaming, so the integration stops the stream for a few seconds while the token is idle (first at the idle-rate switch, then at most every 30 min) and takes the value the token pushes. Values the token reports on its own while streaming are taken under load and ignored. The first value after setup is read at the connect and is low (taken under load) until the first pause. Restored across restarts. |
 | `sensor.<name>_signal_strength` | diagnostic, disabled | Signal of the last advertisement as seen by the scanner that received it. |
+| `sensor.<name>_face_up` | | Which side is up: `cap_up` (metal), `pcb_up` (green board) or `edge`. Set once the token has lain still for 0.3 s; between flat and on edge (z 0.5-0.8 g) the last value stays. Published at most once per second, restored across restarts and kept while the token sleeps. |
 | `sensor.<name>_pitch`, `_roll` | disabled | Tilt in degrees from the gravity estimate, published at most once per second. |
 
 Disabled entities can be enabled from the entity settings. They are off by

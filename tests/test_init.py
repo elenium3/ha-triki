@@ -345,3 +345,18 @@ async def test_led_state_restored_while_asleep(
     await hass.async_block_till_done()
     assert hass.states.get(LED).state == restored
     assert entry.runtime_data.led_on is (restored == "on")
+
+
+async def test_face_sensor(hass: HomeAssistant, setup) -> None:
+    face = "sensor.triki_0000_face_up"
+    assert hass.states.get(face).state == STATE_UNKNOWN
+    _, notify = await connect(hass, setup)
+    dev = setup.runtime_data
+    for az, want in ((-1.0, "cap_up"), (1.0, "pcb_up")):
+        stream = frame(az=az) * 120  # 20 discarded, then over 0.3 s still at 52 Hz
+        for i in range(0, len(stream), 20):
+            notify(None, bytearray(stream[i : i + 20]))
+        dev._last_tilt_pub = 0.0  # published at most once a second
+        notify(None, bytearray(frame(az=az)))
+        await hass.async_block_till_done()
+        assert hass.states.get(face).state == want

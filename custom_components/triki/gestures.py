@@ -64,6 +64,16 @@ SHAKE_REVERSALS = 2
 SHAKE_MIN_FRAMES = 5  # fewer frames in the window say nothing
 SHAKE_QUIET_S = 0.6  # no active frame this long ends a shake episode
 FLIP_STABLE_S = 0.3
+# Which face is up, from the accelerometer z while the token lies still (+z points
+# out of the green PCB, -z out of the metal cap). Between the bands the last face
+# is kept, so a token resting near a threshold does not flicker.
+FACE_FLAT_G = 0.8  # |z| at least this: lying on a face
+FACE_EDGE_G = 0.5  # |z| at most this: standing on its edge
+FACE_STABLE_S = 0.3
+FACE_CAP_UP = "cap_up"
+FACE_PCB_UP = "pcb_up"
+FACE_EDGE = "edge"
+FACES = (FACE_CAP_UP, FACE_PCB_UP, FACE_EDGE)
 STATIC_ACCEL_TOL = 0.15  # g
 STATIC_GYRO_DPS = 30.0
 # A still token streams occasional garbage frames (a lost BLE packet desyncs the
@@ -206,12 +216,17 @@ class GestureDetector:
         self.gravity: tuple[float, float, float] | None = None
         self._ref_up: tuple[float, float, float] | None = None
         self._flip_since: float | None = None
+        self.face: str | None = None  # FACES, once the token has lain still
+        self._face_cand: str | None = None
+        self._face_since = 0.0
         # knob
         self._turn_acc = 0.0
         self._turn_idle_since = 0.0
         self._knob_mute_until = 0.0
         self._turn_run = 0  # consecutive frames above the deadband
         self._turn_held = 0.0  # their angle, counted once the run is confirmed
+        self._speed_deg = 0.0  # angle and time turned since the last step, for speed
+        self._speed_t = 0.0
         # tap
         self._prev_accel: tuple[float, float, float] | None = None
         self._rest_since: float | None = None
@@ -265,6 +280,25 @@ class GestureDetector:
         pitch = math.degrees(math.atan2(-x, math.sqrt(y * y + z * z)))
         roll = math.degrees(math.atan2(y, z))
         return pitch, roll
+
+    def _update_face(self, s: Sample, static: bool) -> None:
+        u = _unit(s.ax, s.ay, s.az) if static else None
+        if u is None:
+            self._face_cand = None
+            return
+        z = u[2]
+        if z >= FACE_FLAT_G:
+            cand: str | None = FACE_PCB_UP
+        elif z <= -FACE_FLAT_G:
+            cand = FACE_CAP_UP
+        elif abs(z) <= FACE_EDGE_G:
+            cand = FACE_EDGE
+        else:
+            cand = None  # in between: keep what was there
+        if cand != self._face_cand:
+            self._face_cand, self._face_since = cand, self.t
+        elif cand is not None and self.t - self._face_since >= FACE_STABLE_S:
+            self.face = cand
 
     # ------------------------------------------------------------------- main
     def update(self, s: Sample, t: float | None = None) -> list[Event]:
@@ -500,7 +534,10 @@ class GestureDetector:
             if abs(rate) >= KNOB_DEADBAND_DPS:
                 if rate * self._turn_acc < 0:  # direction reversed: drop remainder
                     self._turn_acc = 0.0
+                    self._speed_deg = self._speed_t = 0.0
                 self._turn_run += 1
+                self._speed_deg += abs(rate) * dt
+                self._speed_t += dt
                 self._turn_held += rate * dt
                 if self._turn_run >= KNOB_CONFIRM_FRAMES:
                     self._turn_acc += self._turn_held
@@ -511,6 +548,7 @@ class GestureDetector:
                 self._turn_held = 0.0
                 if self.t - self._turn_idle_since > KNOB_RESET_S:
                     self._turn_acc = 0.0
+                    self._speed_deg = self._speed_t = 0.0
             steps = int(abs(self._turn_acc) // self.knob_step)
             if steps:
                 # gravity unit points "up" (at rest the accel reads +1 g upward), so a
@@ -518,7 +556,14 @@ class GestureDetector:
                 kind = "rotate_ccw" if self._turn_acc > 0 else "rotate_cw"
                 deg = math.copysign(steps * self.knob_step, self._turn_acc)
                 self._turn_acc -= deg
-                out.append(Event(kind, {"steps": steps, "degrees": abs(deg)}))
+                data: dict[str, Any] = {"steps": steps, "degrees": abs(deg)}
+                if self._speed_t > 0:
+                    # mean rate while turning since the last step, pauses left out
+                    data["speed"] = round(self._speed_deg / self._speed_t)
+                self._speed_deg = self._speed_t = 0.0
+                out.append(Event(kind, data))
+
+        self._update_face(s, static)
 
         # flip: stable orientation opposite to the reference
         if static:

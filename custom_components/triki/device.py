@@ -239,6 +239,7 @@ class TrikiDevice:
         self.hardware: str | None = None
         self.pitch: float | None = None
         self.roll: float | None = None
+        self.face: str | None = None  # gestures.FACES
         self.device_id: str | None = None
 
         self._last_activity = 0.0
@@ -863,6 +864,10 @@ class TrikiDevice:
                 if (pitch, roll) != (self.pitch, self.roll):
                     self.pitch, self.roll = pitch, roll
                     changed = True
+            face = self._detector.face
+            if face != self.face:
+                self.face = face
+                changed = True
             self._last_tilt_pub = now
         if changed:
             self._notify()

@@ -512,3 +512,56 @@ def test_knob_turn_measured_against_the_bias():
 
     assert run(bias_first=True) == 36
     assert run(bias_first=False) == 34
+
+
+# ------------------------------------------------------------------ face up
+@pytest.mark.parametrize(
+    ("accel", "face"),
+    [
+        ({"az": -1.0}, "cap_up"),  # -z out of the metal cap
+        ({"az": 1.0}, "pcb_up"),  # +z out of the green PCB
+        ({"ay": -1.0, "az": 0.0}, "edge"),
+        ({"ax": 0.94, "az": -0.34}, "edge"),  # 70 degrees off flat still counts
+    ],
+)
+def test_face_up(accel, face):
+    d = GestureDetector(RATE, startup_discard=0)
+    feed(d, secs(0.5), **accel)
+    assert d.face == face
+
+
+def test_face_needs_a_still_token():
+    d = GestureDetector(RATE, startup_discard=0)
+    feed(d, secs(0.2), az=-1.0)
+    assert d.face is None  # not still long enough yet
+    feed(d, secs(0.2), az=-1.0)
+    assert d.face == "cap_up"
+    feed(d, secs(2), az=1.0, gz=200.0)  # turned over while spinning: not still
+    assert d.face == "cap_up"
+    feed(d, secs(0.5), az=1.0)
+    assert d.face == "pcb_up"
+
+
+def test_face_kept_between_the_bands():
+    d = GestureDetector(RATE, startup_discard=0)
+    feed(d, secs(0.5), az=-1.0)
+    feed(d, secs(1), ax=0.77, az=-0.64)  # |z| 0.64: neither flat nor on edge
+    assert d.face == "cap_up"
+
+
+# ------------------------------------------------------------- rotate speed
+@pytest.mark.parametrize("rate", [20.0, 90.0, 400.0])
+def test_rotate_reports_its_speed(rate):
+    d = det()
+    ev = [e for e in feed(d, secs(720 / rate), gz=rate) if e.type == "rotate_ccw"]
+    assert sum(e.data["steps"] for e in ev) >= 22
+    for e in ev:
+        assert e.data["speed"] == pytest.approx(rate, rel=0.05)
+
+
+def test_rotate_speed_leaves_pauses_out():
+    d = det()
+    ev = feed(d, secs(0.25), gz=60.0) + feed(d, secs(0.5)) + feed(d, secs(0.3), gz=60.0)
+    rot = [e for e in ev if e.type == "rotate_ccw"]
+    assert [e.data["steps"] for e in rot] == [1]
+    assert rot[0].data["speed"] == pytest.approx(60, rel=0.05)

@@ -101,6 +101,14 @@
       }
     },
     "sensor": {
+      "face": {
+        "name": "Face up",
+        "state": {
+          "cap_up": "Metal side up",
+          "pcb_up": "Green side up",
+          "edge": "On edge"
+        }
+      },
       "pitch": {
         "name": "Pitch"
       },
