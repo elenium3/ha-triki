@@ -29,7 +29,12 @@ All notable changes to this project are documented here. The format follows
   rate and gesture labels. Orientation is computed in the integration
   (Madgwick filter); motion goes over a websocket subscription
   (`triki/subscribe`, `triki/reset_heading`, `triki/devices`), not into entity
-  states. The model is Flopsstuff's (MIT). See docs/live-card.md.
+  states. The default model is our own, procedural, built from calipered
+  dimensions (its resin glows with the LED and sinks with the button);
+  Flopsstuff's textured model (MIT) is `model: glb`. With several tokens the
+  card has tabs: Auto (follows the awake one) or a pinned token. After an
+  idle disconnect it explains why the token does not reconnect yet. See
+  docs/live-card.md.
 - Diagnostics: `measured_rate` (frames per second actually received) and
   `gyro_bias`.
 
