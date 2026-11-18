@@ -41,11 +41,12 @@ MAX_DT_S = 0.5
 # or a tap it measures motion, not gravity.
 ACCEL_TRUST_G = (0.75, 1.25)
 # Calibration needs the token at rest: gravity within this of 1 g, little spin.
-CAL_ACCEL_TOL_G = 0.08
-CAL_GYRO_MAX_DPS = 8.0
+# The edge step is held by hand: allow its tremor, refuse a real turn.
+CAL_ACCEL_TOL_G = 0.12
+CAL_GYRO_MAX_DPS = 25.0
 CAL_FLAT_MAX_DEG = 15.0  # "lying flat" must be roughly flat
 CAL_EDGE_MIN_DEG = 8.0  # a lifted edge must tilt the token at least this much
-LP_ALPHA = 0.15  # low-pass on the accelerometer for calibration
+LP_ALPHA = 0.08  # low-pass on the accelerometer and spin for calibration
 
 type Quat = tuple[float, float, float, float]  # w, x, y, z
 

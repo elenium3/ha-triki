@@ -492,7 +492,9 @@ class TrikiCard extends HTMLElement {
         { type: "triki/calibrate", device_id: this._deviceId, step });
       this._wizard(step === "flat" ? "edge" : "head");
     } catch (err) {
-      this._el.wizErr.textContent = t.err[err?.code] || err?.message || String(err);
+      // home-assistant-js-websocket rejects with the error object ({code, message})
+      const e = err?.error || err;
+      this._el.wizErr.textContent = t.err[e?.code] || e?.message || t.err.no_data;
     }
   }
 
