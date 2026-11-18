@@ -170,8 +170,8 @@ const CSS = `
   .wizard button.primary { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
   .body { display: block; }
   /* wide card (set from a ResizeObserver): 3D on the left, readings and controls on the right */
-  .wide .body { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); align-items: stretch; }
-  .wide .stage { aspect-ratio: auto; min-height: 460px; }
+  .wide .body { display: grid; grid-template-columns: minmax(0, 1fr) clamp(320px, 30%, 480px); align-items: stretch; }
+  .wide .stage { aspect-ratio: auto; min-height: clamp(460px, calc(100vh - 220px), 900px); }
   .wide .side { display: flex; flex-direction: column; border-left: 1px solid var(--divider-color); }
   .wide .side .values { grid-template-columns: 1fr; padding-top: 12px; }
   .wide .side .row { height: 26px; }
