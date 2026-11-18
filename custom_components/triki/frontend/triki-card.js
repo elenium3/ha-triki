@@ -29,8 +29,51 @@ const STRINGS = {
     cal: { find: "Find the dot above the letter Z on the green side (circled in the photo). On the model that edge has the yellow arrow.", flat: "Lay the cap on the table, either side up, with that edge away from you, let go and press Done.", heading: "Lay the cap on the table with that edge away from you and press Done: the arrow on the model turns away from you too.", turned: "Direction aligned", logo: "Now the logo (once per cap: it is crimped on at any angle). Lay the cap green side up with the Z upright, dot at the top, then turn it over across its right edge. Turn the logo below with the slider until it looks like the one on your cap.", resin: "Green side", metal: "After turning over", next: "Done", cancel: "Cancel", skip: "Skip", saved: "Calibrated",
       err: { moving: "It is moving: hold still for a second", not_flat: "It is not lying flat", asleep: "The cap is asleep: wake it first", no_data: "No data yet: wake the cap" } },
     button: "Button", rate: "Hz", history: "Last 10 s", nodevice: "No Triki token found",
+    check: { title: "Check", open: "Check",
+      steps: { rest: "Lying still", flat: "Level and front", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", press: "Button", flip: "Turn over", drift: "Direction drift" },
+      text: {
+        identify: "Press the button on the cap you want to check. It blinks its LED.",
+        wake: "Press the button on the cap to wake it.",
+        rest: "Put the cap on the table and do not touch it for 10 seconds. This measures the link and the sensor noise.",
+        flat: "Lay the cap on the table, dot away from you, let go and press Done. The model learns what level and front are.",
+        tilt: "Lift the edge with the dot by 2–3 cm and hold it. The model should tilt like the faint hint.",
+        turn_cw: "Without lifting it, turn the cap one full turn clockwise, like the faint hint. Regrip if you need to. Then press Done.",
+        turn_ccw: "Now one full turn counter-clockwise. Then press Done.",
+        press: "Press the button in this order:",
+        flip: "Turn the cap over, wait a second, then turn it back.",
+        drift: "Leave the cap lying for 30 seconds. This measures how far the direction drifts without motion.",
+      },
+      start: "Start", done: "Done", redo: "Redo", skip: "Skip", next: "Next", close: "Close", copy: "Copy report", copied: "Copied",
+      paused: "The link dropped. The step starts over when the cap is back.",
+      busy: "This cap is being checked in another window.", other: "Check running",
+      stepOf: "Step {n} of {total}", count: "Steps", sec: "s", pick: "Which cap?", angle: "Turn", wrong: "wrong way",
+      status: { pass: "Good", warn: "Remarks", fail: "Failed", skip: "Skipped" },
+      summary: "Result", flipStage: ["Lay it flat first", "Turn it over", "Now turn it back", "Done"],
+      values: { rest: "{rate} Hz of {asked}, {loss_pct}% lost, noise {noise_dps}°/s, via {via}", turn: "{steps} steps for {angle}°", drift: "{drift_deg_min}°/min" },
+      reason: {
+        loss: "{loss_pct}% of the frames are lost. Move the cap closer to the receiver ({via}).",
+        noise: "The sensor is noisy: the table shakes or the cap was touched.",
+        moved: "The cap moved. Redo without touching it.",
+        no_frames: "No data from the cap.",
+        not_raised: "The edge with the dot was not lifted.",
+        model_wrong: "The model tilted the wrong way. Redo the calibration.",
+        other_edge: "That is the other edge. Lift the one with the dot.",
+        model: "The model does not tilt like the cap.",
+        short: "Turned {angle}°: a full turn is needed.",
+        long: "Turned {angle}°: more than one turn. Redo.",
+        direction: "Turned the other way.",
+        steps: "{steps} steps, expected {expected}.",
+        wrong_way: "Steps came in the opposite direction.",
+        knob_off: "The knob is off in the options: steps are not checked.",
+        missing: "Not received: {missing}.",
+        not_flat: "Lay the cap flat.",
+        not_flipped: "The cap was not turned over.",
+        flip_events: "The side changed, but {flips} of 2 flip events came.",
+        drift: "The direction drifts {drift_deg_min}°/min.",
+        wrong_press: "That was {got}; now {want}.",
+      } },
     gestures: {
-      single_press: "Press", double_press: "Double press", triple_press: "Triple press",
+      press: "Press", single_press: "Press", double_press: "Double press", triple_press: "Triple press",
       long_press: "Long press", tap: "Tap", double_tap: "Double tap", shake: "Shake",
       flip: "Flip", rotate_cw: "Knob ↻", rotate_ccw: "Knob ↺", wake: "Woke up", motion: "Motion",
     },
@@ -45,9 +88,52 @@ const STRINGS = {
       err: { moving: "Крышка двигается: подержи секунду неподвижно", not_flat: "Крышка лежит не ровно", asleep: "Крышка спит: сначала разбуди её", no_data: "Нет данных: разбуди крышку" } },
     reset: "Выровнять направление",
     led: "Диод", button: "Кнопка", rate: "Гц", history: "Последние 10 с",
+    check: { title: "Проверка", open: "Проверка",
+      steps: { rest: "Покой", flat: "Ровно и перед", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", press: "Кнопка", flip: "Переворот", drift: "Уход направления" },
+      text: {
+        identify: "Нажми кнопку на крышке, которую хочешь проверить. Она мигнёт диодом.",
+        wake: "Нажми кнопку на крышке, чтобы разбудить её.",
+        rest: "Положи крышку на стол и не трогай 10 секунд. Так проверяется связь и шум датчика.",
+        flat: "Положи крышку на стол точкой от себя, отпусти и нажми «Готово». Модель запомнит, где «ровно» и где перед.",
+        tilt: "Приподними край с точкой на 2–3 см и подержи. Модель должна наклониться так же, как полупрозрачная подсказка.",
+        turn_cw: "Не отрывая от стола, поверни крышку на один полный оборот по часовой, как подсказка. Можно перехватывать. Потом нажми «Готово».",
+        turn_ccw: "Теперь один полный оборот против часовой. Потом нажми «Готово».",
+        press: "Нажми кнопку по порядку:",
+        flip: "Переверни крышку на другую сторону, подожди секунду и верни обратно.",
+        drift: "Оставь крышку лежать 30 секунд. Так меряется, насколько уплывает направление без движения.",
+      },
+      start: "Начать", done: "Готово", redo: "Повторить", skip: "Пропустить", next: "Дальше", close: "Закрыть", copy: "Скопировать отчёт", copied: "Скопировано",
+      paused: "Связь пропала. Шаг начнётся заново, когда крышка вернётся.",
+      busy: "Эту крышку уже проверяют в другом окне.", other: "Идёт проверка",
+      stepOf: "Шаг {n} из {total}", count: "Шаги", sec: "с", pick: "Какую крышку проверяем?", angle: "Поворот", wrong: "не в ту сторону",
+      status: { pass: "Хорошо", warn: "Есть замечания", fail: "Не прошло", skip: "Пропущено" },
+      summary: "Итог", flipStage: ["Сначала положи плашмя", "Переверни", "Теперь верни обратно", "Готово"],
+      values: { rest: "{rate} Гц из {asked}, потери {loss_pct}%, шум {noise_dps}°/с, через {via}", turn: "{steps} шагов за {angle}°", drift: "{drift_deg_min}°/мин" },
+      reason: {
+        loss: "Теряется {loss_pct}% кадров. Поставь крышку ближе к приёмнику ({via}).",
+        noise: "Датчик шумит: стол дрожит или крышку задели.",
+        moved: "Крышка двигалась. Повтори, не касаясь её.",
+        no_frames: "Нет данных от крышки.",
+        not_raised: "Край с точкой не поднялся.",
+        model_wrong: "Модель наклонилась не туда. Повтори калибровку.",
+        other_edge: "Это другой край. Подними край с точкой.",
+        model: "Модель наклоняется не так, как крышка.",
+        short: "Поворот {angle}°, нужен полный оборот.",
+        long: "Поворот {angle}°, больше одного оборота. Повтори.",
+        direction: "Повернул не в ту сторону.",
+        steps: "Шагов {steps}, ожидалось {expected}.",
+        wrong_way: "Шаги приходили в обратную сторону.",
+        knob_off: "Крутилка выключена в настройках, шаги не проверяются.",
+        missing: "Не дождались: {missing}.",
+        not_flat: "Положи крышку плашмя.",
+        not_flipped: "Крышку не перевернул.",
+        flip_events: "Сторона сменилась, но событий переворота {flips} из 2.",
+        drift: "Направление уплывает на {drift_deg_min}°/мин.",
+        wrong_press: "Это было «{got}», сейчас нужно «{want}».",
+      } },
     nodevice: "Трики не найден",
     gestures: {
-      single_press: "Нажатие", double_press: "Двойное нажатие", triple_press: "Тройное нажатие",
+      press: "Нажатие", single_press: "Нажатие", double_press: "Двойное нажатие", triple_press: "Тройное нажатие",
       long_press: "Долгое нажатие", tap: "Тап", double_tap: "Двойной тап", shake: "Встряхивание",
       flip: "Переворот", rotate_cw: "Поворот ↻", rotate_ccw: "Поворот ↺", wake: "Проснулся",
       motion: "Движение",
@@ -63,9 +149,52 @@ const STRINGS = {
     cal: { find: "Znajdź po zielonej stronie kropkę nad literą Z (zakreśloną na zdjęciu). Na modelu ta krawędź ma żółtą strzałkę.", flat: "Połóż kapsel na stole dowolną stroną do góry tak, żeby ta krawędź była od ciebie, puść i naciśnij Gotowe.", heading: "Połóż kapsel na stole tą krawędzią od siebie i naciśnij Gotowe: strzałka na modelu też obróci się od ciebie.", turned: "Kierunek wyrównany", logo: "Teraz logo (raz na kapsel: metal jest zaciśnięty pod dowolnym kątem). Połóż kapsel zieloną stroną do góry, literą Z prosto, kropką u góry, i odwróć go przez prawą krawędź. Obróć logo suwakiem, aż będzie wyglądać jak na kapslu.", resin: "Zielona strona", metal: "Po odwróceniu", next: "Gotowe", cancel: "Anuluj", skip: "Pomiń", saved: "Skalibrowano",
       err: { moving: "Kapsel się rusza: przytrzymaj chwilę nieruchomo", not_flat: "Kapsel nie leży płasko", asleep: "Kapsel śpi: najpierw go obudź", no_data: "Brak danych: obudź kapsel" } },
     reset: "Wyrównaj kierunek", led: "Dioda", button: "Przycisk", rate: "Hz", history: "Ostatnie 10 s",
+    check: { title: "Test", open: "Test",
+      steps: { rest: "Spoczynek", flat: "Poziom i przód", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", press: "Przycisk", flip: "Odwrócenie", drift: "Dryf kierunku" },
+      text: {
+        identify: "Naciśnij przycisk na kapslu, który chcesz sprawdzić. Mignie diodą.",
+        wake: "Naciśnij przycisk na kapslu, żeby go obudzić.",
+        rest: "Połóż kapsel na stole i nie dotykaj przez 10 sekund. Mierzy to łącze i szum czujnika.",
+        flat: "Połóż kapsel na stole kropką od siebie, puść i naciśnij Gotowe. Model zapamięta, gdzie jest poziom i przód.",
+        tilt: "Unieś krawędź z kropką o 2–3 cm i przytrzymaj. Model powinien przechylić się jak półprzezroczysta podpowiedź.",
+        turn_cw: "Nie odrywając od stołu, obróć kapsel o jeden pełny obrót w prawo, jak podpowiedź. Możesz przekładać palce. Potem naciśnij Gotowe.",
+        turn_ccw: "Teraz jeden pełny obrót w lewo. Potem naciśnij Gotowe.",
+        press: "Naciśnij przycisk po kolei:",
+        flip: "Odwróć kapsel na drugą stronę, poczekaj sekundę i odwróć z powrotem.",
+        drift: "Zostaw kapsel na 30 sekund. Mierzy to, jak bardzo kierunek ucieka bez ruchu.",
+      },
+      start: "Start", done: "Gotowe", redo: "Powtórz", skip: "Pomiń", next: "Dalej", close: "Zamknij", copy: "Kopiuj raport", copied: "Skopiowano",
+      paused: "Łącze zerwane. Krok zacznie się od nowa, gdy kapsel wróci.",
+      busy: "Ten kapsel jest już sprawdzany w innym oknie.", other: "Trwa test",
+      stepOf: "Krok {n} z {total}", count: "Kroki", sec: "s", pick: "Który kapsel?", angle: "Obrót", wrong: "w złą stronę",
+      status: { pass: "Dobrze", warn: "Uwagi", fail: "Nie przeszło", skip: "Pominięto" },
+      summary: "Wynik", flipStage: ["Najpierw połóż płasko", "Odwróć", "Teraz odwróć z powrotem", "Gotowe"],
+      values: { rest: "{rate} Hz z {asked}, utrata {loss_pct}%, szum {noise_dps}°/s, przez {via}", turn: "{steps} kroków na {angle}°", drift: "{drift_deg_min}°/min" },
+      reason: {
+        loss: "Ginie {loss_pct}% ramek. Przysuń kapsel bliżej odbiornika ({via}).",
+        noise: "Czujnik szumi: stół drży albo kapsel był dotknięty.",
+        moved: "Kapsel się ruszył. Powtórz bez dotykania.",
+        no_frames: "Brak danych z kapsla.",
+        not_raised: "Krawędź z kropką nie została uniesiona.",
+        model_wrong: "Model przechylił się w złą stronę. Powtórz kalibrację.",
+        other_edge: "To inna krawędź. Unieś tę z kropką.",
+        model: "Model przechyla się inaczej niż kapsel.",
+        short: "Obrót {angle}°: potrzebny pełny obrót.",
+        long: "Obrót {angle}°: więcej niż jeden obrót. Powtórz.",
+        direction: "Obrócono w drugą stronę.",
+        steps: "{steps} kroków, oczekiwano {expected}.",
+        wrong_way: "Kroki szły w przeciwną stronę.",
+        knob_off: "Pokrętło jest wyłączone w opcjach: kroki nie są sprawdzane.",
+        missing: "Nie odebrano: {missing}.",
+        not_flat: "Połóż kapsel płasko.",
+        not_flipped: "Kapsel nie został odwrócony.",
+        flip_events: "Strona się zmieniła, ale przyszło {flips} z 2 zdarzeń odwrócenia.",
+        drift: "Kierunek ucieka o {drift_deg_min}°/min.",
+        wrong_press: "To było „{got}”, teraz „{want}”.",
+      } },
     nodevice: "Nie znaleziono kapsla Triki",
     gestures: {
-      single_press: "Naciśnięcie", double_press: "Podwójne naciśnięcie",
+      press: "Naciśnięcie", single_press: "Naciśnięcie", double_press: "Podwójne naciśnięcie",
       triple_press: "Potrójne naciśnięcie", long_press: "Długie naciśnięcie", tap: "Stuknięcie",
       double_tap: "Podwójne stuknięcie", shake: "Potrząśnięcie", flip: "Obrót",
       rotate_cw: "Pokrętło ↻", rotate_ccw: "Pokrętło ↺", wake: "Obudzony", motion: "Ruch",
@@ -82,6 +211,14 @@ const PICK_KEY = "triki-card-pick";
 let threePromise = null;
 let modelPromise = null;
 let capPromise = null;
+let checkPromise = null;
+function loadCheck() {
+  if (!checkPromise) checkPromise = import(asset("triki-check.js"));
+  return checkPromise;
+}
+const CHECK_RENEW_MS = 10000; // the server lets a check lapse 30 s after the last renewal
+const GHOST_TILT = (20 * Math.PI) / 180;
+const GHOST_SPIN_S = 20; // the pace of the hint's full turn
 function loadCap() {
   if (!capPromise) capPromise = import(asset("triki-cap.js"));
   return capPromise;
@@ -207,6 +344,41 @@ const CSS = `
   .wide .side .chart { flex: 1; }
   .wide .side canvas.hist { height: 80px; }
   .wide .side .actions { flex-direction: column; margin-top: auto; }
+  /* guided check */
+  .chip.check { background: rgba(255,193,7,.2); color: #ffc107; }
+  .checkbar { position: absolute; left: 12px; right: 12px; bottom: 10px; display: none; flex-direction: column; gap: 4px; pointer-events: none; }
+  .checking .checkbar { display: flex; }
+  .checkbar b { font-size: 1.05em; text-shadow: 0 1px 4px rgba(0,0,0,.6); }
+  .checkbar .time { height: 6px; border-radius: 3px; background: var(--divider-color); overflow: hidden; }
+  .checkbar .time i { display: block; height: 100%; width: 0; background: var(--primary-color); transition: width .25s linear; }
+  .checking .angles { opacity: .55; }
+  .checking .sleep { display: none; }
+  .checkpanel { display: none; flex-direction: column; gap: 10px; padding: 14px 16px 16px; }
+  .checking .checkpanel { display: flex; }
+  .checking .side > :not(.checkpanel) { display: none; }
+  .checkpanel small.of { color: var(--secondary-text-color); font-size: .8em; text-transform: uppercase; letter-spacing: .04em; }
+  .checkpanel h3 { margin: 0; font-size: 1.2em; font-weight: 500; }
+  .checkpanel p { margin: 0; line-height: 1.45; }
+  .checkpanel .big { display: flex; gap: 22px; }
+  .checkpanel .big div { display: flex; flex-direction: column; }
+  .checkpanel .big small { font-size: .75em; color: var(--secondary-text-color); }
+  .checkpanel .big b { font-size: 1.8em; font-variant-numeric: tabular-nums; }
+  .checkpanel ol { margin: 0; padding-left: 1.3em; }
+  .checkpanel li.ok { color: #66bb6a; }
+  .checkpanel li.ok::marker { content: "✓ "; }
+  .checkpanel .hint { color: #ffb74d; min-height: 1.2em; }
+  .checkpanel .res { padding: 10px 12px; border-radius: 10px; background: var(--secondary-background-color); }
+  .checkpanel .res b { display: block; margin-bottom: 2px; }
+  .res.pass b, .sum .pass { color: #66bb6a; } .res.warn b, .sum .warn { color: #ffb74d; }
+  .res.fail b, .sum .fail { color: var(--error-color, #ef5350); } .res.skip b, .sum .skip { color: var(--secondary-text-color); }
+  .checkpanel .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .checkpanel .btns button { flex: 1 1 40%; font: inherit; font-weight: 500; min-height: 48px; padding: 8px 14px; border-radius: 12px;
+    cursor: pointer; border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); }
+  .checkpanel .btns button.primary { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
+  .checkpanel .btns button.pulse { animation: glow 1.4s ease-in-out infinite; }
+  @keyframes glow { 50% { box-shadow: 0 0 0 6px rgba(var(--rgb-primary-color, 3,169,244), .25); } }
+  .sum { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: .92em; }
+  .sum span.v { grid-column: 1 / -1; color: var(--secondary-text-color); font-size: .88em; margin-top: -2px; }
   .empty { padding: 24px 16px; color: var(--secondary-text-color); }
 `;
 
@@ -227,6 +399,7 @@ class TrikiCard extends HTMLElement {
     this._hass = hass;
     if (first) this._t = STRINGS[(hass.locale?.language || hass.language || "en").slice(0, 2)] || STRINGS.en;
     if (!this._built) this._build();
+    else this._applyAdmin();
     if (this.isConnected && !this._unsub && !this._subscribing) this._subscribe();
   }
 
@@ -236,6 +409,7 @@ class TrikiCard extends HTMLElement {
   }
 
   disconnectedCallback() {
+    this._checkClose();
     this._unsubscribe();
     if (this._io) this._io.disconnect();
     this._visible = false;
@@ -255,6 +429,7 @@ class TrikiCard extends HTMLElement {
           <div class="chip" id="state"><div class="dot"></div><span id="stateText">${t.asleep}</span></div>
           <div class="chip" id="rateChip" hidden><ha-icon icon="mdi:sine-wave" style="--mdc-icon-size:14px"></ha-icon><span id="rate"></span></div>
           <div class="chip" id="rssiChip" hidden><ha-icon icon="mdi:bluetooth" style="--mdc-icon-size:14px"></ha-icon><span id="rssi"></span></div>
+          <div class="chip check" id="checkChip" hidden><ha-icon icon="mdi:clipboard-check-outline" style="--mdc-icon-size:14px"></ha-icon><span>${t.check.other}</span></div>
           <div class="chip" id="battChip" hidden><ha-icon id="battIcon" icon="mdi:battery" style="--mdc-icon-size:14px"></ha-icon><span id="batt"></span></div>
         </div>
         <div class="tabs" id="tabs" hidden></div>
@@ -269,6 +444,7 @@ class TrikiCard extends HTMLElement {
           <div class="btn-ind" id="btnInd"><div class="led"></div>${t.button}</div>
           <div class="toast" id="toast"></div>
           <div class="sleep" id="sleepText">${t.wake}</div>
+          <div class="checkbar" id="checkBar"><b id="checkBarText"></b><div class="time"><i id="checkTime"></i></div></div>
           <div class="wizard" id="wizard">
             <div class="find" id="wizFind" hidden><span class="pic"><img src="${asset("tex_resin.webp")}" alt=""><i></i></span><p id="wizFindText"></p></div>
             <p id="wizText"></p>
@@ -288,12 +464,14 @@ class TrikiCard extends HTMLElement {
           </div>
         </div>
         <div class="side">
+        <div class="checkpanel" id="checkPanel"></div>
         ${c.show_values ? `<div class="values"><div><h4>${t.gyro}</h4>${axisRows("g")}</div><div><h4>${t.accel}</h4>${axisRows("a")}</div></div>` : ""}
         ${c.show_history ? `<div class="chart"><small>${t.gyro} · ${t.history}</small><canvas class="hist" id="hist"></canvas></div>` : ""}
         <div class="actions">
           <button id="cal" disabled><ha-icon icon="mdi:target"></ha-icon><span class="lbl">${t.calibrate}</span></button>
           <button id="reset" disabled><ha-icon icon="mdi:compass-outline"></ha-icon><span class="lbl">${t.reset}</span></button>
           <button id="led" disabled><ha-icon icon="mdi:led-on"></ha-icon><span class="lbl">${t.led}</span></button>
+          <button id="check"><ha-icon icon="mdi:clipboard-check-outline"></ha-icon><span class="lbl">${t.check.open}</span></button>
         </div>
         <div class="help"><div class="front"><span class="pic"><img src="${asset("tex_resin.webp")}" alt=""><i></i></span><p>${t.help.mark}</p></div><p>${t.help.cal}</p><p>${t.help.align}</p></div>
         </div>
@@ -313,6 +491,8 @@ class TrikiCard extends HTMLElement {
       wizNext: $("wizNext"), wizCancel: $("wizCancel"),
       wizLogo: $("wizLogo"), wizSlider: $("wizSlider"), wizMetal: $("wizMetal"), wizAngle: $("wizAngle"),
       wizAngleOut: $("wizAngleOut"), wizLeft: $("wizLeft"), wizRight: $("wizRight"),
+      check: $("check"), checkPanel: $("checkPanel"), checkBar: $("checkBar"), checkBarText: $("checkBarText"),
+      checkTime: $("checkTime"), checkChip: $("checkChip"), card,
     };
     for (const p of ["g", "a"]) for (const a of ["x", "y", "z"]) {
       this._el[`${p}${a}`] = $(`${p}${a}`);
@@ -321,6 +501,8 @@ class TrikiCard extends HTMLElement {
     this._el.reset.addEventListener("click", () => this._wizard("heading"));
     this._el.led.addEventListener("click", () => this._toggleLed());
     this._el.cal.addEventListener("click", () => this._wizard("flat"));
+    this._el.check.addEventListener("click", () => this._checkOpen());
+    this._applyAdmin();
     this._el.wizCancel.addEventListener("click", () => this._wizard(null));
     this._el.wizNext.addEventListener("click", () => this._wizardNext());
     this._el.wizAngle.addEventListener("input", () => this._previewLogo(+this._el.wizAngle.value));
@@ -376,7 +558,7 @@ class TrikiCard extends HTMLElement {
 
   // Follow the awake token: switch when the shown one is not live and another is.
   _follow(id) {
-    if (id === this._deviceId || this._config?.device_id || this._pick !== "auto") return;
+    if (id === this._deviceId || this._config?.device_id || this._pick !== "auto" || this._chk) return;
     if (this._isLive(this._statuses[this._deviceId]) || !this._isLive(this._statuses[id])) return;
     this._show(id);
   }
@@ -430,6 +612,7 @@ class TrikiCard extends HTMLElement {
       this._follow(id);
     }
     else if (msg.type === "motion") this._follow(id);
+    if (this._chk) this._checkMessage(id, msg);
     if (id !== this._deviceId) return;
     if (msg.type === "status") this._showStatus(msg);
     else if (msg.type === "motion") this._showMotion(msg);
@@ -460,6 +643,8 @@ class TrikiCard extends HTMLElement {
     }
     el.reset.disabled = !live;
     el.cal.disabled = !live;
+    el.checkChip.hidden = !(s.checking && !this._chk);
+    el.check.disabled = !!s.checking && !this._chk;
     if (!live && (this._wizStep === "flat" || this._wizStep === "heading")) this._wizard(null);
     el.led.disabled = !s.connected;
     el.led.classList.toggle("on", !!s.led);
@@ -611,6 +796,319 @@ class TrikiCard extends HTMLElement {
     this._hass.callService("switch", this._status?.led ? "turn_off" : "turn_on", { entity_id: ent.entity_id });
   }
 
+  // ------------------------------------------------------------------ guided check
+  // Only an admin may calibrate or run the check (the server refuses others too).
+  _applyAdmin() {
+    const admin = this._hass?.user ? !!this._hass.user.is_admin : true;
+    if (!this._el) return;
+    this._el.check.hidden = !admin;
+    this._el.cal.hidden = !admin;
+  }
+
+  _fmt(text, values = {}) {
+    const esc = (x) => String(x).replace(/[<>&"]/g, (c) => `&#${c.charCodeAt(0)};`);
+    return String(text || "").replace(/\{(\w+)\}/g, (_, k) => esc(values[k] ?? "—"));
+  }
+
+  _send(msg) { return this._hass.connection.sendMessagePromise(msg); }
+
+  // Every token the card shows gets a check started at once, so the press that picks
+  // one does not reach automations; the others are released as soon as one is picked.
+  async _checkOpen() {
+    if (this._chk) return;
+    const ids = this._config?.device_id ? [this._config.device_id] : (this._ids || []);
+    if (!ids.length) return;
+    const session = (crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`).replace(/[^\w-]/g, "");
+    const chk = { session, owned: new Set(), id: null, run: null, msg: null };
+    this._chk = chk;
+    this._wizard(null);
+    this._el.card.classList.add("checking");
+    const results = await Promise.allSettled(ids.map((id) =>
+      this._send({ type: "triki/check", action: "start", device_id: id, session }).then(() => id)));
+    if (this._chk !== chk) return; // closed meanwhile
+    for (const r of results) if (r.status === "fulfilled") chk.owned.add(r.value);
+    if (!chk.owned.size) { chk.msg = "busy"; this._renderCheck(true); return; }
+    chk.renew = setInterval(() => this._checkRenew(), CHECK_RENEW_MS);
+    chk.timer = setInterval(() => this._checkTick(), 250);
+    const live = [...chk.owned].filter((id) => this._isLive(this._statuses?.[id]));
+    // one token, already awake: no need to ask which one
+    if (chk.owned.size === 1 && live.length === 1) await this._checkChoose(live[0]);
+    else this._renderCheck(true);
+  }
+
+  async _checkRenew() {
+    const chk = this._chk;
+    if (!chk) return;
+    const ids = chk.id ? [chk.id] : [...chk.owned];
+    for (const id of ids) {
+      try {
+        await this._send({ type: "triki/check", action: "start", device_id: id, session: chk.session });
+      } catch (err) {
+        if ((err?.error || err)?.code === "busy" && id === chk.id) { chk.msg = "busy"; this._renderCheck(true); }
+      }
+    }
+  }
+
+  async _checkChoose(id) {
+    const chk = this._chk;
+    if (!chk || chk.id) return;
+    chk.id = id;
+    for (const other of chk.owned) {
+      if (other !== id) this._send({ type: "triki/check", action: "stop", device_id: other, session: chk.session }).catch(() => {});
+    }
+    chk.owned = new Set([id]);
+    if (id !== this._deviceId) this._show(id);
+    const { CheckRun } = await loadCheck();
+    if (this._chk !== chk) return;
+    const status = this._statuses?.[id] || this._status || {};
+    chk.run = new CheckRun({ options: status.options || {} });
+    chk.run.feedStatus(status);
+    this._blink(id);
+    this._renderCheck(true);
+  }
+
+  // Two quick LED blinks on the picked token, then its previous state.
+  async _blink(id) {
+    const ent = Object.values(this._hass.entities || {}).find(
+      (e) => e.device_id === id && e.entity_id.startsWith("switch.") && e.translation_key === "led");
+    if (!ent) return;
+    const was = this._statuses?.[id]?.led;
+    const set = (on) => this._hass.callService("switch", on ? "turn_on" : "turn_off", { entity_id: ent.entity_id }).catch(() => {});
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    for (let i = 0; i < 2; i++) { await set(!was); await wait(350); await set(!!was); await wait(250); }
+  }
+
+  _checkMessage(id, msg) {
+    const chk = this._chk;
+    if (!chk.id) {
+      // picking: the first press on a token this card holds a check for
+      if (msg.type === "event" && chk.owned.has(id) && ["press", "wake", "double_press", "long_press"].includes(msg.event)) {
+        this._checkChoose(id);
+      } else if (msg.type === "status") this._renderCheck();
+      return;
+    }
+    if (id !== chk.id || !chk.run) return;
+    const run = chk.run;
+    if (msg.type === "status") run.feedStatus(msg);
+    else if (msg.type === "motion") run.feedMotion(msg);
+    else if (msg.type === "event") run.feedEvent(msg.event, msg.data || {});
+    this._renderCheck();
+  }
+
+  _checkTick() {
+    const run = this._chk?.run;
+    if (!run) return;
+    run.tick();
+    this._renderCheck();
+  }
+
+  async _checkAction(action) {
+    const chk = this._chk, run = chk?.run;
+    if (action === "close") { this._checkClose(); return; }
+    if (!run) return;
+    const t = this._t.check;
+    if (action === "start") {
+      if (run.start()) {
+        chk.ref = this._target ? [...this._target] : null; // the hint moves from here
+        chk.err = "";
+      }
+    } else if (action === "done") {
+      if (run.step.external) {
+        // the flat calibration is the existing server step; its errors stay on this step
+        try {
+          await this._send({ type: "triki/calibrate", device_id: chk.id, step: "flat" });
+          run.complete({ status: "pass" });
+          chk.err = "";
+        } catch (err) {
+          const e = err?.error || err;
+          chk.err = this._t.cal.err[e?.code] || e?.message || this._t.cal.err.no_data;
+        }
+      } else run.done();
+    } else if (action === "redo") { run.redo(); chk.err = ""; }
+    else if (action === "skip") { run.skip(); chk.err = ""; }
+    else if (action === "next") run.next();
+    else if (action === "copy") {
+      const text = run.report({ version: VERSION });
+      try { await navigator.clipboard.writeText(text); this._toast(t.copied); } catch { chk.report = text; }
+    }
+    this._renderCheck(true);
+  }
+
+  _checkClose() {
+    const chk = this._chk;
+    if (!chk) return;
+    this._chk = null;
+    clearInterval(chk.renew);
+    clearInterval(chk.timer);
+    for (const id of chk.owned) {
+      this._send({ type: "triki/check", action: "stop", device_id: id, session: chk.session }).catch(() => {});
+    }
+    this._el?.card.classList.remove("checking");
+    this._setGhost(null);
+    if (this._status) this._showStatus(this._status);
+  }
+
+  // The panel is rebuilt when the step, phase or result changes; numbers in between.
+  _renderCheck(force = false) {
+    const chk = this._chk, el = this._el;
+    if (!chk || !el) return;
+    const t = this._t.check;
+    const run = chk.run;
+    const v = run ? run.view() : null;
+    const key = !run ? `pick|${chk.msg}|${[...chk.owned].map((id) => this._isLive(this._statuses?.[id])).join()}`
+      : v.finished ? "summary" : `${v.id}|${v.phase}|${v.result?.status}|${chk.err}|${chk.report ? 1 : 0}`;
+    if (force || key !== chk.key) {
+      chk.key = key;
+      el.checkPanel.innerHTML = this._checkHtml(v);
+      for (const b of el.checkPanel.querySelectorAll("button[data-a]")) {
+        b.addEventListener("click", () => this._checkAction(b.dataset.a));
+      }
+    }
+    // live numbers
+    const live = v && !v.finished ? v.live : {};
+    const set = (id, text) => { const n = el.checkPanel.querySelector(`#${id}`); if (n) n.textContent = text; };
+    if (v && !v.finished) {
+      if (v.id === "turn_cw" || v.id === "turn_ccw") {
+        set("cSteps", live.expected != null ? `${live.steps} / ${live.expected}` : `${live.steps}`);
+        set("cAngle", `${live.angle}°`);
+        set("cWrong", live.wrong ? `${live.wrong} ${t.wrong}` : "");
+      }
+      if (v.id === "tilt") set("cHint", live.hint ? t.reason[live.hint] : "");
+      if (v.id === "flip") set("cHint", t.flipStage[live.stage] || "");
+      if (v.id === "press") {
+        set("cHint", live.hint ? this._fmt(t.reason.wrong_press, {
+          got: this._t.gestures[live.hint.got] || live.hint.got, want: this._t.gestures[live.hint.want] || live.hint.want }) : "");
+        el.checkPanel.querySelectorAll("li").forEach((li, i) => li.classList.toggle("ok", i < live.got));
+      }
+      if ((v.id === "rest" || v.id === "drift") && live.moved) set("cHint", t.reason.moved);
+      el.checkBarText.textContent = `${t.steps[v.id]}${v.phase === "running" && v.limit ? ` · ${Math.max(0, Math.ceil(v.limit - v.elapsed))} ${t.sec}` : ""}`;
+      el.checkTime.style.width = v.phase === "running" && v.limit ? `${Math.min(100, (v.elapsed / v.limit) * 100)}%` : "0";
+    } else {
+      el.checkBarText.textContent = run ? t.summary : t.title;
+      el.checkTime.style.width = "0";
+    }
+    this._setGhost(v && !v.finished && v.phase === "running" ? v : null);
+  }
+
+  _checkHtml(v) {
+    const t = this._t.check, chk = this._chk;
+    const btn = (a, label, cls = "") => `<button data-a="${a}" class="${cls}">${label}</button>`;
+    if (chk.msg === "busy") {
+      return `<h3>${t.title}</h3><p>${t.busy}</p><div class="btns">${btn("close", t.close)}</div>`;
+    }
+    if (!v) {
+      const many = chk.owned.size > 1;
+      return `<small class="of">${t.title}</small><h3>${many ? t.pick : t.title}</h3>
+        <p>${many ? t.text.identify : t.text.wake}</p><div class="btns">${btn("close", t.close)}</div>`;
+    }
+    if (v.finished) {
+      const rows = chk.run.steps.map((s) => {
+        const r = v.results[s.id] || { status: "skip" };
+        const detail = this._resultText(s.id, r);
+        return `<span>${t.steps[s.id]}</span><b class="${r.status}">${t.status[r.status]}</b>${detail ? `<span class="v">${detail}</span>` : ""}`;
+      }).join("");
+      return `<small class="of">${t.title}</small><h3>${t.summary}</h3><div class="sum">${rows}</div>
+        ${chk.report ? `<textarea readonly rows="6" style="width:100%">${this._fmt("{r}", { r: chk.report })}</textarea>` : ""}
+        <div class="btns">${btn("copy", t.copy)}${btn("close", t.close, "primary")}</div>`;
+    }
+    const of = this._fmt(t.stepOf, { n: v.index + 1, total: v.total });
+    let body = `<p>${t.text[v.id]}</p>`;
+    if (v.id === "press") {
+      body = `<p>${t.text.press}</p><ol>${v.live.want.map((k) => `<li>${this._t.gestures[k] || k}</li>`).join("")}</ol>`;
+    }
+    let live = "";
+    if (v.id === "turn_cw" || v.id === "turn_ccw") {
+      live = `<div class="big"><div><small>${t.count}</small><b id="cSteps">0</b></div><div><small>${t.angle}</small><b id="cAngle">0°</b></div></div><div class="hint" id="cWrong"></div>`;
+    } else if (["tilt", "flip", "press", "rest", "drift"].includes(v.id)) {
+      live = `<div class="hint" id="cHint"></div>`;
+    }
+    let res = "", btns = "";
+    if (v.phase === "paused") {
+      res = `<div class="res warn"><b>${t.paused}</b></div>`;
+      btns = btn("skip", t.skip) + btn("close", t.close);
+    } else if (v.phase === "ready") {
+      btns = btn("start", t.start, "primary pulse") + btn("skip", t.skip) + btn("close", t.close);
+    } else if (v.phase === "running") {
+      btns = (v.manual ? btn("done", t.done, "primary") : "") + btn("redo", t.redo) + btn("skip", t.skip);
+    } else if (v.phase === "done") {
+      const r = v.result || { status: "skip" };
+      res = `<div class="res ${r.status}"><b>${t.status[r.status]}</b>${this._resultText(v.id, r)}</div>`;
+      btns = btn("next", t.next, r.status === "fail" ? "" : "primary") + btn("redo", t.redo, r.status === "fail" ? "primary" : "");
+    }
+    const err = chk.err ? `<div class="res fail"><b>${chk.err}</b></div>` : "";
+    return `<small class="of">${of}</small><h3>${t.steps[v.id]}</h3>${body}${live}${res}${err}<div class="btns">${btns}</div>`;
+  }
+
+  _resultText(id, r) {
+    const t = this._t.check;
+    const vals = { ...(r.values || {}) };
+    if (vals.missing) vals.missing = vals.missing.split(",").map((k) => this._t.gestures[k] || k).join(", ");
+    if (vals.via == null) vals.via = "—";
+    if (typeof vals.expected === "number") vals.expected = Math.round(vals.expected);
+    const parts = [];
+    if (r.reason && t.reason[r.reason]) parts.push(this._fmt(t.reason[r.reason], vals));
+    if (r.status !== "skip" || r.values) {
+      if (id === "rest" && r.values) parts.push(this._fmt(t.values.rest, vals));
+      if ((id === "turn_cw" || id === "turn_ccw") && r.values && r.reason !== "steps") parts.push(this._fmt(t.values.turn, vals));
+      if (id === "drift" && r.values && r.reason !== "drift") parts.push(this._fmt(t.values.drift, vals));
+    }
+    return parts.join(" ");
+  }
+
+  // ------------------------------------------------------------------ hint model
+  // A faint copy of the cap showing where to move it: tilt the dot edge, a slow turn,
+  // or turning over, all from the pose the step started in.
+  _setGhost(v) {
+    const kind = v?.ghost?.type || null;
+    if (!kind || !this._chk?.ref) {
+      if (this._ghost) this._ghost.visible = false;
+      this._ghostView = null;
+      return;
+    }
+    this._ghostView = v;
+    if (!this._ghost && this._cap && this._T) {
+      const T = this._T;
+      const g = this._cap.group.clone(true);
+      g.traverse((o) => {
+        if (!o.isMesh) return;
+        o.material = (Array.isArray(o.material) ? o.material : [o.material]).map((m) => {
+          const c = m.clone();
+          c.transparent = true; c.opacity = 0.28; c.depthWrite = false;
+          return c;
+        });
+        if (o.material.length === 1) o.material = o.material[0];
+      });
+      this._ghost = new T.Group();
+      this._ghost.add(g);
+      this._headingGroup.add(this._ghost);
+    }
+    if (this._ghost) this._ghost.visible = true;
+    this._needsFrame = true;
+    this._startRender();
+  }
+
+  _ghostPose(T) {
+    const v = this._ghostView, ref = this._chk?.ref;
+    if (!v || !ref) return null;
+    const q0 = new T.Quaternion(ref[1], ref[2], ref[3], ref[0]);
+    const d = new T.Vector3(0, -1, 0).applyQuaternion(q0); // the dot edge in the world
+    const h = new T.Vector3(d.x, d.y, 0);
+    if (h.lengthSq() < 1e-6) h.set(0, -1, 0);
+    h.normalize();
+    const up = new T.Vector3(0, 0, 1);
+    const sec = this._chk.run?._elapsed?.() ?? v.elapsed ?? 0; // live, not the 4 Hz panel tick
+    let r;
+    if (v.ghost.type === "tilt") {
+      r = new T.Quaternion().setFromAxisAngle(new T.Vector3().crossVectors(h, up).normalize(), GHOST_TILT);
+    } else if (v.ghost.type === "spin") {
+      r = new T.Quaternion().setFromAxisAngle(up, v.ghost.dir * 2 * Math.PI * ((sec % GHOST_SPIN_S) / GHOST_SPIN_S));
+    } else if (v.ghost.type === "flip") {
+      const p = Math.min(1, (sec % 3) / 1.5);
+      r = new T.Quaternion().setFromAxisAngle(h, Math.PI * p);
+    } else return null;
+    return r.multiply(q0);
+  }
+
   // ------------------------------------------------------------------ 3D
   async _ensureScene() {
     if (this._scene || this._sceneLoading) return;
@@ -633,6 +1131,9 @@ class TrikiCard extends HTMLElement {
       // at table height: a cap lying level shows only its rim
       camera.position.set(0, 0, 6.2); // the cap takes about half the view's height
       camera.lookAt(0, 0, 0);
+      this._camHome = camera.position.clone();
+      // the check looks down at 35 degrees: a turn on the table is invisible edge-on
+      this._camCheck = new T.Vector3(0, 6.2 * Math.sin(0.61), 6.2 * Math.cos(0.61));
       const world = new T.Group(); // z-up world -> three.js Y-up
       world.rotation.x = -Math.PI / 2;
       const heading = new T.Group();
@@ -663,7 +1164,7 @@ class TrikiCard extends HTMLElement {
         this._capLogo = undefined;
         if (this._status) this._setModelState(this._status.led, this._status.button);
       }
-      Object.assign(this, { _renderer: renderer, _scene: scene, _camera: camera, _pivot: pivot });
+      Object.assign(this, { _renderer: renderer, _scene: scene, _camera: camera, _pivot: pivot, _headingGroup: heading });
       this._q = new T.Quaternion();
       this._qTarget = new T.Quaternion();
       this._ro = new ResizeObserver(() => this._resize());
@@ -706,6 +1207,14 @@ class TrikiCard extends HTMLElement {
         this._q.slerp(this._qTarget, 0.1); // back to the rest pose while asleep
         moving = true;
       }
+      const cam = this._chk ? this._camCheck : this._camHome;
+      if (cam && this._camera.position.distanceTo(cam) > 0.01) {
+        this._camera.position.lerp(cam, 0.15);
+        this._camera.lookAt(0, 0, 0);
+        moving = true;
+      }
+      const ghost = this._ghost?.visible ? this._ghostPose(this._T) : null;
+      if (ghost) { this._ghost.quaternion.copy(ghost); moving = true; }
       if (moving || this._needsFrame) {
         this._pivot.quaternion.copy(this._q);
         this._renderer.render(this._scene, this._camera);

@@ -50,6 +50,7 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 FRONTEND_FILES = (
     "triki-card.js",
     "triki-cap.js",
+    "triki-check.js",
     "triki-three.js",
     "triki.glb",
     "tex_metal.webp",

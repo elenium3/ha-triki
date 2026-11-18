@@ -393,6 +393,11 @@ class TrikiDevice:
             "gyro": [round(s.gx - bias[0], 1), round(s.gy - bias[1], 1), round(s.gz - bias[2], 1)],
             "accel": [round(s.ax, 3), round(s.ay, 3), round(s.az, 3)],
             "button": s.button,
+            # for the guided check's link figures: frames since setup, the rate
+            # asked for and the host's clock (frames over time = the real rate)
+            "frames": self.stats.frames,
+            "rate": self.stream_rate,
+            "ts": round(time.monotonic(), 3),
         }
 
     # ------------------------------------------------------------ calibration
