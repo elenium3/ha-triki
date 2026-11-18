@@ -30,15 +30,18 @@ const STRINGS = {
       err: { moving: "It is moving: hold still for a second", not_flat: "It is not lying flat", asleep: "The cap is asleep: wake it first", no_data: "No data yet: wake the cap" } },
     button: "Button", rate: "Hz", history: "Last 10 s", nodevice: "No Triki token found",
     check: { title: "Check", open: "Check",
-      steps: { rest: "Lying still", flat: "Level and front", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", press: "Button", flip: "Turn over", drift: "Direction drift" },
+      steps: { rest: "Lying still", flat: "Level and front", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", press: "Button", flip: "Turn over", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift" },
       text: {
         identify: "Press the button on the cap you want to check. It blinks its LED.",
         wake: "Press the button on the cap to wake it.",
         rest: "Put the cap on the table and do not touch it for 10 seconds. This measures the link and the sensor noise.",
         flat: "Lay the cap on the table, dot away from you, let go and press Done. The model learns what level and front are.",
         tilt: "Lift the edge with the dot by 2–3 cm and hold it. The model should tilt like the faint hint.",
-        turn_cw: "Without lifting it, turn the cap one full turn clockwise, like the faint hint. Regrip if you need to. Then press Done.",
-        turn_ccw: "Now one full turn counter-clockwise. Then press Done.",
+        turn_cw: "Turn the cap on the table a quarter turn clockwise: the arrow goes from pointing away to the right. Let go, regrip and turn another quarter. Then press Done.",
+        turn_ccw: "The same counter-clockwise: two quarter turns, letting go in between. Then press Done.",
+        tap: "Tap the table next to the cap with a finger 2–3 times, a second apart.",
+        shake: "Pick the cap up and give it 2–3 short shakes.",
+        throw: "Toss the cap 10–20 cm up and catch it. You can skip this.",
         press: "Press the button in this order:",
         flip: "Turn the cap over, wait a second, then turn it back.",
         drift: "Leave the cap lying for 30 seconds. This measures how far the direction drifts without motion.",
@@ -46,7 +49,7 @@ const STRINGS = {
       start: "Start", done: "Done", redo: "Redo", skip: "Skip", next: "Next", close: "Close", copy: "Copy report", copied: "Copied",
       paused: "The link dropped. The step starts over when the cap is back.",
       busy: "This cap is being checked in another window.", other: "Check running",
-      stepOf: "Step {n} of {total}", count: "Steps", sec: "s", pick: "Which cap?", angle: "Turn", wrong: "wrong way",
+      stepOf: "Step {n} of {total}", count: "Steps", times: "Times", sec: "s", pick: "Which cap?", angle: "Turn", wrong: "wrong way",
       status: { pass: "Good", warn: "Remarks", fail: "Failed", skip: "Skipped" },
       summary: "Result", flipStage: ["Lay it flat first", "Turn it over", "Now turn it back", "Done"],
       values: { rest: "{rate} Hz of {asked}, {loss_pct}% lost, noise {noise_dps}°/s, via {via}", turn: "{steps} steps for {angle}°", drift: "{drift_deg_min}°/min" },
@@ -71,6 +74,8 @@ const STRINGS = {
         flip_events: "The side changed, but {flips} of 2 flip events came.",
         drift: "The direction drifts {drift_deg_min}°/min.",
         wrong_press: "That was {got}; now {want}.",
+        not_detected: "The gesture was not recognised.",
+        extra: "Something fired that was not asked for: {extra}.",
       } },
     gestures: {
       press: "Press", single_press: "Press", double_press: "Double press", triple_press: "Triple press",
@@ -89,15 +94,18 @@ const STRINGS = {
     reset: "Выровнять направление",
     led: "Диод", button: "Кнопка", rate: "Гц", history: "Последние 10 с",
     check: { title: "Проверка", open: "Проверка",
-      steps: { rest: "Покой", flat: "Ровно и перед", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", press: "Кнопка", flip: "Переворот", drift: "Уход направления" },
+      steps: { rest: "Покой", flat: "Ровно и перед", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", press: "Кнопка", flip: "Переворот", tap: "Касание", shake: "Встряхивание", throw: "Бросок", drift: "Уход направления" },
       text: {
         identify: "Нажми кнопку на крышке, которую хочешь проверить. Она мигнёт диодом.",
         wake: "Нажми кнопку на крышке, чтобы разбудить её.",
         rest: "Положи крышку на стол и не трогай 10 секунд. Так проверяется связь и шум датчика.",
         flat: "Положи крышку на стол точкой от себя, отпусти и нажми «Готово». Модель запомнит, где «ровно» и где перед.",
         tilt: "Приподними край с точкой на 2–3 см и подержи. Модель должна наклониться так же, как полупрозрачная подсказка.",
-        turn_cw: "Не отрывая от стола, поверни крышку на один полный оборот по часовой, как подсказка. Можно перехватывать. Потом нажми «Готово».",
-        turn_ccw: "Теперь один полный оборот против часовой. Потом нажми «Готово».",
+        turn_cw: "Поверни крышку на столе на четверть оборота по часовой: стрелка уйдёт от тебя вправо. Отпусти, перехвати и поверни ещё на четверть. Потом нажми «Готово».",
+        turn_ccw: "То же против часовой: две четверти оборота, между ними можно отпустить. Потом нажми «Готово».",
+        tap: "Постучи пальцем по столу рядом с крышкой 2–3 раза, с паузой в секунду.",
+        shake: "Возьми крышку в руку и коротко встряхни 2–3 раза.",
+        throw: "Подбрось крышку на 10–20 см и поймай. Этот шаг можно пропустить.",
         press: "Нажми кнопку по порядку:",
         flip: "Переверни крышку на другую сторону, подожди секунду и верни обратно.",
         drift: "Оставь крышку лежать 30 секунд. Так меряется, насколько уплывает направление без движения.",
@@ -105,7 +113,7 @@ const STRINGS = {
       start: "Начать", done: "Готово", redo: "Повторить", skip: "Пропустить", next: "Дальше", close: "Закрыть", copy: "Скопировать отчёт", copied: "Скопировано",
       paused: "Связь пропала. Шаг начнётся заново, когда крышка вернётся.",
       busy: "Эту крышку уже проверяют в другом окне.", other: "Идёт проверка",
-      stepOf: "Шаг {n} из {total}", count: "Шаги", sec: "с", pick: "Какую крышку проверяем?", angle: "Поворот", wrong: "не в ту сторону",
+      stepOf: "Шаг {n} из {total}", count: "Шаги", times: "Раз", sec: "с", pick: "Какую крышку проверяем?", angle: "Поворот", wrong: "не в ту сторону",
       status: { pass: "Хорошо", warn: "Есть замечания", fail: "Не прошло", skip: "Пропущено" },
       summary: "Итог", flipStage: ["Сначала положи плашмя", "Переверни", "Теперь верни обратно", "Готово"],
       values: { rest: "{rate} Гц из {asked}, потери {loss_pct}%, шум {noise_dps}°/с, через {via}", turn: "{steps} шагов за {angle}°", drift: "{drift_deg_min}°/мин" },
@@ -130,6 +138,8 @@ const STRINGS = {
         flip_events: "Сторона сменилась, но событий переворота {flips} из 2.",
         drift: "Направление уплывает на {drift_deg_min}°/мин.",
         wrong_press: "Это было «{got}», сейчас нужно «{want}».",
+        not_detected: "Жест не распознан.",
+        extra: "Сработало то, о чём не просили: {extra}.",
       } },
     nodevice: "Трики не найден",
     gestures: {
@@ -150,15 +160,18 @@ const STRINGS = {
       err: { moving: "Kapsel się rusza: przytrzymaj chwilę nieruchomo", not_flat: "Kapsel nie leży płasko", asleep: "Kapsel śpi: najpierw go obudź", no_data: "Brak danych: obudź kapsel" } },
     reset: "Wyrównaj kierunek", led: "Dioda", button: "Przycisk", rate: "Hz", history: "Ostatnie 10 s",
     check: { title: "Test", open: "Test",
-      steps: { rest: "Spoczynek", flat: "Poziom i przód", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", press: "Przycisk", flip: "Odwrócenie", drift: "Dryf kierunku" },
+      steps: { rest: "Spoczynek", flat: "Poziom i przód", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", press: "Przycisk", flip: "Odwrócenie", tap: "Stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", drift: "Dryf kierunku" },
       text: {
         identify: "Naciśnij przycisk na kapslu, który chcesz sprawdzić. Mignie diodą.",
         wake: "Naciśnij przycisk na kapslu, żeby go obudzić.",
         rest: "Połóż kapsel na stole i nie dotykaj przez 10 sekund. Mierzy to łącze i szum czujnika.",
         flat: "Połóż kapsel na stole kropką od siebie, puść i naciśnij Gotowe. Model zapamięta, gdzie jest poziom i przód.",
         tilt: "Unieś krawędź z kropką o 2–3 cm i przytrzymaj. Model powinien przechylić się jak półprzezroczysta podpowiedź.",
-        turn_cw: "Nie odrywając od stołu, obróć kapsel o jeden pełny obrót w prawo, jak podpowiedź. Możesz przekładać palce. Potem naciśnij Gotowe.",
-        turn_ccw: "Teraz jeden pełny obrót w lewo. Potem naciśnij Gotowe.",
+        turn_cw: "Obróć kapsel na stole o ćwierć obrotu w prawo: strzałka przejdzie od ciebie w prawo. Puść, przełóż palce i obróć o kolejną ćwiartkę. Potem naciśnij Gotowe.",
+        turn_ccw: "To samo w lewo: dwie ćwiartki obrotu, między nimi możesz puścić. Potem naciśnij Gotowe.",
+        tap: "Stuknij palcem w stół obok kapsla 2–3 razy, co sekundę.",
+        shake: "Weź kapsel do ręki i krótko potrząśnij 2–3 razy.",
+        throw: "Podrzuć kapsel na 10–20 cm i złap. Ten krok możesz pominąć.",
         press: "Naciśnij przycisk po kolei:",
         flip: "Odwróć kapsel na drugą stronę, poczekaj sekundę i odwróć z powrotem.",
         drift: "Zostaw kapsel na 30 sekund. Mierzy to, jak bardzo kierunek ucieka bez ruchu.",
@@ -166,7 +179,7 @@ const STRINGS = {
       start: "Start", done: "Gotowe", redo: "Powtórz", skip: "Pomiń", next: "Dalej", close: "Zamknij", copy: "Kopiuj raport", copied: "Skopiowano",
       paused: "Łącze zerwane. Krok zacznie się od nowa, gdy kapsel wróci.",
       busy: "Ten kapsel jest już sprawdzany w innym oknie.", other: "Trwa test",
-      stepOf: "Krok {n} z {total}", count: "Kroki", sec: "s", pick: "Który kapsel?", angle: "Obrót", wrong: "w złą stronę",
+      stepOf: "Krok {n} z {total}", count: "Kroki", times: "Razy", sec: "s", pick: "Który kapsel?", angle: "Obrót", wrong: "w złą stronę",
       status: { pass: "Dobrze", warn: "Uwagi", fail: "Nie przeszło", skip: "Pominięto" },
       summary: "Wynik", flipStage: ["Najpierw połóż płasko", "Odwróć", "Teraz odwróć z powrotem", "Gotowe"],
       values: { rest: "{rate} Hz z {asked}, utrata {loss_pct}%, szum {noise_dps}°/s, przez {via}", turn: "{steps} kroków na {angle}°", drift: "{drift_deg_min}°/min" },
@@ -191,6 +204,8 @@ const STRINGS = {
         flip_events: "Strona się zmieniła, ale przyszło {flips} z 2 zdarzeń odwrócenia.",
         drift: "Kierunek ucieka o {drift_deg_min}°/min.",
         wrong_press: "To było „{got}”, teraz „{want}”.",
+        not_detected: "Gest nie został rozpoznany.",
+        extra: "Zadziałało coś, o co nie proszono: {extra}.",
       } },
     nodevice: "Nie znaleziono kapsla Triki",
     gestures: {
@@ -218,7 +233,6 @@ function loadCheck() {
 }
 const CHECK_RENEW_MS = 10000; // the server lets a check lapse 30 s after the last renewal
 const GHOST_TILT = (20 * Math.PI) / 180;
-const GHOST_SPIN_S = 20; // the pace of the hint's full turn
 function loadCap() {
   if (!capPromise) capPromise = import(asset("triki-cap.js"));
   return capPromise;
@@ -981,6 +995,11 @@ class TrikiCard extends HTMLElement {
         el.checkPanel.querySelectorAll("li").forEach((li, i) => li.classList.toggle("ok", i < live.got));
       }
       if ((v.id === "rest" || v.id === "drift") && live.moved) set("cHint", t.reason.moved);
+      if (["tap", "shake", "throw"].includes(v.id)) set("cCount", `${live.count} / ${live.want}`);
+      if (v.extra && v.phase === "running") {
+        const list = Object.entries(v.extra).map(([k, n]) => `${this._t.gestures[k] || k} ×${n}`).join(", ");
+        set("cHint", this._fmt(t.reason.extra, { extra: list }));
+      }
       el.checkBarText.textContent = `${t.steps[v.id]}${v.phase === "running" && v.limit ? ` · ${Math.max(0, Math.ceil(v.limit - v.elapsed))} ${t.sec}` : ""}`;
       el.checkTime.style.width = v.phase === "running" && v.limit ? `${Math.min(100, (v.elapsed / v.limit) * 100)}%` : "0";
     } else {
@@ -1019,6 +1038,8 @@ class TrikiCard extends HTMLElement {
     let live = "";
     if (v.id === "turn_cw" || v.id === "turn_ccw") {
       live = `<div class="big"><div><small>${t.count}</small><b id="cSteps">0</b></div><div><small>${t.angle}</small><b id="cAngle">0°</b></div></div><div class="hint" id="cWrong"></div>`;
+    } else if (["tap", "shake", "throw"].includes(v.id)) {
+      live = `<div class="big"><div><small>${t.times}</small><b id="cCount">0 / ${v.live.want}</b></div></div><div class="hint" id="cHint"></div>`;
     } else if (["tilt", "flip", "press", "rest", "drift"].includes(v.id)) {
       live = `<div class="hint" id="cHint"></div>`;
     }
@@ -1045,6 +1066,7 @@ class TrikiCard extends HTMLElement {
     if (vals.missing) vals.missing = vals.missing.split(",").map((k) => this._t.gestures[k] || k).join(", ");
     if (vals.via == null) vals.via = "—";
     if (typeof vals.expected === "number") vals.expected = Math.round(vals.expected);
+    if (vals.extra) vals.extra = vals.extra.split(",").map((x) => { const [k, n] = x.split("×"); return `${this._t.gestures[k] || k} ×${n}`; }).join(", ");
     const parts = [];
     if (r.reason && t.reason[r.reason]) parts.push(this._fmt(t.reason[r.reason], vals));
     if (r.status !== "skip" || r.values) {
@@ -1100,8 +1122,10 @@ class TrikiCard extends HTMLElement {
     let r;
     if (v.ghost.type === "tilt") {
       r = new T.Quaternion().setFromAxisAngle(new T.Vector3().crossVectors(h, up).normalize(), GHOST_TILT);
-    } else if (v.ghost.type === "spin") {
-      r = new T.Quaternion().setFromAxisAngle(up, v.ghost.dir * 2 * Math.PI * ((sec % GHOST_SPIN_S) / GHOST_SPIN_S));
+    } else if (v.ghost.type === "quarter") {
+      // a quarter turn in 2 s, a 1 s rest, again: the pace of a turning wrist
+      const p = Math.min(1, (sec % 3) / 2);
+      r = new T.Quaternion().setFromAxisAngle(up, v.ghost.dir * (Math.PI / 2) * (1 - Math.cos(Math.PI * p)) / 2);
     } else if (v.ghost.type === "flip") {
       const p = Math.min(1, (sec % 3) / 1.5);
       r = new T.Quaternion().setFromAxisAngle(h, Math.PI * p);

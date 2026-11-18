@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { CheckRun } from "../../custom_components/triki/frontend/triki-check.js";
 
 const LIVE = { connected: true, streaming: true, rate: 52, face: "cap_up", via: "hm-ble-esp32", rssi: -60 };
-const OPTS = { knob: true, knob_step: 30, invert_rotation: false, motion_gestures: true, multi_press: true };
+const OPTS = { knob: true, knob_step: 30, invert_rotation: false, motion_gestures: true, multi_press: true, shake: true };
 const FLAT_Q = [1, 0, 0, 0];
 
 function rig(options = OPTS) {
@@ -115,34 +115,41 @@ test("tilt hints when the other edge is raised and times out", () => {
   assert.equal(run.results.tilt.reason, "not_raised");
 });
 
+// two quarter turns with a regrip between them: turn, pause, turn
 function turn(run, clock, degrees, events, kind = "rotate_cw") {
-  const secs = 12;
+  const secs = 8;
   let fired = 0;
+  const angleAt = (s) => {
+    const half = degrees / 2;
+    if (s < 3) return (s / 3) * half; // first quarter
+    if (s < 5) return half; // let go, regrip
+    return half + ((s - 5) / 3) * half;
+  };
   stream(run, clock, secs, 53, (s) => {
-    const due = Math.floor((s / secs) * events);
+    const due = Math.floor((Math.abs(angleAt(s)) / Math.abs(degrees)) * events);
     while (fired < due) { run.feedEvent(kind, { steps: 1, degrees: 30 }); fired++; }
-    return { yaw: ((((s / secs) * degrees) % 360) + 540) % 360 - 180, gyro: [0, 0, degrees / secs] };
+    return { yaw: ((angleAt(s) % 360) + 540) % 360 - 180 };
   });
   while (fired < events) { run.feedEvent(kind, { steps: 1, degrees: 30 }); fired++; }
 }
 
-test("a clockwise turn with 12 steps passes", () => {
+test("two clockwise quarter turns with a regrip and 6 steps pass", () => {
   const { run, clock } = rig();
   goTo(run, "turn_cw");
   run.start();
-  turn(run, clock, -360, 12);
-  assert.equal(run.view().live.steps, 12);
+  turn(run, clock, -180, 6);
+  assert.equal(run.view().live.steps, 6);
   run.done();
   const r = run.results.turn_cw;
   assert.equal(r.status, "pass");
-  assert.equal(r.values.angle, -360);
+  assert.equal(r.values.angle, -180);
 });
 
 test("a turn that lost steps fails, a short or reversed one is redone", () => {
   let { run, clock } = rig();
   goTo(run, "turn_cw");
   run.start();
-  turn(run, clock, -360, 8);
+  turn(run, clock, -180, 3);
   run.done();
   assert.equal(run.results.turn_cw.status, "fail");
   assert.equal(run.results.turn_cw.reason, "steps");
@@ -150,14 +157,14 @@ test("a turn that lost steps fails, a short or reversed one is redone", () => {
   ({ run, clock } = rig());
   goTo(run, "turn_cw");
   run.start();
-  turn(run, clock, -200, 6);
+  turn(run, clock, -100, 3);
   run.done();
   assert.equal(run.results.turn_cw.reason, "short");
 
   ({ run, clock } = rig());
   goTo(run, "turn_cw");
   run.start();
-  turn(run, clock, 360, 12, "rotate_ccw");
+  turn(run, clock, 180, 6, "rotate_ccw");
   run.done();
   assert.equal(run.results.turn_cw.reason, "direction");
 });
@@ -166,23 +173,23 @@ test("inverted rotation expects the other event name, the same hand direction", 
   const { run, clock } = rig({ ...OPTS, invert_rotation: true });
   goTo(run, "turn_cw");
   run.start();
-  turn(run, clock, -360, 12, "rotate_ccw");
+  turn(run, clock, -180, 6, "rotate_ccw");
   run.done();
   assert.equal(run.results.turn_cw.status, "pass");
 });
 
-test("a 45 degree knob step expects 8 steps; the knob off measures the turn only", () => {
+test("a 45 degree knob step expects 4 steps; the knob off measures the turn only", () => {
   let { run, clock } = rig({ ...OPTS, knob_step: 45 });
   goTo(run, "turn_ccw");
   run.start();
-  turn(run, clock, 360, 8, "rotate_ccw");
+  turn(run, clock, 180, 4, "rotate_ccw");
   run.done();
   assert.equal(run.results.turn_ccw.status, "pass");
 
   ({ run, clock } = rig({ ...OPTS, knob: false }));
   goTo(run, "turn_ccw");
   run.start();
-  turn(run, clock, 360, 0);
+  turn(run, clock, 180, 0);
   run.done();
   assert.equal(run.results.turn_ccw.status, "skip");
   assert.equal(run.results.turn_ccw.reason, "knob_off");
@@ -267,4 +274,66 @@ test("skip and redo", () => {
   run.skip();
   assert.equal(run.results.rest.status, "skip");
   assert.equal(run.step.id, "flat");
+});
+
+test("the gesture steps follow the options", () => {
+  const ids = (o) => new CheckRun({ options: o }).steps.map((s) => s.id);
+  assert.ok(ids(OPTS).includes("tap") && ids(OPTS).includes("shake") && ids(OPTS).includes("throw"));
+  const plain = ids({ ...OPTS, motion_gestures: false, shake: false });
+  assert.ok(!plain.includes("tap") && !plain.includes("shake") && !plain.includes("throw"));
+  // the options arriving with the first status rebuild the list
+  let t = 0;
+  const run = new CheckRun({ options: {}, now: () => t });
+  assert.ok(!run.steps.some((s) => s.id === "shake"));
+  run.feedStatus({ ...LIVE, options: OPTS });
+  assert.ok(run.steps.some((s) => s.id === "shake"));
+});
+
+test("tap needs two taps, shake one; a step that sees none fails", () => {
+  let { run, clock } = rig();
+  goTo(run, "tap");
+  run.start();
+  run.feedEvent("tap");
+  assert.equal(run.phase, "running");
+  run.feedEvent("tap");
+  assert.equal(run.results.tap.status, "pass");
+
+  ({ run, clock } = rig());
+  goTo(run, "shake");
+  run.start();
+  clock.advance(31_000);
+  assert.equal(run.results.shake.reason, "not_detected");
+  assert.equal(run.view().optional, false);
+});
+
+test("throw is optional and may bring a tap and a flip on landing", () => {
+  const { run } = rig();
+  goTo(run, "throw");
+  assert.equal(run.view().optional, true);
+  run.start();
+  run.feedEvent("tap");
+  run.feedEvent("throw");
+  assert.equal(run.results.throw.status, "pass");
+});
+
+test("a gesture nobody asked for is reported as a false alarm", () => {
+  let { run, clock } = rig();
+  run.start(); // lying still
+  let fired = false;
+  stream(run, clock, 10.2, 53, (sec) => {
+    if (sec > 5 && !fired) { fired = true; run.feedEvent("shake"); } // garbage read as a shake
+    return {};
+  });
+  assert.equal(run.results.rest.status, "warn");
+  assert.equal(run.results.rest.reason, "extra");
+  assert.equal(run.results.rest.values.extra, "shake×1");
+
+  ({ run, clock } = rig());
+  goTo(run, "turn_cw");
+  run.start();
+  run.feedEvent("shake"); // a brisk turn read as a shake
+  turn(run, clock, -180, 6);
+  run.done();
+  assert.equal(run.results.turn_cw.status, "warn");
+  assert.match(run.report(), /turn_cw: warn \(extra\).*extra=shake×1/);
 });

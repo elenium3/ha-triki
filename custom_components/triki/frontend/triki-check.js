@@ -13,9 +13,18 @@ const STILL_DPS = 8; // above this the token is being moved
 const TILT_SIN = 0.26; // an edge raised by 15 degrees or more
 const HOLD_S = 1.0;
 
-// One full turn of the knob, judged against the angle the pose integrated.
-const TURN_MIN_DEG = 300;
-const TURN_MAX_DEG = 450;
+// Two quarter turns of the knob (a wrist turns about 90 degrees comfortably; the hand
+// lets go between them), judged against the angle the pose integrated.
+export const TURN_TARGET_DEG = 180;
+const TURN_MIN_DEG = 140;
+const TURN_MAX_DEG = 250;
+
+// Gestures a step does not ask for are false alarms worth reporting.
+const GESTURES = ["shake", "tap", "throw", "flip", "rotate_cw", "rotate_ccw"];
+const EXPECTED = {
+  turn_cw: ["rotate_cw", "rotate_ccw"], turn_ccw: ["rotate_cw", "rotate_ccw"],
+  flip: ["flip"], tap: ["tap"], shake: ["shake"], throw: ["throw", "tap", "flip"],
+};
 
 export function buildSteps(options = {}) {
   const steps = [
@@ -26,9 +35,12 @@ export function buildSteps(options = {}) {
     { id: "turn_ccw", manual: true, timeout: 60, dir: 1 },
     { id: "press", timeout: 60 },
     { id: "flip", timeout: 60 },
+    { id: "tap", timeout: 30, need: "motion_gestures" },
+    { id: "shake", timeout: 30, need: "shake" },
+    { id: "throw", timeout: 40, need: "motion_gestures", optional: true },
     { id: "drift", auto: 30 },
   ];
-  return steps.map((s) => ({ ...s, options }));
+  return steps.filter((s) => !s.need || options[s.need]).map((s) => ({ ...s, options }));
 }
 
 const opposite = { cap_up: "pcb_up", pcb_up: "cap_up" };
@@ -70,7 +82,12 @@ export class CheckRun {
   feedStatus(s) {
     const was = this._live(this.status);
     this.status = s;
-    if (s?.options) this.options = { ...this.options, ...s.options };
+    if (s?.options) {
+      this.options = { ...this.options, ...s.options };
+      if (this.index === 0 && this.phase === "ready" && !Object.keys(this.results).length) {
+        this.steps = buildSteps(this.options);
+      }
+    }
     const live = this._live(s);
     if (!live && was && this.phase === "running") {
       this.phase = "paused";
@@ -148,7 +165,7 @@ export class CheckRun {
     if (s.id === "turn_cw" || s.id === "turn_ccw") {
       v.live = { steps: st.steps || 0, wrong: st.wrong || 0, angle: Math.round(st.angle || 0),
         expected: this._knobStep() ? Math.round(Math.abs(st.angle || 0) / this._knobStep()) : null };
-      v.ghost = { type: "spin", dir: s.dir };
+      v.ghost = { type: "quarter", dir: s.dir };
     } else if (s.id === "tilt") {
       v.ghost = { type: "tilt" };
       v.live = { hint: st.hint || null };
@@ -159,7 +176,11 @@ export class CheckRun {
       v.live = { want: this._pressTargets(), got: st.got || 0, hint: st.hint || null };
     } else if (s.id === "rest" || s.id === "drift") {
       v.live = { moved: !!st.moved };
+    } else if (s.id === "tap" || s.id === "shake" || s.id === "throw") {
+      v.live = { count: st[s.id] || 0, want: s.id === "tap" ? 2 : 1 };
     }
+    v.optional = !!s.optional;
+    v.extra = st.extra || null;
     return v;
   }
 
@@ -257,6 +278,17 @@ export class CheckRun {
 
   _onEvent(kind, data) {
     const s = this.step, st = this._st;
+    if (GESTURES.includes(kind) && !(EXPECTED[s.id] || []).includes(kind)) {
+      st.extra ??= {};
+      st.extra[kind] = (st.extra[kind] || 0) + 1;
+      return;
+    }
+    if (s.id === "tap" || s.id === "shake" || s.id === "throw") {
+      if (kind !== s.id) return;
+      st[kind] = (st[kind] || 0) + 1;
+      if (st[kind] >= (s.id === "tap" ? 2 : 1)) this._finish(this._judge());
+      return;
+    }
     if (s.id === "turn_cw" || s.id === "turn_ccw") {
       if (kind !== "rotate_cw" && kind !== "rotate_ccw") return;
       // invert_rotation swaps the event names, not the hand's direction
@@ -294,8 +326,27 @@ export class CheckRun {
   }
 
   _judge(timedOut = false) {
+    const r = this._judgeStep(timedOut);
+    const extra = this._st?.extra;
+    if (extra && r.status !== "fail" && r.status !== "skip") {
+      // something fired that this step did not ask for: a false alarm
+      const list = Object.entries(extra).map(([k, n]) => `${k}×${n}`).join(",");
+      return { ...r, status: "warn", reason: r.reason || "extra", values: { ...(r.values || {}), extra: list } };
+    }
+    if (extra && r.values) r.values.extra = Object.entries(extra).map(([k, n]) => `${k}×${n}`).join(",");
+    return r;
+  }
+
+  _judgeStep(timedOut = false) {
     const s = this.step, st = this._st || {};
     switch (s.id) {
+      case "tap":
+      case "shake":
+      case "throw": {
+        const n = st[s.id] || 0, want = s.id === "tap" ? 2 : 1;
+        return n >= want ? { status: "pass", values: { count: n } }
+          : { status: "fail", reason: "not_detected", values: { count: n } };
+      }
       case "rest": return this._judgeRest(st);
       case "tilt":
         if (timedOut) {
