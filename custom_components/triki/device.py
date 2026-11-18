@@ -133,6 +133,16 @@ CALIBRATION_KEY = "calibration"
 _BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before pausing
 # Live motion for the card: at most this often, and only while someone listens.
 LIVE_INTERVAL_S = 1 / 30
+# The pose is integrated on the token's sample clock, not on arrival times. A proxy
+# sometimes holds notifications back for a second or two and then delivers them in a
+# burst; on arrival times that is one long gap (dropped by the filter) and then frames
+# an instant apart, so the turn made meanwhile was lost. The sample clock steps one
+# sample period per frame and only re-syncs to arrival time after a long silence.
+CLOCK_RESYNC_S = 5.0
+# The LSM6DSL runs about 2 % faster than its nominal rate (53.0 frames/s at 52 Hz on
+# the owner's tokens); the factor is measured per token over windows of this length.
+ODR_WINDOW_S = 20.0
+ODR_SCALE_RANGE = (0.98, 1.06)
 
 
 @dataclass(slots=True)
@@ -230,6 +240,9 @@ class TrikiDevice:
         # live motion (the Lovelace card): called at most every LIVE_INTERVAL_S
         self._motion_listeners: list[Callable[[dict[str, Any]], None]] = []
         self._orientation = Orientation()
+        self._clk_t: float | None = None  # sample-clock time of the last frame
+        self._odr_scale = 1.0
+        self._odr_anchor: tuple[float, int, int] | None = None  # (arrival, frames, rate)
         self._logo_angle: float | None = None
         self._load_calibration()
         self._last_sample: Sample | None = None
@@ -760,6 +773,8 @@ class TrikiDevice:
         t = time.monotonic()
         self._stale_notifs = self._dup_notifs = 0
         self._last_chunk = None
+        self._clk_t = None
+        self._odr_anchor = None
         self._streaming = False
         self.stream_rate = self.options.rate
         await client.start_notify(
@@ -933,6 +948,31 @@ class TrikiDevice:
         self._last_chunk, self._last_chunk_t = chunk, now
         self._on_notify(char, data)
 
+    def _sample_clock(self, now: float) -> float:
+        """The time of the next frame on the token's clock (see CLOCK_RESYNC_S)."""
+        rate = self.stream_rate or self.options.rate
+        anchor = self._odr_anchor
+        if anchor is None or anchor[2] != rate:
+            self._odr_anchor = (now, 0, rate)
+        else:
+            t0, n, _ = anchor
+            n += 1
+            if now - t0 >= ODR_WINDOW_S:
+                est = n / ((now - t0) * rate)
+                # a lossy window reads low: only plausible ones count
+                if ODR_SCALE_RANGE[0] <= est <= ODR_SCALE_RANGE[1]:
+                    self._odr_scale += 0.5 * (est - self._odr_scale)
+                self._odr_anchor = (now, 0, rate)
+            else:
+                self._odr_anchor = (t0, n, rate)
+        clk = self._clk_t
+        if clk is None or now - clk > CLOCK_RESYNC_S:
+            clk = now
+        else:
+            clk = min(clk + 1.0 / (rate * self._odr_scale), now)
+        self._clk_t = clk
+        return clk
+
     @callback
     def _on_notify(self, _char: Any, data: bytearray) -> None:
         if self._capture:
@@ -952,7 +992,7 @@ class TrikiDevice:
             # frames of one notification arrived together: spread them one
             # sample period apart, ending at the arrival time
             t_frame = now - (len(frames) - 1 - i) * dt
-            self._orientation.update(sample, t_frame, self._detector.gyro_bias)
+            self._orientation.update(sample, self._sample_clock(now), self._detector.gyro_bias)
             self._last_sample = sample
             for ev in self._detector.update(sample, t_frame):
                 active = True

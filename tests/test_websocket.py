@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import pytest
 from homeassistant.core import HomeAssistant
 
 from custom_components import triki
@@ -152,3 +153,31 @@ async def test_calibrate_logo_angle_is_stored(hass: HomeAssistant, setup, hass_w
     await ws.send_json({"id": 3, "type": "triki/calibrate", "step": "clear"})
     assert (await ws.receive_json())["success"]
     assert dev.logo_angle is None
+
+
+async def test_a_delayed_burst_keeps_the_turn(hass: HomeAssistant, setup, monkeypatch) -> None:
+    """A proxy holds notifications back for 2 s, then delivers them at once.
+
+    The pose runs on the sample clock, so the turn made meanwhile is not lost.
+    """
+    dev = setup.runtime_data
+    clock = [1000.0]
+    monkeypatch.setattr(device_mod.time, "monotonic", lambda: clock[0])
+    _client, notify = await connect(hass, setup)
+    rate = dev.stream_rate
+
+    def send(n: int, gz: float, step: float) -> None:
+        for i in range(n):
+            clock[0] += step
+            # real frames carry sensor noise; identical ones are dropped as duplicates
+            notify(None, bytearray(frame(gz=gz, ax=0.001 * (i % 7))))
+
+    send(3 * rate, 0.0, 1 / rate)  # settle, still
+    yaw0 = dev.motion_snapshot()["euler"][2]
+    send(rate, 50.0, 1 / rate)  # 1 s of turning at 50 deg/s, on time
+    clock[0] += 2.0  # then the proxy goes quiet for 2 s ...
+    send(2 * rate, 50.0, 0.001)  # ... and delivers the next 2 s of turning at once
+    send(rate, 0.0, 1 / rate)
+    turned = dev.motion_snapshot()["euler"][2] - yaw0
+    turned -= 360 * round(turned / 360)
+    assert abs(turned) == pytest.approx(150, abs=8)  # on arrival times it was about 55
