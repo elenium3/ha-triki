@@ -107,7 +107,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> boo
 
 def _card_hash() -> str:
     digest = hashlib.sha256()
-    for name in ("triki-card.js", "triki-three.js", "triki.glb"):
+    for name in ("triki-card.js", "triki-cap.js", "triki-three.js", "triki.glb"):
         digest.update((FRONTEND_DIR / name).read_bytes())
     return digest.hexdigest()[:12]
 

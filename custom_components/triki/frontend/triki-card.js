@@ -5,13 +5,15 @@
 // and accelerometer reading) at up to 30 per second while the token streams, and `event`
 // (gestures). Nothing of this goes through entity states.
 //
-// Frames: the sensor has +z out of the top (logo side), +x to the left of the logo and -y
-// towards the top of the logo (docs/protocol.md). The glTF model is Y-up with the logo on +Y
-// and its top towards -Z, so a sensor vector (x, y, z) is (-x, z, y) in the model frame and a
-// sensor quaternion (w, x, y, z) becomes (w, -x, z, y).
+// Frames: the pose quaternion turns sensor vectors into a world frame with z up. The sensor
+// has +z out of the resin side, +x to the left of the PCB art and -y towards its top
+// (docs/protocol.md). The scene keeps that world frame in a group turned to three.js's Y-up
+// (and half a turn about z, so the art faces the camera upright at heading 0); the model sits
+// in the sensor frame inside a pivot that takes the quaternion as is.
 //
-// 3D model: Flopsstuff/triki (MIT), textures resized to 1024 px WebP. Renderer: three.js (MIT),
-// bundled as triki-three.js. Both are loaded only when a card is on screen.
+// Models: `cap` (default) is procedural, built from calipered dimensions (triki-cap.js);
+// `glb` is Flopsstuff's textured model (MIT, triki.glb). Renderer: three.js (MIT), bundled
+// as triki-three.js. All of it is loaded only when a card is on screen.
 
 const BASE = new URL(".", import.meta.url).href;
 const VERSION = new URL(import.meta.url).searchParams.get("v") || "";
@@ -64,6 +66,11 @@ const ACCEL_RANGE = 2; // g at full bar
 
 let threePromise = null;
 let modelPromise = null;
+let capPromise = null;
+function loadCap() {
+  if (!capPromise) capPromise = import(asset("triki-cap.js"));
+  return capPromise;
+}
 function loadThree() {
   if (!threePromise) threePromise = import(asset("triki-three.js"));
   return threePromise;
@@ -290,6 +297,7 @@ class TrikiCard extends HTMLElement {
     el.led.disabled = !s.connected;
     el.led.classList.toggle("on", !!s.led);
     el.btnInd.classList.toggle("on", !!s.button);
+    this._setModelState(s.led, s.button);
     if (!live) {
       this._target = null;
       for (const k of ["roll", "pitch", "yaw"]) el[k].textContent = "—";
@@ -300,11 +308,12 @@ class TrikiCard extends HTMLElement {
     const el = this._el;
     if (!el) return;
     const [w, x, y, z] = m.quaternion;
-    this._target = [w, -x, z, y]; // sensor frame -> model frame, see the header
+    this._target = [w, x, y, z];
     el.roll.textContent = `${Math.round(m.euler[0])}°`;
     el.pitch.textContent = `${Math.round(m.euler[1])}°`;
     el.yaw.textContent = `${Math.round(m.euler[2])}°`;
     el.btnInd.classList.toggle("on", !!m.button);
+    this._setModelState(this._status?.led, m.button);
     if (this._config.show_values) {
       ["x", "y", "z"].forEach((a, i) => {
         this._bar(el[`g${a}`], m.gyro[i] / GYRO_RANGE);
@@ -319,6 +328,18 @@ class TrikiCard extends HTMLElement {
       while (this._history.length && now - this._history[0][0] > HISTORY_S) this._history.shift();
       this._historyDirty = true;
     }
+    this._startRender();
+  }
+
+  // the LED glow and the pressed button on the procedural model
+  _setModelState(led, pressed) {
+    if (!this._cap) return;
+    const key = `${!!led}${!!pressed}`;
+    if (key === this._capState) return;
+    this._capState = key;
+    this._cap.setLed(!!led);
+    this._cap.setPressed(!!pressed);
+    this._needsFrame = true;
     this._startRender();
   }
 
@@ -375,16 +396,35 @@ class TrikiCard extends HTMLElement {
       const camera = new T.PerspectiveCamera(32, 1, 0.1, 50);
       camera.position.set(0, 3.3, 2.3);
       camera.lookAt(0, 0, 0);
-      const pivot = new T.Group();
-      scene.add(pivot);
-      const gltf = await loadModel(T);
-      const model = gltf.scene.clone(true);
-      const box = new T.Box3().setFromObject(model);
-      const size = box.getSize(new T.Vector3()).length();
-      model.position.sub(box.getCenter(new T.Vector3()));
-      model.scale.setScalar(2.9 / size);
-      model.position.multiplyScalar(2.9 / size);
-      pivot.add(model);
+      const world = new T.Group(); // z-up world -> three.js Y-up
+      world.rotation.x = -Math.PI / 2;
+      const heading = new T.Group();
+      heading.rotation.z = Math.PI;
+      const pivot = new T.Group(); // takes the sensor quaternion
+      world.add(heading);
+      heading.add(pivot);
+      scene.add(world);
+      if (this._config.model === "glb") {
+        const gltf = await loadModel(T);
+        const model = gltf.scene.clone(true);
+        const box = new T.Box3().setFromObject(model);
+        const size = box.getSize(new T.Vector3()).length();
+        model.position.sub(box.getCenter(new T.Vector3()));
+        const holder = new T.Group();
+        holder.scale.setScalar(2.9 / size);
+        holder.add(model);
+        // the GLB is Y-up with its art's top towards -Z: model X, Y, Z are sensor -x, z, y
+        holder.quaternion.setFromRotationMatrix(new T.Matrix4().makeBasis(
+          new T.Vector3(-1, 0, 0), new T.Vector3(0, 0, 1), new T.Vector3(0, 1, 0)));
+        pivot.add(holder);
+      } else {
+        const { buildCap } = await loadCap();
+        this._cap = buildCap(T);
+        this._cap.group.scale.setScalar(0.078); // millimetres -> scene units
+        pivot.add(this._cap.group);
+        this._capState = null;
+        if (this._status) this._setModelState(this._status.led, this._status.button);
+      }
       Object.assign(this, { _renderer: renderer, _scene: scene, _camera: camera, _pivot: pivot });
       this._q = new T.Quaternion();
       this._qTarget = new T.Quaternion();
@@ -480,7 +520,7 @@ class TrikiCardEditor extends HTMLElement {
       this._form = document.createElement("ha-form");
       this._form.computeLabel = (s) => ({
         device_id: "Triki", title: "Title", show_values: "Gyro and accelerometer bars",
-        show_history: "Gyro history",
+        show_history: "Gyro history", model: "3D model",
       })[s.name] || s.name;
       this._form.addEventListener("value-changed", (ev) => {
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: ev.detail.value } }));
@@ -494,6 +534,8 @@ class TrikiCardEditor extends HTMLElement {
       { name: "title", selector: { text: {} } },
       { name: "show_values", selector: { boolean: {} } },
       { name: "show_history", selector: { boolean: {} } },
+      { name: "model", selector: { select: { mode: "dropdown", options: [
+        { value: "cap", label: "Triki (built in)" }, { value: "glb", label: "Flopsstuff textured" }] } } },
     ];
   }
 }

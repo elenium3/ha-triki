@@ -12,7 +12,7 @@ from .helpers import frame
 
 
 async def test_frontend_files_are_shipped() -> None:
-    for name in ("triki-card.js", "triki-three.js", "triki.glb"):
+    for name in ("triki-card.js", "triki-cap.js", "triki-three.js", "triki.glb"):
         assert (triki.FRONTEND_DIR / name).is_file()
 
 
