@@ -51,8 +51,12 @@ while the button is held. `model: glb` uses Flopsstuff's textured model.
   detector learns while the token lies still. Tilt is held to gravity; the
   accelerometer is ignored while it reads far from 1 g (a swing or a tap).
 - **Heading drifts.** There is no compass, so yaw is only the integrated gyro.
-  **Zero heading** on the card makes the current heading 0. A new link starts
-  level with yaw 0.
+  **Reset turn** on the card points the model's front away from the viewer. A
+  dozing token keeps its heading over the reconnect; a Home Assistant restart
+  loses it. The calibration itself is stored and never resets; the card's
+  "When to calibrate?" note says this in the owner's language. The angles are
+  labelled tilt sideways (roll), tilt forward (pitch) and turn (yaw), and each
+  button carries a one-line hint.
 - **Data path:** the card subscribes over Home Assistant's websocket
   (`triki/subscribe`). The integration sends the pose and the last frame at up
   to 30 messages per second while a card is open, and nothing when none is.
