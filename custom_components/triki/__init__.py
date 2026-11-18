@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from bleak_retry_connector import close_stale_connections_by_address
@@ -15,7 +16,6 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.typing import ConfigType
-from homeassistant.loader import async_get_integration
 
 from .const import (
     CONF_IDLE_TIMEOUT,
@@ -51,13 +51,13 @@ FRONTEND_DIR = Path(__file__).parent / "frontend"
 
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     async_register_websocket(hass)
-    integration = await async_get_integration(hass, DOMAIN)
+    # the card's content hash in its URL makes browsers fetch it again after any change
+    card_hash = await hass.async_add_executor_job(_card_hash)
     await hass.http.async_register_static_paths(
         [StaticPathConfig(FRONTEND_URL, str(FRONTEND_DIR), cache_headers=True)]
     )
     if "frontend" in hass.config.components:
-        # the version in the URL makes browsers fetch the card again after an update
-        add_extra_js_url(hass, f"{FRONTEND_URL}/triki-card.js?v={integration.version}")
+        add_extra_js_url(hass, f"{FRONTEND_URL}/triki-card.js?v={card_hash}")
     return True
 
 
@@ -103,6 +103,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> boo
 
     entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_stop))
     return True
+
+
+def _card_hash() -> str:
+    digest = hashlib.sha256()
+    for name in ("triki-card.js", "triki-three.js", "triki.glb"):
+        digest.update((FRONTEND_DIR / name).read_bytes())
+    return digest.hexdigest()[:12]
 
 
 def _async_update_sleep_issue(

@@ -80,6 +80,7 @@ const CSS = `
   .name { font-size: 1.15em; font-weight: 500; margin-right: auto; }
   .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85em; padding: 2px 8px;
     border-radius: 12px; background: var(--secondary-background-color); color: var(--secondary-text-color); }
+  .chip[hidden] { display: none; }
   .chip.live { background: rgba(102,187,106,.2); color: #66bb6a; }
   .chip.warn { background: rgba(255,152,0,.2); color: #ff9800; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
@@ -215,15 +216,19 @@ class TrikiCard extends HTMLElement {
   async _subscribe() {
     this._subscribing = true;
     try {
-      let deviceId = this._config?.device_id;
-      if (!deviceId) {
+      // a fixed token from the config, otherwise every token: the card then shows
+      // whichever one is awake (a home can have several, most of them asleep)
+      let ids = this._config?.device_id ? [this._config.device_id] : null;
+      if (!ids) {
         const devices = await this._hass.connection.sendMessagePromise({ type: "triki/devices" });
-        deviceId = devices[0]?.device_id;
-        if (!deviceId) { this._noDevice(); return; }
+        ids = devices.map((d) => d.device_id);
+        if (!ids.length) { this._noDevice(); return; }
       }
-      this._deviceId = deviceId;
-      this._unsub = await this._hass.connection.subscribeMessage(
-        (msg) => this._onMessage(msg), { type: "triki/subscribe", device_id: deviceId });
+      this._statuses = {};
+      this._deviceId = this._deviceId && ids.includes(this._deviceId) ? this._deviceId : ids[0];
+      this._unsubs = await Promise.all(ids.map((id) => this._hass.connection.subscribeMessage(
+        (msg) => this._onMessage(id, msg), { type: "triki/subscribe", device_id: id })));
+      this._unsub = () => Promise.all(this._unsubs.map((u) => u()));
     } catch (err) {
       console.warn("triki-card: subscribe failed", err);
       this._noDevice();
@@ -236,12 +241,27 @@ class TrikiCard extends HTMLElement {
     if (this._unsub) { this._unsub().catch?.(() => {}); this._unsub = null; }
   }
 
+  _isLive(s) { return !!(s && s.connected && s.streaming); }
+
+  // Follow the awake token: switch when the shown one is not live and another is.
+  _follow(id) {
+    if (id === this._deviceId || this._config?.device_id) return;
+    if (this._isLive(this._statuses[this._deviceId]) || !this._isLive(this._statuses[id])) return;
+    this._deviceId = id;
+    this._target = null;
+    this._history = [];
+    this._showStatus(this._statuses[id]);
+  }
+
   _noDevice() {
     const card = this.shadowRoot?.querySelector("ha-card");
     if (card) card.innerHTML = `<div class="empty">${(this._t || STRINGS.en).nodevice}</div>`;
   }
 
-  _onMessage(msg) {
+  _onMessage(id, msg) {
+    if (msg.type === "status") { this._statuses[id] = msg; this._follow(id); }
+    else if (msg.type === "motion") this._follow(id);
+    if (id !== this._deviceId) return;
     if (msg.type === "status") this._showStatus(msg);
     else if (msg.type === "motion") this._showMotion(msg);
     else if (msg.type === "event") this._showEvent(msg.event, msg.data);
