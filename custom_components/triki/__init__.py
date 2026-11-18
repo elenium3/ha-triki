@@ -59,10 +59,12 @@ FRONTEND_FILES = (
 
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     async_register_websocket(hass)
-    # the card's content hash in its URL makes browsers fetch it again after any change
+    # The content hash in the URL changes after an update with a restart. The files are
+    # also served without the long cache lifetime, so the browser revalidates them on a
+    # page reload and a frontend-only update needs no restart (304 when unchanged).
     card_hash = await hass.async_add_executor_job(_card_hash)
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(FRONTEND_URL, str(FRONTEND_DIR), cache_headers=True)]
+        [StaticPathConfig(FRONTEND_URL, str(FRONTEND_DIR), cache_headers=False)]
     )
     if "frontend" in hass.config.components:
         add_extra_js_url(hass, f"{FRONTEND_URL}/triki-card.js?v={card_hash}")
