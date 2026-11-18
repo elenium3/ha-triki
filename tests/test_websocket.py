@@ -98,3 +98,13 @@ async def test_pose_is_forgotten_on_disconnect(hass: HomeAssistant, setup) -> No
     dev._on_disconnect(client)
     await hass.async_block_till_done()
     assert dev.motion_snapshot() is None
+
+
+async def test_status_reports_the_wait_for_sleep(hass: HomeAssistant, setup) -> None:
+    """After an idle drop the card can tell the owner why the token does not reconnect."""
+    from custom_components.triki.websocket import status
+
+    dev = setup.runtime_data
+    assert status(dev)["waiting_for_sleep"] is False
+    dev._await_sleep = True
+    assert status(dev)["waiting_for_sleep"] is True

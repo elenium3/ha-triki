@@ -21,7 +21,8 @@ const asset = (name) => `${BASE}${name}${VERSION ? `?v=${VERSION}` : ""}`;
 
 const STRINGS = {
   en: {
-    auto: "Auto", asleep: "Asleep", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
+    auto: "Auto", asleep: "Asleep", dozing: "Dozing off",
+    dozeHint: "Disconnected after idling. Put the cap down: once it has slept (up to ~3 min) a press wakes it again", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
     wake: "Press or shake the cap to wake it", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
     roll: "Roll", pitch: "Pitch", yaw: "Yaw", reset: "Zero heading", led: "LED",
     button: "Button", rate: "Hz", history: "Last 10 s", nodevice: "No Triki token found",
@@ -32,7 +33,8 @@ const STRINGS = {
     },
   },
   ru: {
-    auto: "Авто", asleep: "Спит", connected: "Подключён", streaming: "Онлайн", unresponsive: "Не отвечает",
+    auto: "Авто", asleep: "Спит", dozing: "Засыпает",
+    dozeHint: "Отключился по простою. Положи крышку: когда уснёт (до ~3 мин), нажатие снова её разбудит", connected: "Подключён", streaming: "Онлайн", unresponsive: "Не отвечает",
     wake: "Нажми или встряхни крышку, чтобы разбудить", gyro: "Гироскоп, °/с",
     accel: "Акселерометр, g", roll: "Крен", pitch: "Тангаж", yaw: "Курс", reset: "Обнулить курс",
     led: "Диод", button: "Кнопка", rate: "Гц", history: "Последние 10 с",
@@ -45,7 +47,8 @@ const STRINGS = {
     },
   },
   pl: {
-    auto: "Auto", asleep: "Śpi", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
+    auto: "Auto", asleep: "Śpi", dozing: "Zasypia",
+    dozeHint: "Rozłączony po bezczynności. Odłóż kapsel: gdy zaśnie (do ~3 min), naciśnięcie znów go obudzi", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
     wake: "Naciśnij lub potrząśnij kapslem, żeby go obudzić", gyro: "Żyroskop, °/s",
     accel: "Akcelerometr, g", roll: "Przechył", pitch: "Pochylenie", yaw: "Kurs",
     reset: "Wyzeruj kurs", led: "Dioda", button: "Przycisk", rate: "Hz", history: "Ostatnie 10 s",
@@ -118,7 +121,7 @@ const CSS = `
     background: var(--primary-color); color: var(--text-primary-color, #fff); padding: 6px 14px;
     border-radius: 16px; font-weight: 500; transition: opacity .2s, transform .2s; pointer-events: none; }
   .toast.show { opacity: 1; transform: translateX(-50%) scale(1); }
-  .sleep { position: absolute; inset: 0; display: none; align-items: flex-end; justify-content: center;
+  .sleep { position: absolute; inset: 0; display: none; align-items: flex-end; justify-content: center; text-align: center; padding-left: 24px; padding-right: 24px;
     padding-bottom: 16px; color: var(--secondary-text-color); font-size: .9em; pointer-events: none; }
   .asleep .sleep { display: flex; }
   .asleep canvas.gl { opacity: .45; filter: grayscale(.7); }
@@ -198,7 +201,7 @@ class TrikiCard extends HTMLElement {
           </div>
           <div class="btn-ind" id="btnInd"><div class="led"></div>${t.button}</div>
           <div class="toast" id="toast"></div>
-          <div class="sleep">${t.wake}</div>
+          <div class="sleep" id="sleepText">${t.wake}</div>
         </div>
         ${c.show_values ? `<div class="values"><div><h4>${t.gyro}</h4>${axisRows("g")}</div><div><h4>${t.accel}</h4>${axisRows("a")}</div></div>` : ""}
         ${c.show_history ? `<div class="chart"><small>${t.gyro} · ${t.history}</small><canvas class="hist" id="hist"></canvas></div>` : ""}
@@ -212,7 +215,7 @@ class TrikiCard extends HTMLElement {
       name: $("name"), state: $("state"), stateText: $("stateText"), rate: $("rate"), rateChip: $("rateChip"),
       rssi: $("rssi"), rssiChip: $("rssiChip"), batt: $("batt"), battChip: $("battChip"), battIcon: $("battIcon"),
       stage: $("stage"), gl: $("gl"), roll: $("roll"), pitch: $("pitch"), yaw: $("yaw"), btnInd: $("btnInd"),
-      toast: $("toast"), tabs: $("tabs"), hist: $("hist"), reset: $("reset"), led: $("led"),
+      toast: $("toast"), tabs: $("tabs"), sleepText: $("sleepText"), hist: $("hist"), reset: $("reset"), led: $("led"),
     };
     for (const p of ["g", "a"]) for (const a of ["x", "y", "z"]) {
       this._el[`${p}${a}`] = $(`${p}${a}`);
@@ -337,7 +340,10 @@ class TrikiCard extends HTMLElement {
     if (!this._config?.title && s.name) el.name.textContent = s.name;
     const live = s.connected && s.streaming;
     el.state.className = `chip ${live ? "live" : s.unresponsive ? "warn" : ""}`;
-    el.stateText.textContent = live ? t.streaming : s.connected ? t.connected : s.unresponsive ? t.unresponsive : t.asleep;
+    const dozing = !s.connected && s.waiting_for_sleep;
+    el.stateText.textContent = live ? t.streaming : s.connected ? t.connected
+      : s.unresponsive ? t.unresponsive : dozing ? t.dozing : t.asleep;
+    el.sleepText.textContent = dozing ? t.dozeHint : t.wake;
     el.stage.classList.toggle("asleep", !live);
     el.rateChip.hidden = !live;
     if (live) el.rate.textContent = `${Math.round(s.measured_rate ?? s.rate ?? 0)} ${t.rate}`;

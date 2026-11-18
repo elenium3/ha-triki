@@ -298,6 +298,11 @@ class TrikiDevice:
         }
 
     @property
+    def waiting_for_sleep(self) -> bool:
+        """Dropped on idle: no reconnect until the token has really slept."""
+        return self._await_sleep and not self.connected
+
+    @property
     def streaming(self) -> bool:
         """Frames are arriving on the current link."""
         return self._streaming
@@ -468,6 +473,7 @@ class TrikiDevice:
                 self._awake_seen = now
             if slept:
                 self._await_sleep = False
+                self._notify()
             else:
                 reason = "waiting for the token to sleep after an idle disconnect"
         if reason is None:
