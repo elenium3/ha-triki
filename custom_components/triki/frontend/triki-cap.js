@@ -112,10 +112,13 @@ export async function buildCap(T, urls) {
   logo.add(face);
   inner.add(logo);
 
-  const resinMat = new T.MeshPhysicalMaterial({
-    map: resinMap, emissiveMap: resinMap, emissive: 0x9cff3c, emissiveIntensity: 0.0,
-    roughness: 0.45, metalness: 0.0, clearcoat: 0.35, clearcoatRoughness: 0.2,
-    envMapIntensity: 0.35, color: 0xd4dccf,
+  // The photo already carries the resin's look (light, gloss, the PCB under it), so it is
+  // shown as is: unlit emission outside the tone mapping. Scene light and reflections on
+  // top of it washed it out into a milky green.
+  const RESIN_SELF = 0.8;
+  const resinMat = new T.MeshStandardMaterial({
+    color: 0x000000, emissiveMap: resinMap, emissive: 0xffffff, emissiveIntensity: RESIN_SELF,
+    roughness: 1, metalness: 0, envMapIntensity: 0, toneMapped: false,
   });
   const resin = new T.Group();
   const top = new T.Mesh(new T.CircleGeometry(R_RESIN, 96), resinMat);
@@ -138,7 +141,8 @@ export async function buildCap(T, urls) {
   return {
     group,
     setLed(on) {
-      resinMat.emissiveIntensity = on ? 0.18 : 0.0;
+      resinMat.emissive.set(on ? 0xd8ffb0 : 0xffffff);
+      resinMat.emissiveIntensity = on ? 1.6 : RESIN_SELF;
       glow.intensity = on ? 40 : 0;
     },
     setPressed(on) {
