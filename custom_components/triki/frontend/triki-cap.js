@@ -71,9 +71,10 @@ function shellGeometry(T) {
 }
 
 // Which way the top of the resin photo (tex_resin.webp) points in the sensor frame,
-// radians. The PCB, and with it the IMU, sits the same way in every token, so this is
-// a constant, measured once by lifting an edge (see docs/live-card.md).
-export const RESIN_PHOTO_UP = Math.PI / 2;
+// radians. The photo has the Żabka Z (copper under the resin) upright, and the sensor
+// axes are known against that Z (Flopsstuff's axes photo: +x to the left of the Z,
+// +y towards its foot), so the photo's top is sensor -y.
+export const RESIN_PHOTO_UP = -Math.PI / 2;
 
 function loadTexture(T, url) {
   return new Promise((resolve, reject) => {
@@ -108,7 +109,8 @@ export async function buildCap(T, urls) {
 
   const resinMat = new T.MeshPhysicalMaterial({
     map: resinMap, emissiveMap: resinMap, emissive: 0x9cff3c, emissiveIntensity: 0.0,
-    roughness: 0.22, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.08,
+    roughness: 0.45, metalness: 0.0, clearcoat: 0.35, clearcoatRoughness: 0.2,
+    envMapIntensity: 0.35, color: 0xd4dccf,
   });
   const resin = new T.Group();
   const top = new T.Mesh(new T.CircleGeometry(R_RESIN, 96), resinMat);

@@ -7,5 +7,6 @@
 - `triki-three.js`: a bundle of three.js r187 (core, GLTFLoader, RoomEnvironment),
   https://github.com/mrdoob/three.js, MIT License, Copyright 2010-2026 three.js authors.
 - `tex_metal.webp`, `tex_resin.webp`: textures of the procedural model made from the
-  maintainer's own photos of a token (the logo shape is a mask taken from a photo,
-  the resin side is the photographed PCB). Same license as this project.
+  maintainer's photos of tokens (the logo shape is a mask taken from a photo; the
+  resin side, with the Z, is a photo rectified to a circle). Same license as this
+  project.
