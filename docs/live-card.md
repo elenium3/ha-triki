@@ -29,9 +29,11 @@ shows whichever token wakes up; a token's tab pins that one. The choice is kept
 per browser. With `device_id` set the card shows that token only and no tabs.
 
 **Calibration.** Press **Calibrate** with the token awake and follow three steps:
-lay it flat logo up (the token then reads level on that table), lift the edge
-the arrow points at (the logo is crimped on at any angle, so its angle is
-measured), and put it back with the arrow pointing away from you (heading 0).
+lay it flat with the metal side (the grey crown with the black sign) up, so it
+reads level on that table; lift the edge the arrow points at in the picture of
+the sign (the crown is crimped on at any angle, so the sign's angle is
+measured); put it back metal side up with that edge pointing away from you
+(heading 0).
 The result is kept per token in its config entry. `triki/calibrate` with
 `step: clear` forgets it.
 
