@@ -66,8 +66,22 @@ integration uses this for the idle rate.
 | gyro | 14.286 LSB per °/s | ±2000 °/s |
 | accel | 2048 LSB per g | ±16 g |
 
-Axes are in the sensor frame: +z points out of the top (Ż logo side), so a token
-lying flat reads +1 g on z. Some earlier tools used a gyro scale of 131 LSB per
+Axes are in the sensor frame, right-handed, viewed from the green PCB side with
+the Ż upright:
+
+| Axis | Points toward |
+|---|---|
+| +z | out of the green PCB face (the Ż side) |
+| −z | out of the metal cap face (the "T" logo) |
+| −y | the top of the Ż (12 o'clock) |
+| +x | the left of the Ż (9 o'clock) |
+
+So a token lying metal side up, as it usually sits, reads −1 g on z, and PCB side
+up reads +1 g. The table follows the measurements in
+[Flopsstuff/triki](https://github.com/Flopsstuff/triki) (`docs/guide/hardware.md`),
+and koksny/TRIKI-Control and TrikiScope agree on the z sign. The integration does
+not depend on the sign: it measures turns about whatever direction gravity has.
+Some earlier tools used a gyro scale of 131 LSB per
 °/s (an MPU‑6050 value); that under-reads rotation about nine times. 14.286 is
 the LSM6DSL value at ±2000 °/s and matches real turns. Notifications may carry several frames back to back
 (20-byte MTU chunks are common through BlueZ; proxies deliver whole frames), so
