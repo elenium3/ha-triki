@@ -856,9 +856,9 @@ class TrikiDevice:
         self._battery_event.set()  # do not keep a stream pause waiting on a dead link
         was_connected = self.connected
         self.connected = False
-        # the next link starts from the accelerometer again: the token may have
-        # been moved while asleep, so the old pose and heading mean nothing
-        self._orientation.reset()
+        # the next link takes tilt from the accelerometer again; the heading is
+        # carried over (a dozing token lies where it was), so a calibration lasts
+        self._orientation.reset(keep_heading=True)
         self._last_sample = None
         for attr in ("_unsub_idle", "_unsub_battery", "_unsub_watchdog"):
             self._cancel_timer(attr)

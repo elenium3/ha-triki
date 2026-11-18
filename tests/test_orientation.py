@@ -226,3 +226,19 @@ def test_replayed_full_turns_read_one_revolution() -> None:
     if abs(rest) > 3:
         problems.append(f"at rest: {rest:.1f} deg")
     assert not problems, "\n".join(problems)
+
+
+def test_heading_survives_a_reconnect() -> None:
+    """A dozing token: after the link drops and comes back, the heading is kept."""
+    o = Orientation()
+    t = run(o, sample(), 1.0)
+    t = run(o, sample(gz=90.0), 1.0, t0=t)  # turned ~90 degrees
+    run(o, sample(), 1.0, t0=t)
+    before = o.euler[2]
+    assert abs(before - 90) < 5
+    o.reset(keep_heading=True)
+    run(o, sample(), 1.0, t0=100.0)
+    assert o.euler[2] == pytest.approx(before, abs=1)
+    o.reset()  # a plain reset still forgets it
+    run(o, sample(), 1.0, t0=200.0)
+    assert abs(o.euler[2]) < 1

@@ -113,10 +113,18 @@ class Orientation:
     def __init__(self, beta: float = BETA) -> None:
         self.beta = beta
         self.mount: Quat = (1.0, 0.0, 0.0, 0.0)  # cap frame -> sensor frame
+        self._carry: float | None = None  # world angle of the front, kept over a reset
         self.reset()
 
-    def reset(self) -> None:
-        """Forget the pose; the next frames converge from the accelerometer."""
+    def reset(self, keep_heading: bool = False) -> None:
+        """Forget the pose; the next frames converge from the accelerometer.
+
+        With ``keep_heading`` the front's direction is carried over: the next
+        link starts at the heading this one ended with. Tilt comes from gravity
+        again; the heading cannot be measured (no compass), so this assumes the
+        token was not turned on the table in between, as when it dozes off.
+        """
+        self._carry = self._front_angle() if keep_heading and self.ready else None
         self._q: Quat = (1.0, 0.0, 0.0, 0.0)
         self._heading: Quat = (1.0, 0.0, 0.0, 0.0)  # applied on output: zeroes yaw
         self._t: float | None = None
@@ -137,6 +145,11 @@ class Orientation:
     @property
     def euler(self) -> tuple[float, float, float]:
         return euler_deg(self.quaternion)
+
+    def _front_angle(self) -> float | None:
+        """World angle (about z) of the front with the current heading, if not vertical."""
+        wx, wy, _ = quat_rotate(self.quaternion, FRONT)
+        return math.atan2(wy, wx) if math.hypot(wx, wy) > 0.3 else None
 
     def reset_heading(self) -> None:
         """Make the current heading 0; tilt is untouched.
@@ -201,6 +214,11 @@ class Orientation:
                 self._started = t
                 self._q = self._from_accel(s)
                 self.samples = 1
+                if self._carry is not None:
+                    now = self._front_angle()
+                    if now is not None:
+                        self._heading = quat_about_z(self._carry - now)
+                    self._carry = None
             return
         dt = t - self._t
         self._t = t
