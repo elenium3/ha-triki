@@ -72,8 +72,8 @@ STATIC_GYRO_DPS = 30.0
 # motion lasts many frames. Only count motion that persists this long, so a glitch
 # does not keep resetting the idle timer and hold the link open forever.
 MOTION_CONFIRM_S = 0.1
-KNOB_DEADBAND_DPS = 15.0  # below this the turn accumulator is not fed
-KNOB_RESET_S = 0.6  # idle time after which a partial turn is dropped
+KNOB_DEADBAND_DPS = 10.0  # below this the turn accumulator is not fed
+KNOB_RESET_S = 1.0  # idle time after which a partial turn is dropped
 # Pressing the button twists the token in the hand: on hardware every press came
 # with 3-5 spurious rotate events within ~0.7 s. The knob is muted while the button
 # is down and for this long after it is released.
