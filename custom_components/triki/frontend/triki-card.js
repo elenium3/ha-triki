@@ -25,7 +25,7 @@ const STRINGS = {
     dozeHint: "Disconnected after idling. Put the cap down: once it has slept (up to ~3 min) a press wakes it again", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
     wake: "Press or shake the cap to wake it", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
     roll: "Roll", pitch: "Pitch", yaw: "Yaw", reset: "Zero heading", led: "LED", calibrate: "Calibrate",
-    cal: { flat: "Lay the cap flat on the table, either side up, with the front (the dot above the Z) pointing away from you, and let go. The view then shows it edge-on.", next: "Done", cancel: "Cancel", saved: "Calibrated",
+    cal: { flat: "Lay the cap flat on the table, either side up, with the front (the dot above the Z) pointing away from you, and let go. The view then shows it edge-on.", logo: "Now the logo (once per cap: it is crimped on at any angle). Lay the cap green side up with the Z upright, dot at the top, then turn it over across its right edge. Turn the logo below with the slider until it looks like the one on your cap.", resin: "Green side", metal: "After turning over", next: "Done", cancel: "Cancel", skip: "Skip", saved: "Calibrated",
       err: { moving: "It is moving: hold still for a second", not_flat: "It is not lying flat", asleep: "The cap is asleep: wake it first", no_data: "No data yet: wake the cap" } },
     button: "Button", rate: "Hz", history: "Last 10 s", nodevice: "No Triki token found",
     gestures: {
@@ -39,7 +39,7 @@ const STRINGS = {
     dozeHint: "Отключился по простою. Положи крышку: когда уснёт (до ~3 мин), нажатие снова её разбудит", connected: "Подключён", streaming: "Онлайн", unresponsive: "Не отвечает",
     wake: "Нажми или встряхни крышку, чтобы разбудить", gyro: "Гироскоп, °/с",
     accel: "Акселерометр, g", roll: "Крен", pitch: "Тангаж", yaw: "Курс", calibrate: "Калибровка",
-    cal: { flat: "Положи крышку на стол любой стороной вверх, передом (точка над буквой Z) от себя, и отпусти. На картинке она станет ровно, видно будет только ребро.", next: "Готово", cancel: "Отмена", saved: "Откалибровано",
+    cal: { flat: "Положи крышку на стол любой стороной вверх, передом (точка над буквой Z) от себя, и отпусти. На картинке она станет ровно, видно будет только ребро.", logo: "Теперь логотип (один раз для каждой крышки: металл обжат под любым углом). Положи крышку зелёной стороной вверх, буквой Z ровно, точкой сверху, и переверни через правый край. Поверни логотип ползунком, чтобы он выглядел как на крышке.", resin: "Зелёная сторона", metal: "После переворота", next: "Готово", cancel: "Отмена", skip: "Пропустить", saved: "Откалибровано",
       err: { moving: "Крышка двигается: подержи секунду неподвижно", not_flat: "Крышка лежит не ровно", asleep: "Крышка спит: сначала разбуди её", no_data: "Нет данных: разбуди крышку" } },
     reset: "Обнулить курс",
     led: "Диод", button: "Кнопка", rate: "Гц", history: "Последние 10 с",
@@ -57,7 +57,7 @@ const STRINGS = {
     wake: "Naciśnij lub potrząśnij kapslem, żeby go obudzić", gyro: "Żyroskop, °/s",
     accel: "Akcelerometr, g", roll: "Przechył", pitch: "Pochylenie", yaw: "Kurs",
     calibrate: "Kalibracja",
-    cal: { flat: "Połóż kapsel płasko na stole, dowolną stroną do góry, przodem (kropka nad Z) od siebie, i puść. Widok pokaże go wtedy z boku.", next: "Gotowe", cancel: "Anuluj", saved: "Skalibrowano",
+    cal: { flat: "Połóż kapsel płasko na stole, dowolną stroną do góry, przodem (kropka nad Z) od siebie, i puść. Widok pokaże go wtedy z boku.", logo: "Teraz logo (raz na kapsel: metal jest zaciśnięty pod dowolnym kątem). Połóż kapsel zieloną stroną do góry, literą Z prosto, kropką u góry, i odwróć go przez prawą krawędź. Obróć logo suwakiem, aż będzie wyglądać jak na kapslu.", resin: "Zielona strona", metal: "Po odwróceniu", next: "Gotowe", cancel: "Anuluj", skip: "Pomiń", saved: "Skalibrowano",
       err: { moving: "Kapsel się rusza: przytrzymaj chwilę nieruchomo", not_flat: "Kapsel nie leży płasko", asleep: "Kapsel śpi: najpierw go obudź", no_data: "Brak danych: obudź kapsel" } },
     reset: "Wyzeruj kurs", led: "Dioda", button: "Przycisk", rate: "Hz", history: "Ostatnie 10 s",
     nodevice: "Nie znaleziono kapsla Triki",
@@ -166,6 +166,16 @@ const CSS = `
   .wizard p { margin: 0; max-width: 32em; }
   .wizard .err { color: var(--error-color, #ef5350); min-height: 1.2em; font-size: .9em; }
   .wizard .row { display: flex; gap: 8px; }
+  .logo-match { display: flex; align-items: center; gap: 18px; }
+  .logo-match[hidden], .slider[hidden] { display: none; }
+  .logo-match figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  .logo-match img { width: 92px; height: 92px; border-radius: 50%; transition: transform .15s; }
+  .logo-match figcaption { font-size: .78em; color: var(--secondary-text-color); }
+  .logo-match .arrow { font-size: 22px; color: var(--secondary-text-color); }
+  .slider { display: flex; align-items: center; gap: 8px; width: min(360px, 90%); }
+  .slider input { flex: 1; accent-color: var(--primary-color); }
+  .slider button { width: 40px; height: 40px; padding: 0; font-size: 18px; }
+  .slider output { min-width: 3.2em; text-align: right; font-variant-numeric: tabular-nums; }
   .wizard button { font: inherit; font-size: 1.05em; min-height: 48px; padding: 10px 24px; border-radius: 12px; cursor: pointer;
     border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); }
   .wizard button.primary { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
@@ -243,6 +253,17 @@ class TrikiCard extends HTMLElement {
           <div class="sleep" id="sleepText">${t.wake}</div>
           <div class="wizard" id="wizard">
             <p id="wizText"></p>
+            <div class="logo-match" id="wizLogo" hidden>
+              <figure><img src="${asset("tex_resin.webp")}" alt=""><figcaption>${t.cal.resin}</figcaption></figure>
+              <span class="arrow">⟲</span>
+              <figure><img id="wizMetal" src="${asset("tex_metal.webp")}" alt=""><figcaption>${t.cal.metal}</figcaption></figure>
+            </div>
+            <div class="slider" id="wizSlider" hidden>
+              <button id="wizLeft" aria-label="-15°">↺</button>
+              <input type="range" id="wizAngle" min="-180" max="180" step="5" value="0">
+              <button id="wizRight" aria-label="+15°">↻</button>
+              <output id="wizAngleOut">0°</output>
+            </div>
             <div class="err" id="wizErr"></div>
             <div class="row"><button id="wizCancel">${t.cal.cancel}</button><button class="primary" id="wizNext">${t.cal.next}</button></div>
           </div>
@@ -270,6 +291,8 @@ class TrikiCard extends HTMLElement {
       toast: $("toast"), tabs: $("tabs"), sleepText: $("sleepText"), hist: $("hist"), reset: $("reset"), led: $("led"),
       cal: $("cal"), wizard: $("wizard"), wizText: $("wizText"), wizErr: $("wizErr"),
       wizNext: $("wizNext"), wizCancel: $("wizCancel"),
+      wizLogo: $("wizLogo"), wizSlider: $("wizSlider"), wizMetal: $("wizMetal"), wizAngle: $("wizAngle"),
+      wizAngleOut: $("wizAngleOut"), wizLeft: $("wizLeft"), wizRight: $("wizRight"),
     };
     for (const p of ["g", "a"]) for (const a of ["x", "y", "z"]) {
       this._el[`${p}${a}`] = $(`${p}${a}`);
@@ -280,6 +303,9 @@ class TrikiCard extends HTMLElement {
     this._el.cal.addEventListener("click", () => this._wizard("flat"));
     this._el.wizCancel.addEventListener("click", () => this._wizard(null));
     this._el.wizNext.addEventListener("click", () => this._wizardNext());
+    this._el.wizAngle.addEventListener("input", () => this._previewLogo(+this._el.wizAngle.value));
+    this._el.wizLeft.addEventListener("click", () => this._previewLogo(+this._el.wizAngle.value - 15));
+    this._el.wizRight.addEventListener("click", () => this._previewLogo(+this._el.wizAngle.value + 15));
     this._history = [];
     this._built = true;
     this._io = new IntersectionObserver((entries) => {
@@ -414,7 +440,7 @@ class TrikiCard extends HTMLElement {
     }
     el.reset.disabled = !live;
     el.cal.disabled = !live;
-    if (!live && this._wizStep) this._wizard(null);
+    if (!live && this._wizStep === "flat") this._wizard(null);
     el.led.disabled = !s.connected;
     el.led.classList.toggle("on", !!s.led);
     el.btnInd.classList.toggle("on", !!s.button);
@@ -455,6 +481,11 @@ class TrikiCard extends HTMLElement {
   // the LED glow and the pressed button on the procedural model
   _setModelState(led, pressed) {
     if (!this._cap) return;
+    const logo = this._status?.logo_angle ?? 0;
+    if (logo !== this._capLogo && this._wizStep !== "logo") {
+      this._capLogo = logo;
+      this._setLogo(logo);
+    }
     const key = `${!!led}${!!pressed}`;
     if (key === this._capState) return;
     this._capState = key;
@@ -487,22 +518,47 @@ class TrikiCard extends HTMLElement {
     this._toastTimer = setTimeout(() => el.classList.remove("show"), 1200);
   }
 
-  // Calibration: one step. Lying on the table it levels the cap and zeroes the heading.
+  // Calibration: flat (levels the cap, zeroes the heading), then logo (the metal logo's
+  // angle against the PCB, matched by eye: the crown is crimped on at any angle).
   _wizard(step) {
     const el = this._el, t = this._t.cal;
+    if (this._wizStep === "logo" && step !== "logo") this._setLogo(this._status?.logo_angle); // undo preview
     this._wizStep = step;
     el.wizard.classList.toggle("show", !!step);
     el.wizErr.textContent = "";
     if (!step) return;
     el.wizText.textContent = t[step];
+    el.wizLogo.hidden = el.wizSlider.hidden = step !== "logo";
+    el.wizCancel.textContent = step === "logo" ? t.skip : t.cancel;
+    if (step === "logo") this._previewLogo(this._status?.logo_angle ?? 0);
+  }
+
+  // degrees, clockwise on screen: the picture and the model turn together
+  _previewLogo(deg) {
+    deg = ((Math.round(deg) + 540) % 360) - 180;
+    const el = this._el;
+    el.wizAngle.value = deg;
+    el.wizAngleOut.textContent = `${deg}°`;
+    el.wizMetal.style.transform = `rotate(${deg}deg)`;
+    this._setLogo(deg);
+  }
+
+  _setLogo(deg) {
+    if (!this._cap) return;
+    this._cap.setLogoAngle(deg ?? 0);
+    this._needsFrame = true;
+    this._startRender();
   }
 
   async _wizardNext() {
     const step = this._wizStep;
     const t = this._t.cal;
     try {
-      await this._hass.connection.sendMessagePromise(
-        { type: "triki/calibrate", device_id: this._deviceId, step });
+      const msg = { type: "triki/calibrate", device_id: this._deviceId, step };
+      if (step === "logo") msg.angle = +this._el.wizAngle.value;
+      await this._hass.connection.sendMessagePromise(msg);
+      if (step === "flat") { this._wizard("logo"); return; }
+      this._wizStep = null; // keep the angle just saved on the model
       this._wizard(null);
       this._toast(t.saved);
     } catch (err) {
@@ -582,6 +638,7 @@ class TrikiCard extends HTMLElement {
         this._cap.group.scale.setScalar(0.078); // millimetres -> scene units
         pivot.add(this._cap.group);
         this._capState = null;
+        this._capLogo = undefined;
         if (this._status) this._setModelState(this._status.led, this._status.button);
       }
       Object.assign(this, { _renderer: renderer, _scene: scene, _camera: camera, _pivot: pivot });

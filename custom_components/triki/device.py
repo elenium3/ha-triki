@@ -230,6 +230,7 @@ class TrikiDevice:
         # live motion (the Lovelace card): called at most every LIVE_INTERVAL_S
         self._motion_listeners: list[Callable[[dict[str, Any]], None]] = []
         self._orientation = Orientation()
+        self._logo_angle: float | None = None
         self._load_calibration()
         self._last_sample: Sample | None = None
         self._last_live_pub = 0.0
@@ -310,22 +311,40 @@ class TrikiDevice:
                 float(mount[2]),
                 float(mount[3]),
             )
+        logo = cal.get("logo")
+        self._logo_angle = float(logo) if isinstance(logo, (int, float)) else None
+
+    @property
+    def logo_angle(self) -> float | None:
+        """Degrees: how the metal logo is turned against the PCB on this token.
+
+        The crown is crimped on at any angle, so this differs from token to token.
+        It is set by the owner in the card (matching a picture to the real cap) and
+        only used to draw the model.
+        """
+        return self._logo_angle
 
     @property
     def calibrated(self) -> bool:
         return self._orientation.mount != (1.0, 0.0, 0.0, 0.0)
 
     @callback
-    def calibrate(self, step: str) -> None:
-        """The card's calibration: ``flat`` (lying on the table) or ``clear``.
+    def calibrate(self, step: str, angle: float | None = None) -> None:
+        """The card's calibration: ``flat``, ``logo`` or ``clear``.
 
-        ``flat`` levels the cap on that table and zeroes the heading so the
-        front points away from the viewer. Raises :class:`CalibrationError` when
-        the token is not lying still. The mount is kept in the config entry's data.
+        ``flat`` (lying on the table) levels the cap on that table and zeroes the
+        heading so the front points away from the viewer; it raises
+        :class:`CalibrationError` when the token is not lying still. ``logo``
+        stores the logo's angle in degrees. Both are kept in the config entry's data.
         """
         o = self._orientation
         if step == "clear":
             o.mount = (1.0, 0.0, 0.0, 0.0)
+            self._logo_angle = None
+        elif step == "logo":
+            if angle is None:
+                raise CalibrationError("no_angle")
+            self._logo_angle = round((angle + 180.0) % 360.0 - 180.0, 1)
         elif not self.streaming:
             raise CalibrationError("asleep")
         elif step == "flat":
@@ -334,7 +353,10 @@ class TrikiDevice:
         else:
             raise CalibrationError("unknown_step")
         data = dict(self.entry.data)
-        data[CALIBRATION_KEY] = {"mount": [round(c, 6) for c in o.mount]}
+        data[CALIBRATION_KEY] = {
+            "mount": [round(c, 6) for c in o.mount],
+            "logo": self._logo_angle,
+        }
         self.hass.config_entries.async_update_entry(self.entry, data=data)
         self._notify()
 

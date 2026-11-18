@@ -32,7 +32,12 @@ per browser. With `device_id` set the card shows that token only and no tabs.
 PCB (sensor -y). Lay the token flat on the table, either side up, front away
 from you, and press **Calibrate**. That levels it on this table (the cap then
 shows edge-on, the camera is at table height) and zeroes the heading with the
-front away from the viewer. The result is kept per token in its config entry;
+front away from the viewer. A second step sets the metal logo's angle: the crown is crimped on at any angle,
+so on two tokens the logo and the Z differ (photos 2026-11-18: about 30° and
+-111°). With the token green side up, Z upright, turned over across its right
+edge, the owner turns a picture of the logo with a slider until it matches;
+`triki/calibrate` with `step: logo, angle: <degrees>` stores it. Both are kept
+per token in its config entry;
 `triki/calibrate` with `step: clear` forgets it.
 
 **Models.** `model: cap` (the default) is a procedural model built from calipered

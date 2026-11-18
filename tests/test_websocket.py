@@ -131,3 +131,24 @@ async def test_calibrate_flat_is_stored(hass: HomeAssistant, setup, hass_ws_clie
     await ws.send_json({"id": 3, "type": "triki/calibrate", "step": "clear"})
     assert (await ws.receive_json())["success"]
     assert not dev.calibrated
+
+
+async def test_calibrate_logo_angle_is_stored(hass: HomeAssistant, setup, hass_ws_client) -> None:
+    """The logo angle needs no motion: the token may be asleep."""
+    dev = setup.runtime_data
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "triki/calibrate", "step": "logo", "angle": 390})
+    msg = await ws.receive_json()
+    assert msg["success"], msg
+    assert dev.logo_angle == 30.0
+    assert setup.data["calibration"]["logo"] == 30.0
+
+    from custom_components.triki.websocket import status
+
+    assert status(dev)["logo_angle"] == 30.0
+    await ws.send_json({"id": 2, "type": "triki/calibrate", "step": "logo"})
+    msg = await ws.receive_json()
+    assert msg["error"]["code"] == "no_angle"
+    await ws.send_json({"id": 3, "type": "triki/calibrate", "step": "clear"})
+    assert (await ws.receive_json())["success"]
+    assert dev.logo_angle is None
