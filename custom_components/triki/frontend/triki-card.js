@@ -24,10 +24,9 @@ const STRINGS = {
     auto: "Auto", asleep: "Asleep", dozing: "Dozing off",
     dozeHint: "Disconnected after idling. Put the cap down: once it has slept (up to ~3 min) a press wakes it again", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
     wake: "Press or shake the cap to wake it", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
-    roll: "Tilt sideways", pitch: "Tilt forward", yaw: "Turn on table", reset: "Turn the model", led: "LED", calibrate: "Calibrate",
-    hint: { cal: "Fit the model to the cap", reset: "If it faces the wrong way", led: "On / off" },
-    help: { title: "When to calibrate?", front: "<b>Front</b> is the edge with the dot above the letter Z on the green side (circled).", turn: "<b>Turn on table</b> is where the cap faces when you spin it flat on the table, like a knob.", body: "<p>Calibration is saved in Home Assistant and does not reset. Do it once per cap, and again only if the cap lies flat but the model is tilted.</p><p>The turn is different: the cap has no compass, so the gyroscope tracks it and slowly drifts, faster after quick spins. After a Home Assistant restart the turn is lost. When the model faces the wrong way, lay the cap with the front away from you and press <b>Turn the model</b>: it is instant and keeps the calibration.</p>" },
-    cal: { find: "On the green side, find the dot above the letter Z (circled in the picture).", flat: "Lay the cap flat on the table, either side up, with that edge away from you, let go and press Done. The view then shows it edge-on.", heading: "Lay the cap on the table with that edge away from you and press Done: the model turns the same way.", turned: "Model turned", logo: "Now the logo (once per cap: it is crimped on at any angle). Lay the cap green side up with the Z upright, dot at the top, then turn it over across its right edge. Turn the logo below with the slider until it looks like the one on your cap.", resin: "Green side", metal: "After turning over", next: "Done", cancel: "Cancel", skip: "Skip", saved: "Calibrated",
+    roll: "Left-right", pitch: "Forward-back", yaw: "Turn about the axis", reset: "Align direction", led: "LED", calibrate: "Calibrate",
+    help: { mark: "The yellow arrow on the model marks the edge with the dot above the letter Z (circled in the photo). It shows which way the model is turned.", cal: "<b>Calibrate</b> once per cap. The cap lies on the table, dot away from you: the model learns what level looks like for this cap, then you match the logo. It is saved for good.", align: "<b>Align direction</b> is needed from time to time. The cap senses tilt by itself, from gravity, but not which way it is turned: it has no compass. The gyroscope counts the turn and slowly drifts, and a Home Assistant restart loses it. When the arrow on the model points elsewhere than the dot on the cap, lay the cap dot away from you and press this button. The calibration stays." },
+    cal: { find: "Find the dot above the letter Z on the green side (circled in the photo). On the model that edge has the yellow arrow.", flat: "Lay the cap on the table, either side up, with that edge away from you, let go and press Done.", heading: "Lay the cap on the table with that edge away from you and press Done: the arrow on the model turns away from you too.", turned: "Direction aligned", logo: "Now the logo (once per cap: it is crimped on at any angle). Lay the cap green side up with the Z upright, dot at the top, then turn it over across its right edge. Turn the logo below with the slider until it looks like the one on your cap.", resin: "Green side", metal: "After turning over", next: "Done", cancel: "Cancel", skip: "Skip", saved: "Calibrated",
       err: { moving: "It is moving: hold still for a second", not_flat: "It is not lying flat", asleep: "The cap is asleep: wake it first", no_data: "No data yet: wake the cap" } },
     button: "Button", rate: "Hz", history: "Last 10 s", nodevice: "No Triki token found",
     gestures: {
@@ -40,12 +39,11 @@ const STRINGS = {
     auto: "Авто", asleep: "Спит", dozing: "Засыпает",
     dozeHint: "Отключился по простою. Положи крышку: когда уснёт (до ~3 мин), нажатие снова её разбудит", connected: "Подключён", streaming: "Онлайн", unresponsive: "Не отвечает",
     wake: "Нажми или встряхни крышку, чтобы разбудить", gyro: "Гироскоп, °/с",
-    accel: "Акселерометр, g", roll: "Наклон вбок", pitch: "Наклон вперёд", yaw: "Поворот на столе", calibrate: "Калибровка",
-    hint: { cal: "Подогнать модель под крышку", reset: "Если смотрит не туда", led: "Вкл. / выкл." },
-    help: { title: "Когда калибровать?", front: "<b>Перед</b> — край с точкой над буквой Z на зелёной стороне (обведена).", turn: "<b>Поворот на столе</b> — куда смотрит крышка, если крутить её на столе, как ручку.", body: "<p>Калибровка хранится в Home Assistant и сама не сбрасывается. Пройди её один раз для каждой крышки и повтори, только если крышка лежит ровно, а модель наклонена.</p><p>С поворотом на столе иначе: компаса в крышке нет, его считает гироскоп и понемногу ошибается, быстрее после резких вращений. После перезапуска Home Assistant поворот теряется. Если модель смотрит не туда, положи крышку передом от себя и нажми <b>Развернуть модель</b>: это мгновенно и калибровку не трогает.</p>" },
-    cal: { find: "Найди на зелёной стороне точку над буквой Z (на картинке обведена).", flat: "Положи крышку на стол любой стороной вверх, этим краем от себя, отпусти и нажми «Готово». Модель ляжет ровно, будет видно только ребро.", heading: "Положи крышку на стол этим краем от себя и нажми «Готово»: модель развернётся так же.", turned: "Модель развёрнута", logo: "Теперь логотип (один раз для каждой крышки: металл обжат под любым углом). Положи крышку зелёной стороной вверх, буквой Z ровно, точкой сверху, и переверни через правый край. Поверни логотип ползунком, чтобы он выглядел как на крышке.", resin: "Зелёная сторона", metal: "После переворота", next: "Готово", cancel: "Отмена", skip: "Пропустить", saved: "Откалибровано",
+    accel: "Акселерометр, g", roll: "Влево-вправо", pitch: "Вперёд-назад", yaw: "Поворот вокруг оси", calibrate: "Калибровка",
+    help: { mark: "Жёлтая стрелка на модели показывает край с точкой над буквой Z (на фото обведена). По ней видно, куда повёрнута модель.", cal: "<b>Калибровка</b> — один раз для каждой крышки. Крышка лежит на столе точкой от тебя: модель запоминает, как для этой крышки выглядит «ровно», потом подгоняешь логотип. Сохраняется навсегда.", align: "<b>Выровнять направление</b> — нужно время от времени. Наклон крышка чувствует сама, по силе тяжести, а в какую сторону повёрнута — нет: компаса в ней нет. Поворот считает гироскоп, он понемногу ошибается, а после перезапуска Home Assistant поворот теряется. Если стрелка на модели смотрит не туда, куда точка на крышке, положи крышку точкой от себя и нажми эту кнопку. Калибровку это не трогает." },
+    cal: { find: "Найди на зелёной стороне точку над буквой Z (на фото обведена). На модели этот край отмечен жёлтой стрелкой.", flat: "Положи крышку на стол любой стороной вверх так, чтобы этот край был от тебя, отпусти и нажми «Готово».", heading: "Положи крышку на стол этим краем от себя и нажми «Готово»: стрелка на модели тоже повернётся от тебя.", turned: "Направление выровнено", logo: "Теперь логотип (один раз для каждой крышки: металл обжат под любым углом). Положи крышку зелёной стороной вверх, буквой Z ровно, точкой сверху, и переверни через правый край. Поверни логотип ползунком, чтобы он выглядел как на крышке.", resin: "Зелёная сторона", metal: "После переворота", next: "Готово", cancel: "Отмена", skip: "Пропустить", saved: "Откалибровано",
       err: { moving: "Крышка двигается: подержи секунду неподвижно", not_flat: "Крышка лежит не ровно", asleep: "Крышка спит: сначала разбуди её", no_data: "Нет данных: разбуди крышку" } },
-    reset: "Развернуть модель",
+    reset: "Выровнять направление",
     led: "Диод", button: "Кнопка", rate: "Гц", history: "Последние 10 с",
     nodevice: "Трики не найден",
     gestures: {
@@ -59,13 +57,12 @@ const STRINGS = {
     auto: "Auto", asleep: "Śpi", dozing: "Zasypia",
     dozeHint: "Rozłączony po bezczynności. Odłóż kapsel: gdy zaśnie (do ~3 min), naciśnięcie znów go obudzi", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
     wake: "Naciśnij lub potrząśnij kapslem, żeby go obudzić", gyro: "Żyroskop, °/s",
-    accel: "Akcelerometr, g", roll: "Przechył w bok", pitch: "Pochylenie", yaw: "Obrót na stole",
-    hint: { cal: "Dopasuj model do kapsla", reset: "Gdy patrzy w złą stronę", led: "Wł. / wył." },
-    help: { title: "Kiedy kalibrować?", front: "<b>Przód</b> to krawędź z kropką nad literą Z po zielonej stronie (zakreśloną).", turn: "<b>Obrót na stole</b> to kierunek, w który patrzy kapsel, gdy kręcisz nim na stole jak pokrętłem.", body: "<p>Kalibracja jest zapisana w Home Assistant i sama się nie kasuje. Zrób ją raz na kapsel i powtórz tylko wtedy, gdy kapsel leży płasko, a model jest przechylony.</p><p>Z obrotem jest inaczej: kapsel nie ma kompasu, obrót liczy żyroskop i powoli się myli, szybciej po gwałtownym kręceniu. Po restarcie Home Assistant obrót się gubi. Gdy model patrzy w złą stronę, połóż kapsel przodem od siebie i naciśnij <b>Obróć model</b>: to natychmiastowe i nie rusza kalibracji.</p>" },
+    accel: "Akcelerometr, g", roll: "Lewo-prawo", pitch: "Przód-tył", yaw: "Obrót wokół osi",
+    help: { mark: "Żółta strzałka na modelu wskazuje krawędź z kropką nad literą Z (zakreśloną na zdjęciu). Po niej widać, w którą stronę model jest obrócony.", cal: "<b>Kalibracja</b> raz na kapsel. Kapsel leży na stole kropką od ciebie: model zapamiętuje, jak dla tego kapsla wygląda „płasko”, potem dopasowujesz logo. Zapisuje się na stałe.", align: "<b>Wyrównaj kierunek</b> trzeba od czasu do czasu. Przechył kapsel czuje sam, z grawitacji, ale nie wie, w którą stronę jest obrócony: nie ma kompasu. Obrót liczy żyroskop, który powoli się myli, a restart Home Assistant go gubi. Gdy strzałka na modelu wskazuje inaczej niż kropka na kapslu, połóż kapsel kropką od siebie i naciśnij ten przycisk. Kalibracja zostaje." },
     calibrate: "Kalibracja",
-    cal: { find: "Znajdź po zielonej stronie kropkę nad literą Z (zakreśloną na obrazku).", flat: "Połóż kapsel płasko na stole, dowolną stroną do góry, tą krawędzią od siebie, puść i naciśnij Gotowe. Widok pokaże go wtedy z boku.", heading: "Połóż kapsel na stole tą krawędzią od siebie i naciśnij Gotowe: model obróci się tak samo.", turned: "Model obrócony", logo: "Teraz logo (raz na kapsel: metal jest zaciśnięty pod dowolnym kątem). Połóż kapsel zieloną stroną do góry, literą Z prosto, kropką u góry, i odwróć go przez prawą krawędź. Obróć logo suwakiem, aż będzie wyglądać jak na kapslu.", resin: "Zielona strona", metal: "Po odwróceniu", next: "Gotowe", cancel: "Anuluj", skip: "Pomiń", saved: "Skalibrowano",
+    cal: { find: "Znajdź po zielonej stronie kropkę nad literą Z (zakreśloną na zdjęciu). Na modelu ta krawędź ma żółtą strzałkę.", flat: "Połóż kapsel na stole dowolną stroną do góry tak, żeby ta krawędź była od ciebie, puść i naciśnij Gotowe.", heading: "Połóż kapsel na stole tą krawędzią od siebie i naciśnij Gotowe: strzałka na modelu też obróci się od ciebie.", turned: "Kierunek wyrównany", logo: "Teraz logo (raz na kapsel: metal jest zaciśnięty pod dowolnym kątem). Połóż kapsel zieloną stroną do góry, literą Z prosto, kropką u góry, i odwróć go przez prawą krawędź. Obróć logo suwakiem, aż będzie wyglądać jak na kapslu.", resin: "Zielona strona", metal: "Po odwróceniu", next: "Gotowe", cancel: "Anuluj", skip: "Pomiń", saved: "Skalibrowano",
       err: { moving: "Kapsel się rusza: przytrzymaj chwilę nieruchomo", not_flat: "Kapsel nie leży płasko", asleep: "Kapsel śpi: najpierw go obudź", no_data: "Brak danych: obudź kapsel" } },
-    reset: "Obróć model", led: "Dioda", button: "Przycisk", rate: "Hz", history: "Ostatnie 10 s",
+    reset: "Wyrównaj kierunek", led: "Dioda", button: "Przycisk", rate: "Hz", history: "Ostatnie 10 s",
     nodevice: "Nie znaleziono kapsla Triki",
     gestures: {
       single_press: "Naciśnięcie", double_press: "Podwójne naciśnięcie",
@@ -167,16 +164,13 @@ const CSS = `
   .actions .lbl { display: flex; flex-direction: column; align-items: center; line-height: 1.2; text-align: center; }
   .actions .lbl small { font-size: .74em; font-weight: 400; color: var(--secondary-text-color); }
   .help { padding: 0 16px 14px; font-size: .88em; color: var(--secondary-text-color); }
-  .help summary { cursor: pointer; display: inline-flex; align-items: center; gap: 6px; list-style: none; color: var(--primary-color); }
-  .help summary::-webkit-details-marker { display: none; }
-  .help summary ha-icon { --mdc-icon-size: 18px; }
   .help p { margin: 8px 0 0; line-height: 1.4; }
   .help b { color: var(--primary-text-color); font-weight: 500; }
-  .help .front { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+  .help .front { display: flex; gap: 12px; align-items: center; margin-top: 2px; }
   .help .front p { margin: 0 0 4px; }
   .pic { position: relative; flex: none; width: 64px; height: 64px; }
   .pic img { width: 100%; height: 100%; border-radius: 50%; }
-  .pic i { position: absolute; left: 50%; top: 8%; width: 14px; height: 14px; margin: -7px 0 0 -7px;
+  .pic i { position: absolute; left: 50%; top: 9%; width: 14px; height: 14px; margin: -7px 0 0 -7px;
     border: 2px solid #ffd54f; border-radius: 50%; box-shadow: 0 0 6px #ffd54f; }
   .wizard { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center;
     justify-content: center; gap: 10px; padding: 16px; text-align: center;
@@ -297,11 +291,11 @@ class TrikiCard extends HTMLElement {
         ${c.show_values ? `<div class="values"><div><h4>${t.gyro}</h4>${axisRows("g")}</div><div><h4>${t.accel}</h4>${axisRows("a")}</div></div>` : ""}
         ${c.show_history ? `<div class="chart"><small>${t.gyro} · ${t.history}</small><canvas class="hist" id="hist"></canvas></div>` : ""}
         <div class="actions">
-          <button id="cal" disabled><ha-icon icon="mdi:target"></ha-icon><span class="lbl">${t.calibrate}<small>${t.hint.cal}</small></span></button>
-          <button id="reset" disabled><ha-icon icon="mdi:compass-outline"></ha-icon><span class="lbl">${t.reset}<small>${t.hint.reset}</small></span></button>
-          <button id="led" disabled><ha-icon icon="mdi:led-on"></ha-icon><span class="lbl">${t.led}<small>${t.hint.led}</small></span></button>
+          <button id="cal" disabled><ha-icon icon="mdi:target"></ha-icon><span class="lbl">${t.calibrate}</span></button>
+          <button id="reset" disabled><ha-icon icon="mdi:compass-outline"></ha-icon><span class="lbl">${t.reset}</span></button>
+          <button id="led" disabled><ha-icon icon="mdi:led-on"></ha-icon><span class="lbl">${t.led}</span></button>
         </div>
-        <details class="help"><summary><ha-icon icon="mdi:help-circle-outline"></ha-icon>${t.help.title}</summary><div class="front"><span class="pic"><img src="${asset("tex_resin.webp")}" alt=""><i></i></span><div><p>${t.help.front}</p><p>${t.help.turn}</p></div></div>${t.help.body}</details>
+        <div class="help"><div class="front"><span class="pic"><img src="${asset("tex_resin.webp")}" alt=""><i></i></span><p>${t.help.mark}</p></div><p>${t.help.cal}</p><p>${t.help.align}</p></div>
         </div>
         </div>
       </ha-card>`;

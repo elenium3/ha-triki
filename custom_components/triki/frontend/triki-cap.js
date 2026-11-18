@@ -134,6 +134,16 @@ export async function buildCap(T, urls) {
   glow.position.z = RESIN_Z + 4;
   inner.add(glow);
 
+  // A yellow arrow outside the rim at the edge with the dot above the Z (sensor -y): the
+  // card's texts call it the arrow, so the owner can compare where the model and the cap face.
+  const arrow = new T.Mesh(
+    new T.CylinderGeometry(0, 3.0, 7.0, 24), // a cone; the bundle has no ConeGeometry
+    new T.MeshStandardMaterial({ color: 0x000000, emissive: 0xffd54f, emissiveIntensity: 1, toneMapped: false }),
+  );
+  arrow.rotation.z = Math.PI; // the cone's tip points +y; turn it to -y, outwards
+  arrow.position.set(0, -(R_SHOULDER + FLUTE_DEPTH + 4.6), H / 2);
+  inner.add(arrow);
+
   return {
     group,
     setLed(on) {
