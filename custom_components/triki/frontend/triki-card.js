@@ -94,16 +94,19 @@ function loadModel(T) {
 
 const CSS = `
   :host { display: block; }
-  ha-card { overflow: hidden; }
+  ha-card { display: block; overflow: hidden; }
+  button { transition: transform .12s, background .2s, border-color .2s, color .2s, box-shadow .2s; }
+  button:not(:disabled):hover { box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+  button:not(:disabled):active { transform: scale(.96); }
   .head { display: flex; align-items: center; gap: 8px; padding: 12px 16px 4px; flex-wrap: wrap; }
-  .name { font-size: 1.15em; font-weight: 500; margin-right: auto; }
+  .name { font-size: 1.3em; font-weight: 500; margin-right: auto; }
   .chip { display: inline-flex; align-items: center; gap: 4px; font-size: 0.85em; padding: 2px 8px;
     border-radius: 12px; background: var(--secondary-background-color); color: var(--secondary-text-color); }
   .chip[hidden] { display: none; }
-  .tabs { display: flex; gap: 6px; padding: 4px 16px 0; overflow-x: auto; scrollbar-width: none; }
+  .tabs { display: flex; gap: 8px; padding: 8px 16px 0; overflow-x: auto; scrollbar-width: none; }
   .tabs[hidden] { display: none; }
-  .tab { display: inline-flex; align-items: center; gap: 6px; flex: none; font: inherit; font-size: .85em;
-    padding: 4px 10px; border-radius: 14px; cursor: pointer; border: 1px solid var(--divider-color);
+  .tab { display: inline-flex; align-items: center; gap: 6px; flex: none; font: inherit; font-size: .95em;
+    padding: 8px 16px; border-radius: 18px; cursor: pointer; border: 1px solid var(--divider-color);
     background: none; color: var(--secondary-text-color); white-space: nowrap; }
   .tab.sel { border-color: var(--primary-color); color: var(--primary-text-color);
     background: rgba(var(--rgb-primary-color, 3,169,244), .12); }
@@ -114,8 +117,11 @@ const CSS = `
   .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
   .chip.live .dot { animation: pulse 1.2s infinite; }
   @keyframes pulse { 50% { opacity: .3; } }
-  .stage { position: relative; aspect-ratio: 16 / 10; min-height: 220px; }
-  canvas.gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .stage { position: relative; aspect-ratio: 16 / 10; min-height: 260px; }
+  canvas.gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
+    transition: opacity .5s, filter .5s; }
+  .stage.bump { animation: bump .35s ease-out; }
+  @keyframes bump { 30% { box-shadow: inset 0 0 0 3px rgba(var(--rgb-primary-color, 3,169,244), .55); } }
   .angles { position: absolute; left: 12px; top: 8px; display: flex; gap: 14px; pointer-events: none; }
   .angle { display: flex; flex-direction: column; }
   .angle small { font-size: .72em; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: .04em; }
@@ -139,26 +145,39 @@ const CSS = `
   .row span { font-size: .8em; font-weight: 600; }
   .row output { text-align: right; font-variant-numeric: tabular-nums; font-size: .9em; }
   .bar { position: relative; height: 6px; border-radius: 3px; background: var(--divider-color); overflow: hidden; }
-  .bar i { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-radius: 3px; }
+  .bar i { position: absolute; top: 0; bottom: 0; left: 50%; width: 0; border-radius: 3px;
+    transition: width .08s linear, left .08s linear; }
   .bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--secondary-text-color); opacity: .5; }
   .chart { padding: 4px 16px 0; }
   .chart small { font-size: .72em; color: var(--secondary-text-color); }
   canvas.hist { width: 100%; height: 70px; display: block; }
-  .actions { display: flex; gap: 8px; padding: 8px 16px 14px; }
-  .actions button { flex: 1; font: inherit; font-size: .9em; padding: 8px; border-radius: 8px; cursor: pointer;
+  .actions { display: flex; gap: 10px; padding: 10px 16px 16px; }
+  .actions button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font: inherit; font-size: 1em; font-weight: 500; min-height: 52px; padding: 10px 14px; border-radius: 12px; cursor: pointer;
     border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); }
   .actions button:disabled { opacity: .45; cursor: default; }
   .actions button.on { border-color: #66bb6a; color: #66bb6a; }
   .wizard { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center;
     justify-content: center; gap: 10px; padding: 16px; text-align: center;
     background: color-mix(in srgb, var(--card-background-color, #1c1f23) 88%, transparent); }
-  .wizard.show { display: flex; }
+  .wizard.show { display: flex; animation: fade .25s ease-out; }
+  @keyframes fade { from { opacity: 0; transform: scale(.98); } }
   .wizard p { margin: 0; max-width: 32em; }
   .wizard .err { color: var(--error-color, #ef5350); min-height: 1.2em; font-size: .9em; }
   .wizard .row { display: flex; gap: 8px; }
-  .wizard button { font: inherit; padding: 8px 16px; border-radius: 8px; cursor: pointer;
+  .wizard button { font: inherit; font-size: 1.05em; min-height: 48px; padding: 10px 24px; border-radius: 12px; cursor: pointer;
     border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); }
   .wizard button.primary { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
+  .body { display: block; }
+  /* wide card (set from a ResizeObserver): 3D on the left, readings and controls on the right */
+  .wide .body { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(320px, 1fr); align-items: stretch; }
+  .wide .stage { aspect-ratio: auto; min-height: 460px; }
+  .wide .side { display: flex; flex-direction: column; border-left: 1px solid var(--divider-color); }
+  .wide .side .values { grid-template-columns: 1fr; padding-top: 12px; }
+  .wide .side .row { height: 26px; }
+  .wide .side .chart { flex: 1; }
+  .wide .side canvas.hist { height: 110px; }
+  .wide .side .actions { flex-direction: column; margin-top: auto; }
   .empty { padding: 24px 16px; color: var(--secondary-text-color); }
 `;
 
@@ -210,6 +229,7 @@ class TrikiCard extends HTMLElement {
           <div class="chip" id="battChip" hidden><ha-icon id="battIcon" icon="mdi:battery" style="--mdc-icon-size:14px"></ha-icon><span id="batt"></span></div>
         </div>
         <div class="tabs" id="tabs" hidden></div>
+        <div class="body">
         <div class="stage asleep" id="stage">
           <canvas class="gl" id="gl"></canvas>
           <div class="angles">
@@ -226,15 +246,22 @@ class TrikiCard extends HTMLElement {
             <div class="row"><button id="wizCancel">${t.cal.cancel}</button><button class="primary" id="wizNext">${t.cal.next}</button></div>
           </div>
         </div>
+        <div class="side">
         ${c.show_values ? `<div class="values"><div><h4>${t.gyro}</h4>${axisRows("g")}</div><div><h4>${t.accel}</h4>${axisRows("a")}</div></div>` : ""}
         ${c.show_history ? `<div class="chart"><small>${t.gyro} · ${t.history}</small><canvas class="hist" id="hist"></canvas></div>` : ""}
         <div class="actions">
-          <button id="cal" disabled>${t.calibrate}</button>
-          <button id="reset" disabled>${t.reset}</button>
-          <button id="led" disabled>${t.led}</button>
+          <button id="cal" disabled><ha-icon icon="mdi:target"></ha-icon>${t.calibrate}</button>
+          <button id="reset" disabled><ha-icon icon="mdi:compass-outline"></ha-icon>${t.reset}</button>
+          <button id="led" disabled><ha-icon icon="mdi:led-on"></ha-icon>${t.led}</button>
+        </div>
+        </div>
         </div>
       </ha-card>`;
     const $ = (id) => this.shadowRoot.getElementById(id);
+    const card = this.shadowRoot.querySelector("ha-card");
+    this._wideRo?.disconnect();
+    this._wideRo = new ResizeObserver(() => card.classList.toggle("wide", this.clientWidth >= 760));
+    this._wideRo.observe(this);
     this._el = {
       name: $("name"), state: $("state"), stateText: $("stateText"), rate: $("rate"), rateChip: $("rateChip"),
       rssi: $("rssi"), rssiChip: $("rssiChip"), batt: $("batt"), battChip: $("battChip"), battIcon: $("battIcon"),
@@ -448,6 +475,10 @@ class TrikiCard extends HTMLElement {
     if (!label) return;
     if ((kind === "rotate_cw" || kind === "rotate_ccw") && data?.steps) label += ` ×${data.steps}`;
     if (kind === "motion") return; // too frequent to be worth a toast
+    const st = this._el.stage;
+    st.classList.remove("bump");
+    void st.offsetWidth; // restart the animation
+    st.classList.add("bump");
     const el = this._el.toast;
     el.textContent = label;
     el.classList.add("show");
