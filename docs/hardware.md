@@ -94,8 +94,10 @@ Also: a KiCad schematic in [DISKIMG/Triki-PCB](https://github.com/DISKIMG/Triki-
   minutes into a 26 Hz stream). On the development unit the resting level went from 84 % to
   82 % over a night with the link held most of the time. No long-term figures
   yet.
-- **Axes.** The sensor's +Z points out of the top (the Ż logo side), so a token
-  lying flat reads +1 g on Z. Rotation around Z is what the knob gesture uses.
+- **Axes.** The sensor's +Z points out of the green PCB face (the Ż side) and −Z out of
+  the metal cap, so a token lying metal side up reads −1 g on Z (full table in
+  [protocol.md](protocol.md)). The knob gesture uses rotation about gravity, so it works
+  with either side up.
 
 <p align="center">
   <img src="images/triki-axes.jpg" width="420" alt="The token with its X, Y and Z axes drawn in">

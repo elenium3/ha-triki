@@ -513,7 +513,7 @@ class GestureDetector:
                     self._turn_acc = 0.0
             steps = int(abs(self._turn_acc) // self.knob_step)
             if steps:
-                # gravity unit points "up" (accel reads +1 g when flat), so a
+                # gravity unit points "up" (at rest the accel reads +1 g upward), so a
                 # positive rate is counter-clockwise viewed from above.
                 kind = "rotate_ccw" if self._turn_acc > 0 else "rotate_cw"
                 deg = math.copysign(steps * self.knob_step, self._turn_acc)

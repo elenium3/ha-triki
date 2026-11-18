@@ -23,6 +23,8 @@ All notable changes to this project are documented here. The format follows
   `gyro_bias`.
 
 ### Fixed
+- Docs: the IMU axes in `docs/protocol.md`. +z points out of the green PCB (Ż)
+  side, not the metal side, so a token lying metal side up reads −1 g on z.
 - A token in its firmware-update bootloader (advertising as `TrikiDfu…`) is
   no longer offered as a new device.
 - The LED switch keeps its last known state across Home Assistant restarts. It
