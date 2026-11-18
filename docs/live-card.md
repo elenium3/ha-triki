@@ -51,7 +51,7 @@ while the button is held. `model: glb` uses Flopsstuff's textured model.
   detector learns while the token lies still. Tilt is held to gravity; the
   accelerometer is ignored while it reads far from 1 g (a swing or a tap).
 - **Heading drifts.** There is no compass, so yaw is only the integrated gyro.
-  **Reset turn** on the card points the model's front away from the viewer. A
+  **Turn the model** on the card opens a step with a picture of the green side, the dot above the Z circled: lay the cap with that edge away and press Done. A
   dozing token keeps its heading over the reconnect; a Home Assistant restart
   loses it. The calibration itself is stored and never resets; the card's
   "When to calibrate?" note says this in the owner's language. The angles are
