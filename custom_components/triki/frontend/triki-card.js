@@ -93,7 +93,8 @@ function loadModel(T) {
 }
 
 const CSS = `
-  :host { display: block; }
+  /* one compact block, centred on wide dashboards (panel view) */
+  :host { display: block; max-width: 1040px; margin: 0 auto; }
   ha-card { display: block; overflow: hidden; }
   button { transition: transform .12s, background .2s, border-color .2s, color .2s, box-shadow .2s; }
   button:not(:disabled):hover { box-shadow: 0 2px 10px rgba(0,0,0,.25); }
@@ -170,13 +171,13 @@ const CSS = `
   .wizard button.primary { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
   .body { display: block; }
   /* wide card (set from a ResizeObserver): 3D on the left, readings and controls on the right */
-  .wide .body { display: grid; grid-template-columns: minmax(0, 1fr) clamp(320px, 30%, 480px); align-items: stretch; }
-  .wide .stage { aspect-ratio: auto; min-height: clamp(460px, calc(100vh - 220px), 900px); }
+  .wide .body { display: grid; grid-template-columns: minmax(0, 1fr) 340px; align-items: stretch; }
+  .wide .stage { aspect-ratio: auto; height: 400px; min-height: 0; }
   .wide .side { display: flex; flex-direction: column; border-left: 1px solid var(--divider-color); }
   .wide .side .values { grid-template-columns: 1fr; padding-top: 12px; }
-  .wide .side .row { height: 26px; }
+  .wide .side .row { height: 22px; }
   .wide .side .chart { flex: 1; }
-  .wide .side canvas.hist { height: 110px; }
+  .wide .side canvas.hist { height: 80px; }
   .wide .side .actions { flex-direction: column; margin-top: auto; }
   .empty { padding: 24px 16px; color: var(--secondary-text-color); }
 `;
@@ -552,7 +553,7 @@ class TrikiCard extends HTMLElement {
       scene.add(key);
       const camera = new T.PerspectiveCamera(32, 1, 0.1, 50);
       // at table height: a cap lying level shows only its rim
-      camera.position.set(0, 0, 4.6);
+      camera.position.set(0, 0, 6.2); // the cap takes about half the view's height
       camera.lookAt(0, 0, 0);
       const world = new T.Group(); // z-up world -> three.js Y-up
       world.rotation.x = -Math.PI / 2;
