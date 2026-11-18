@@ -54,7 +54,11 @@ from .protocol import DEFAULT_RATE, SUPPORTED_RATES
 
 
 def _is_triki(info: BluetoothServiceInfoBleak) -> bool:
-    return (info.name or "").lower().startswith("triki")
+    name = (info.name or "").lower()
+    # "TrikiDfu..." is a token in its Nordic DFU bootloader (opcode 0x42, also
+    # used by the Żappka app for firmware updates): it only offers the DFU
+    # service, not the Triki one.
+    return name.startswith("triki") and not name.startswith("trikidfu")
 
 
 class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):

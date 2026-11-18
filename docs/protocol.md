@@ -43,7 +43,10 @@ of 4 s through an L2CAP connection parameter update right after connecting.
 Other opcodes documented by Flopsstuff (reply opcode = request `| 0x80`;
 TX is silent until a command arrives): `05` static configuration, `07` unique
 id, `09` status (~54 bytes), `43` live counter. `0a`, `42`, `44`, `46` cause a
-soft reset of the token. The integration uses none of them.
+soft reset of the token. `42` is the reboot into the Nordic DFU bootloader,
+which then advertises as `TrikiDfu…` ([Piwencjusz/zabka-triki-hardware](https://github.com/Piwencjusz/zabka-triki-hardware),
+`dfu_trigger.py`); discovery ignores that name. The integration uses none of
+these opcodes.
 
 Re-sending *Start* with another rate over a live link switches the rate without
 a reconnect; the stream continues and the IMU does not re-settle. The
