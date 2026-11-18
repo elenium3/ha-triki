@@ -71,7 +71,7 @@ def main():
                         f"{r['t']:8.3f} {fr.hex()} g=({s.gx:.0f},{s.gy:.0f},{s.gz:.0f}) "
                         f"a=({s.ax:.2f},{s.ay:.2f},{s.az:.2f}) b={int(s.button)}"
                     )
-                for ev in det.update(s):
+                for ev in det.update(s, r["t"]):
                     now_ev[seg][ev.type] += 1
         elif "rate" in r and "meta" not in r:
             # the live link switched between the idle and the configured rate

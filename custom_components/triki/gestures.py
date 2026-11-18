@@ -4,6 +4,8 @@ Timing: ``update(sample, t)`` takes the frame's arrival time. Through a proxy
 half the frames can be lost, and counting samples would then run the clock at
 half speed (a 0.3 s multi-press window becomes 0.6 s, a shake looks slow).
 Without ``t`` (tools, tests) time advances by one sample period per frame.
+Angles (the knob) are integrated over that clock too, not over the nominal
+sample period, so lost frames do not lose degrees.
 
 Event types produced:
   press, double_press, triple_press, long_press   - built-in button
@@ -18,6 +20,7 @@ tune them via the constants or the integration options.
 from __future__ import annotations
 
 import math
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -93,7 +96,31 @@ KNOB_LEVEL_COS = 0.5
 # turn: the partial turn is dropped and the knob is muted for a moment.
 KNOB_SHOCK_G = 1.5
 KNOB_SHOCK_GUARD_S = 0.5
+# A gap longer than this between two frames counts as this long for the knob
+# angle: the rate in the gap is unknown. Good links show gaps of 115-155 ms,
+# rarely 340 ms; 26 Hz with heavy loss needs more than 150.
+KNOB_MAX_DT_S = 0.25
 GRAVITY_ALPHA = 0.08  # low-pass for the gravity estimate
+# Frames per second actually received, over this much wall time. Some firmware
+# ignores the requested rate (find-my-triki's game mode always streams ~100 Hz);
+# a sample period taken from the request would then run the clock fast.
+# A congested link delivers in bursts (17-27 frames every 0.3 s on 2026-11-17)
+# that drain a backlog faster than real time, so a short window over-reads the
+# rate; only a long window well above the requested rate counts as a faster
+# stream.
+RATE_WINDOW_S = 5.0
+RATE_MIN_SPAN_S = 3.0
+FAST_STREAM_FACTOR = 1.5
+# Gyro zero offset, learned while the token lies still. The development unit
+# reads (0.3, -2.5, -0.6) °/s at rest with 0.03-0.1 °/s of noise, stable over
+# a whole session; uncorrected, -0.6 °/s about z is 36° per minute of yaw.
+BIAS_STILL_G = 0.05  # |a| - 1 g
+BIAS_STILL_DPS = 3.0  # |gyro - bias|, or |gyro| before the first estimate
+BIAS_FIRST_DPS = 10.0
+BIAS_SETTLE_S = 0.5  # still this long before frames are learned from
+BIAS_FAST_FRAMES = 50  # plain average for the first frames, then a slow EMA
+BIAS_ALPHA = 0.002  # ~10 s at 52 Hz: a slow turn below the deadband barely moves it
+BIAS_MAX_DPS = 10.0  # per axis; more is not an offset
 
 KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
 MOTION_EVENTS = frozenset({"rotate_cw", "rotate_ccw", "shake", "tap", "throw", "flip"})
@@ -139,6 +166,9 @@ class GestureDetector:
         shake: bool = True,
     ) -> None:
         self.dt = 1.0 / rate_hz
+        # survives reset(): a reconnect of the same token keeps its offset
+        self.gyro_bias: tuple[float, float, float] | None = None
+        self._bias_n = 0
         self.knob_step = knob_step_deg
         self.invert_rotation = invert_rotation
         self._startup_discard = startup_discard
@@ -157,9 +187,12 @@ class GestureDetector:
         made right after the switch must not be lost in a skip window.
         """
         self.dt = 1.0 / rate_hz
+        self._arrivals.clear()
 
     def reset(self) -> None:
         self.t = 0.0
+        self._arrivals: deque[float] = deque()
+        self._bias_still_since: float | None = None
         self._t_origin: float | None = None  # wall time of the first timed frame
         self._skip = self._startup_discard
         # button
@@ -204,6 +237,26 @@ class GestureDetector:
 
     # ---------------------------------------------------------------- derived
     @property
+    def measured_rate(self) -> float | None:
+        """Frames per second received over the last RATE_WINDOW_S of wall time."""
+        arr = self._arrivals
+        if len(arr) < 2 or arr[-1] - arr[0] < RATE_MIN_SPAN_S:
+            return None
+        return (len(arr) - 1) / (arr[-1] - arr[0])
+
+    @property
+    def frame_period(self) -> float:
+        """The shortest plausible time between two frames.
+
+        The nominal period, or less when the token streams faster than asked.
+        A lossy link measures slower than nominal and keeps the nominal one.
+        """
+        rate = self.measured_rate
+        if rate is None or rate * self.dt < FAST_STREAM_FACTOR:
+            return self.dt
+        return 1.0 / rate
+
+    @property
     def pitch_roll(self) -> tuple[float, float] | None:
         """Tilt in degrees from the gravity estimate (sensor frame, z = cap normal)."""
         if self.gravity is None:
@@ -222,16 +275,22 @@ class GestureDetector:
             # keep the button edge state honest even while discarding
             self.button = s.button
             return out
+        prev_t = self.t
         if t is None:
             self.t += self.dt
         else:
+            arr = self._arrivals
+            arr.append(t)
+            while arr[-1] - arr[0] > RATE_WINDOW_S:
+                arr.popleft()
+            period = self.frame_period
             if self._t_origin is None:
-                self._t_origin = t - self.t - self.dt
+                self._t_origin = t - self.t - period
             # at least one sample period per frame: a burst of buffered
             # notifications must not compress the stream into an instant
-            self.t = max(self.t + self.dt, t - self._t_origin)
+            self.t = max(self.t + period, t - self._t_origin)
         self._button(s.button, out)
-        self._motion(s, out)
+        self._motion(s, out, min(self.t - prev_t, KNOB_MAX_DT_S))
         if out:
             # all of it is still tracked (idle logic, tilt), only reporting is gated
             allowed: set[str] = set()
@@ -279,8 +338,34 @@ class GestureDetector:
         self.button = pressed
 
     # ----------------------------------------------------------------- motion
-    def _motion(self, s: Sample, out: list[Event]) -> None:
+    def _learn_bias(self, s: Sample, a: float) -> None:
+        b = self.gyro_bias
+        if b is None:
+            calm = s.gyro_mag < BIAS_FIRST_DPS
+        else:
+            calm = math.dist((s.gx, s.gy, s.gz), b) < BIAS_STILL_DPS
+        if not calm or abs(a - 1.0) >= BIAS_STILL_G:
+            self._bias_still_since = None
+            return
+        if self._bias_still_since is None:
+            self._bias_still_since = self.t
+        if self.t - self._bias_still_since < BIAS_SETTLE_S:
+            return
+        g = (s.gx, s.gy, s.gz)
+        if b is None:
+            self.gyro_bias, self._bias_n = g, 1
+            return
+        self._bias_n += 1
+        k = 1.0 / self._bias_n if self._bias_n <= BIAS_FAST_FRAMES else BIAS_ALPHA
+
+        def step(bi: float, gi: float) -> float:
+            return max(-BIAS_MAX_DPS, min(BIAS_MAX_DPS, bi + k * (gi - bi)))
+
+        self.gyro_bias = (step(b[0], g[0]), step(b[1], g[1]), step(b[2], g[2]))
+
+    def _motion(self, s: Sample, out: list[Event], dt: float) -> None:
         a = s.accel_mag
+        self._learn_bias(s, a)
         static = abs(a - 1.0) < STATIC_ACCEL_TOL and s.gyro_mag < STATIC_GYRO_DPS
         if static:
             self._motion_since = None
@@ -408,14 +493,15 @@ class GestureDetector:
         elif self.gravity is not None and abs(self.gravity[2]) < KNOB_LEVEL_COS:
             pass  # held edge-on: handled, not turned
         elif self.gravity is not None:
-            rate = _dot((s.gx, s.gy, s.gz), self.gravity)
+            bx, by, bz = self.gyro_bias or (0.0, 0.0, 0.0)
+            rate = _dot((s.gx - bx, s.gy - by, s.gz - bz), self.gravity)
             if self.invert_rotation:
                 rate = -rate
             if abs(rate) >= KNOB_DEADBAND_DPS:
                 if rate * self._turn_acc < 0:  # direction reversed: drop remainder
                     self._turn_acc = 0.0
                 self._turn_run += 1
-                self._turn_held += rate * self.dt
+                self._turn_held += rate * dt
                 if self._turn_run >= KNOB_CONFIRM_FRAMES:
                     self._turn_acc += self._turn_held
                     self._turn_held = 0.0

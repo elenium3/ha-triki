@@ -431,3 +431,84 @@ def test_knob_ignores_turns_with_the_token_edge_on():
     d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0)
     feed(d, secs(2.0), ax=1.0, az=0.0)  # cap sideways: gravity along x
     assert types(feed(d, secs(1.0), gx=185.0, ax=1.0, az=0.0)) == []
+
+
+@pytest.mark.parametrize(("rate", "loss"), [(52, 0.0), (52, 0.5), (26, 0.7)])
+def test_knob_angle_survives_lost_frames(rate, loss):
+    # 360° at 120 °/s: the angle is integrated over the arrival times, so
+    # dropped frames do not drop degrees (it used to count one period per frame)
+    ev = timed(rate, loss, 3, [(3.0, {"gz": 120.0}), (1.0, {})])
+    steps = sum(e.data["steps"] for e in ev if e.type == "rotate_ccw")
+    # 26 Hz with 70 % loss leaves gaps longer than KNOB_MAX_DT_S (was 3-4 steps)
+    assert (10 if loss > 0.6 else 11) <= steps <= 12, steps
+
+
+def test_faster_stream_than_requested_keeps_the_clock():
+    # find-my-triki's game mode streams ~100 Hz whatever rate is asked for: one
+    # nominal period per frame would run the clock almost twice as fast
+    d = GestureDetector(52, startup_discard=0)
+    t = 50.0
+    for _ in range(500):  # 5 s at 100 Hz: the rate is known after RATE_MIN_SPAN_S
+        t += 0.01
+        d.update(Sample.from_frame(frame()), t)
+    assert d.measured_rate == pytest.approx(100.0, rel=0.02)
+    t_known = d.t
+    for _ in range(400):  # 4 more seconds
+        t += 0.01
+        d.update(Sample.from_frame(frame()), t)
+    assert d.t - t_known == pytest.approx(4.0, abs=0.1)  # 7.7 s at the nominal period
+
+
+def test_bursty_delivery_keeps_the_nominal_period():
+    # a congested link: 17 frames at once every 0.33 s, nothing lost. The bursts
+    # must not read as a faster stream (it shrank the knob angle by 10-20 %)
+    # (one frame per notification, the notifications 2 ms apart)
+    d = GestureDetector(52, startup_discard=0)
+    t = 0.0
+    for _ in range(30):
+        t += 17 / 52
+        for i in range(17):
+            d.update(Sample.from_frame(frame()), t + i * 0.002)
+    assert d.frame_period == pytest.approx(1 / 52)
+
+
+def test_gyro_bias_learned_at_rest_and_kept_over_reset():
+    d = GestureDetector(52, startup_discard=0)
+    t = 0.0
+    for _ in range(52 * 3):
+        t += 1 / 52
+        d.update(Sample.from_frame(frame(gx=0.3, gy=-2.5, gz=-0.6)), t)
+    # int16 at 14.286 LSB per °/s: the frames carry 0.28, -2.52, -0.63
+    assert d.gyro_bias == pytest.approx((0.3, -2.5, -0.6), abs=0.05)
+    d.reset()  # a reconnect of the same token
+    assert d.gyro_bias == pytest.approx((0.3, -2.5, -0.6), abs=0.05)
+
+
+def test_gyro_bias_not_learned_while_moving():
+    d = GestureDetector(52, startup_discard=0)
+    t = 0.0
+    for _ in range(52 * 3):
+        t += 1 / 52
+        d.update(Sample.from_frame(frame(gz=40.0)), t)  # a slow turn on the table
+    assert d.gyro_bias is None
+
+
+def test_knob_turn_measured_against_the_bias():
+    # an offset of -6 °/s about z: a 360° turn reads 342° raw; the learned
+    # bias puts the missing degrees back
+    def run(bias_first):
+        d = GestureDetector(52, knob_step_deg=10, startup_discard=0)
+        t = 0.0
+        segs = [(3.0, {"gz": -6.0})] if bias_first else []
+        segs += [(3.0, {"gz": 114.0}), (1.0, {"gz": -6.0})]
+        steps = 0
+        for seconds, kw in segs:
+            for _ in range(round(seconds * 52)):
+                t += 1 / 52
+                for e in d.update(Sample.from_frame(frame(**kw)), t):
+                    if e.type == "rotate_ccw":
+                        steps += e.data["steps"]
+        return steps
+
+    assert run(bias_first=True) == 36
+    assert run(bias_first=False) == 34

@@ -378,6 +378,20 @@ class TrikiDevice:
         self._maybe_connect(service_info, _FRESH_ADV_S)
 
     @property
+    def measured_rate(self) -> float | None:
+        """Frames per second actually received (diagnostics)."""
+        if not self.connected:
+            return None
+        rate = self._detector.measured_rate
+        return None if rate is None else round(rate, 1)
+
+    @property
+    def gyro_bias(self) -> list[float] | None:
+        """Gyro zero offset learned at rest, °/s (diagnostics)."""
+        b = self._detector.gyro_bias
+        return None if b is None else [round(v, 2) for v in b]
+
+    @property
     def advertisement_cadence(self) -> dict[str, Any]:
         """Recent advertisement timing for diagnostics (seconds)."""
         times = list(self._advert_times)
@@ -815,7 +829,7 @@ class TrikiDevice:
         self.stats.notifications += 1
         frames = list(self._parser.push(data))
         now = time.monotonic()
-        dt = self._detector.dt
+        dt = self._detector.frame_period
         for i, frame in enumerate(frames):
             self.stats.frames += 1
             if not self._streaming:
