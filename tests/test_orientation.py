@@ -84,10 +84,10 @@ def test_reset_heading_zeroes_only_yaw() -> None:
 
 
 def test_a_gap_is_not_integrated() -> None:
-    """A lost burst: one frame half a second later must not count as 0.5 s of spin."""
+    """A stalled link: one frame a second later must not count as a second of spin."""
     o = Orientation()
     t = run(o, sample(), 1.0)
-    o.update(sample(gz=200.0), t + 0.5)
+    o.update(sample(gz=200.0), t + 1.0)
     _, _, yaw = o.euler
     assert abs(yaw) < 1
 
@@ -190,3 +190,61 @@ def test_heading_reset_points_the_logo_away() -> None:
     wx, wy, _ = quat_rotate(o.quaternion, (1.0, 0.0, 0.0))
     assert wx == pytest.approx(0.0, abs=0.02)
     assert wy == pytest.approx(1.0, abs=0.02)
+
+
+def test_replayed_full_turns_read_one_revolution() -> None:
+    """Real hand turns (fixture of the knob tests): yaw changes by one revolution.
+
+    Each turn ends against a pen mark by hand, so +-25 degrees; at rest it stays put.
+    """
+    import gzip
+    import json
+    import pathlib
+
+    from custom_components.triki import gestures
+    from custom_components.triki.protocol import FrameParser
+
+    fixture = pathlib.Path(__file__).parent / "fixtures" / "slow-turns-2026-11-18.jsonl.gz"
+    parser = FrameParser()
+    det = gestures.GestureDetector(52, knob_step_deg=30.0)
+    o = Orientation()
+    track: list[tuple[float, float]] = []  # (t, unwrapped yaw)
+    last = None
+    unwrap = 0.0
+    with gzip.open(fixture, "rt") as fh:
+        for line in fh:
+            rec = json.loads(line)
+            if "rate" in rec and "meta" not in rec:
+                det.set_rate(rec["rate"])
+            if "hex" not in rec:
+                continue
+            frames = list(parser.push(bytes.fromhex(rec["hex"])))
+            for i, frame in enumerate(frames):
+                s = Sample.from_frame(frame)
+                t = rec["t"] - (len(frames) - 1 - i) * det.frame_period
+                o.update(s, t, det.gyro_bias)
+                det.update(s, t)
+                yaw = o.euler[2]
+                if last is not None:
+                    d = yaw - last
+                    unwrap += d - 360 * round(d / 360)
+                last = yaw
+                track.append((t, unwrap))
+
+    def turned(lo: float, hi: float) -> float:
+        inside = [y for t, y in track if lo <= t <= hi]
+        return inside[-1] - inside[0]
+
+    problems = []
+    for label, lo, hi in [
+        ("slow turn #1", 160.0, 181.6),
+        ("slow turn #2", 189.5, 206.5),
+        ("normal turn", 208.0, 225.5),
+    ]:
+        deg = turned(lo, hi)
+        if not 335 <= abs(deg) <= 385:
+            problems.append(f"{label}: {deg:.0f} deg")
+    rest = turned(227.8, 236.6)
+    if abs(rest) > 3:
+        problems.append(f"at rest: {rest:.1f} deg")
+    assert not problems, "\n".join(problems)

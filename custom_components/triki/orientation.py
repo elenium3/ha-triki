@@ -33,8 +33,10 @@ BETA = 0.08
 # First frames after a (re)start: converge from the accelerometer quickly.
 BETA_SETTLE = 2.5
 SETTLE_S = 0.5
-# Gaps longer than this (a lost burst, a rate switch) are not integrated.
-MAX_DT_S = 0.1
+# Gaps longer than this are not integrated (the link stalled; the pose is
+# re-anchored by gravity). Shorter ones are: notifications arrive in bursts
+# with 0.1-0.2 s between them, and skipping those lost a fifth of every turn.
+MAX_DT_S = 0.5
 # The accelerometer only corrects tilt while it reads about 1 g; during a swing
 # or a tap it measures motion, not gravity.
 ACCEL_TRUST_G = (0.75, 1.25)
@@ -198,7 +200,9 @@ class Orientation:
         bias = gyro_bias if gyro_bias is not None else (0.0, 0.0, 0.0)
         spin = math.sqrt(sum((g - b) ** 2 for g, b in zip((s.gx, s.gy, s.gz), bias, strict=True)))
         self._gyro_lp += LP_ALPHA * (spin - self._gyro_lp)
-        if self._t is None or not 0 < t - self._t <= MAX_DT_S:
+        if self._t is not None and t <= self._t:
+            return  # same arrival time as the last frame: nothing to integrate over
+        if self._t is None or t - self._t > MAX_DT_S:
             # first frame or a gap: no integration step, just remember the time
             first = self._t is None
             self._t = t
