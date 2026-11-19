@@ -161,6 +161,10 @@ KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
 MOTION_EVENTS = frozenset({"rotate_cw", "rotate_ccw", "shake", "tap", "throw", "flip"})
 EXPERIMENTAL_EVENTS = frozenset({"tap", "throw", "flip"})  # the "motion gestures" option
 
+# The shake recorder keeps this much of the stream before each shake (diagnostics):
+# a false shake on 2026-11-18 19:21 had no capture to tell what caused it.
+SHAKE_RECORD_S = 1.5
+
 REFRACTORY_S = {
     "tap": 0.3,
     "throw": 1.0,
@@ -271,6 +275,9 @@ class GestureDetector:
         self._shake_latched = False
         self._last_active_t = 0.0
         self._last: dict[str, float] = {}
+        # (detector time, arrival time, |a|, |gyro|, button) of the recent frames
+        self._recent: deque[tuple[float, float | None, float, float, bool]] = deque()
+        self.shake_window: list[list[float | int | None]] | None = None
         self.last_motion_t = 0.0
         self._motion_since: float | None = None
 
@@ -356,7 +363,7 @@ class GestureDetector:
             # notifications must not compress the stream into an instant
             self.t = max(self.t + period, t - self._t_origin)
         self._button(s.button, out)
-        self._motion(s, out, min(self.t - prev_t, KNOB_MAX_DT_S))
+        self._motion(s, out, min(self.t - prev_t, KNOB_MAX_DT_S), t)
         if out:
             # all of it is still tracked (idle logic, tilt), only reporting is gated
             allowed: set[str] = set()
@@ -490,8 +497,25 @@ class GestureDetector:
 
         self.gyro_bias = (step(b[0], g[0]), step(b[1], g[1]), step(b[2], g[2]))
 
-    def _motion(self, s: Sample, out: list[Event], dt: float) -> None:
+    def _record(self, s: Sample, a: float, arrival: float | None) -> None:
+        rec = self._recent
+        rec.append((self.t, arrival, a, s.gyro_mag, s.button))
+        while rec and self.t - rec[0][0] > SHAKE_RECORD_S:
+            rec.popleft()
+
+    def _snapshot(self) -> list[list[float | int | None]]:
+        """The recorded frames as [s before the shake, ms since the previous arrival, |a|, |gyro|, button]."""
+        out: list[list[float | int | None]] = []
+        prev: float | None = None
+        for t, arr, a, g, b in self._recent:
+            gap = None if arr is None or prev is None else round((arr - prev) * 1000)
+            prev = arr
+            out.append([round(t - self.t, 3), gap, round(a, 2), round(g), int(b)])
+        return out
+
+    def _motion(self, s: Sample, out: list[Event], dt: float, arrival: float | None = None) -> None:
         a = s.accel_mag
+        self._record(s, a, arrival)
         self._learn_bias(s, a)
         static = abs(a - 1.0) < STATIC_ACCEL_TOL and s.gyro_mag < STATIC_GYRO_DPS
         if static:
@@ -600,6 +624,7 @@ class GestureDetector:
         if shaking and not self._shake_latched:
             # one event per episode: a 2 s shake must not fire two or three times
             self._shake_latched = True
+            self.shake_window = self._snapshot()
             self._fire(out, "shake")
             frames.clear()
             self._turn_acc = 0.0

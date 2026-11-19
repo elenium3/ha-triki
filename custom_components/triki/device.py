@@ -35,13 +35,16 @@ from bleak_retry_connector import (
     establish_connection,
 )
 from homeassistant.components import bluetooth
+from homeassistant.components.bluetooth import BaseHaRemoteScanner
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.typing import UNDEFINED
+from homeassistant.util import dt as dt_util
 
 from .capture import Capture
 from .const import (
@@ -80,6 +83,12 @@ _LOGGER = logging.getLogger(__name__)
 _FRESH_ADV_S = 10.0
 _IDLE_CHECK_S = 2.0
 _RECONNECT_BACKOFF_S = 3.0
+# Right after Home Assistant starts, the proxies have not reported the token yet,
+# so a wake-up heard only by the host's own adapter would link through it, often
+# far weaker (−85 dBm on hci0 after a restart on 2026-11-18). An advert through a
+# local adapter waits this long after the start for a proxy to hear it too.
+_PROXY_GRACE_S = 30.0
+_SHAKE_LOG_LEN = 3  # recorded shakes kept for diagnostics
 # Home Assistant only calls advertisement callbacks when the advertised data
 # changes. Triki always advertises the same payload, so after the first wake-up
 # the callback goes silent for minutes. We therefore also poll the last seen
@@ -161,7 +170,7 @@ class LinkStats:
     rate_switches: int = 0  # idle <-> active stream rate changes over the live link
     led_write_retries: int = 0  # LED writes that needed a second (or third) try
     parser_dropped_bytes: int = 0
-    last_source: str | None = None  # scanner the last connect went through
+    last_source: str | None = None  # scanner the last link went through (the advert's until known)
     last_link_s: float | None = None  # time to establish the last link
     last_session_s: float | None = None  # how long the last link lasted
 
@@ -231,6 +240,10 @@ class TrikiDevice:
         self._battery_event = asyncio.Event()  # set by a battery notification
         self._battery_pause = False  # the stream is stopped for a measurement right now
         self._unsub_adv: CALLBACK_TYPE | None = None
+        self._unsub_started: CALLBACK_TYPE | None = None
+        self._proxy_grace_until = 0.0
+        # the stream around each recent shake, for diagnostics (see SHAKE_RECORD_S)
+        self.shake_log: deque[dict[str, Any]] = deque(maxlen=_SHAKE_LOG_LEN)
         self._unsub_poll: CALLBACK_TYPE | None = None
         self._unsub_idle: CALLBACK_TYPE | None = None
         self._unsub_battery: CALLBACK_TYPE | None = None
@@ -519,6 +532,12 @@ class TrikiDevice:
     @callback
     def async_start(self) -> None:
         self._stopping = False
+        if not self.hass.is_running:
+            # set up during the start: proxies get their grace once it is over
+            self._proxy_grace_until = float("inf")
+            self._unsub_started = self.hass.bus.async_listen_once(
+                EVENT_HOMEASSISTANT_STARTED, self._on_ha_started
+            )
         # Home Assistant 2026.10 delivers every advertisement of an address;
         # older versions only changed ones (the token's payload never changes),
         # which is why they also need the 1 s poll of the last advertisement.
@@ -537,8 +556,20 @@ class TrikiDevice:
             self.hass, self._poll_awake, timedelta(seconds=_POLL_S)
         )
 
+    @callback
+    def _on_ha_started(self, _event: Any) -> None:
+        self._unsub_started = None
+        self._proxy_grace_until = time.monotonic() + _PROXY_GRACE_S
+
+    def _local_source(self, source: str) -> bool:
+        scanner = bluetooth.async_scanner_by_source(self.hass, source)
+        return scanner is not None and not isinstance(scanner, BaseHaRemoteScanner)
+
     async def async_stop(self) -> None:
         self._stopping = True
+        if self._unsub_started is not None:
+            self._unsub_started()
+            self._unsub_started = None
         self._cancel_timer("_unsub_check")
         self._cancel_timer("_unsub_silence")
         for attr in ("_unsub_adv", "_unsub_poll"):
@@ -666,6 +697,8 @@ class TrikiDevice:
                 reason = "idle cooldown"
             elif now - self._last_attempt < _RECONNECT_BACKOFF_S:
                 reason = "reconnect backoff"
+            elif now < self._proxy_grace_until and self._local_source(service_info.source):
+                reason = "Home Assistant just started: waiting for a proxy to hear it"
         if reason:
             if reason.split(" (")[0] != self._last_skip:
                 self._last_skip = reason.split(" (")[0]
@@ -749,6 +782,12 @@ class TrikiDevice:
                 self._expected_disconnect = True
                 await client.disconnect()
                 return
+            # habluetooth picks the path itself at connect time, among every scanner
+            # that heard the token: the advert's source is a guess until now.
+            # `_connected_scanner` is habluetooth's own record of that path.
+            path = getattr(client, "_connected_scanner", None)
+            if isinstance(getattr(path, "source", None), str):
+                self.stats.last_source = path.source
             self.connected = True
             self._last_activity = self._session_t0 = time.monotonic()
             self.stats.connects += 1
@@ -764,8 +803,9 @@ class TrikiDevice:
             self._schedule_idle_check()
             self._schedule_battery_check()
             _LOGGER.debug(
-                "%s: connected, streaming at %s Hz (advert age %.1fs, link %.1fs, setup %.1fs: notify %.1fs, write %.1fs)",
+                "%s: connected via %s, streaming at %s Hz (advert age %.1fs, link %.1fs, setup %.1fs: notify %.1fs, write %.1fs)",
                 self.name,
+                self.link_source_name or "an unnamed scanner",
                 self.options.rate,
                 adv_age,
                 t_link - t0,
@@ -1100,6 +1140,16 @@ class TrikiDevice:
             self._last_sample = sample
             for ev in self._detector.update(sample, t_frame):
                 active = True
+                if ev.type == "shake" and self._detector.shake_window is not None:
+                    self.shake_log.append(
+                        {
+                            "at": dt_util.utcnow().isoformat(timespec="seconds"),
+                            "rate": self.stream_rate,
+                            # s before the shake, ms since the previous arrival, |a| g,
+                            # |gyro| °/s, button
+                            "frames": self._detector.shake_window,
+                        }
+                    )
                 self._emit(ev.type, ev.data)
             if sample.button != self.button:
                 self.button = sample.button
