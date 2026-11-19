@@ -70,6 +70,46 @@ function shellGeometry(T) {
   return g;
 }
 
+// The marker stripe: a ribbon STRIPE_W wide following the cap's outline in the y-z
+// plane at -y, lifted a little off every surface, from the resin across the rim, down
+// the skirt (bridging the flute crests) and across the metal face.
+const STRIPE_W = 3.2;
+const STRIPE_IN = 4.0; // how far the stripe reaches in from the edge on both faces
+const LIFT = 0.08;
+
+function stripeGeometry(T) {
+  const crest = FLUTE_DEPTH * 0.65; // a flute crest stands out this much at the rim
+  const path = [ // [r, z] from the middle of the resin to the middle of the face
+    [R_RESIN - STRIPE_IN, RESIN_Z + LIFT],
+    [R_RESIN - 0.05, RESIN_Z + LIFT],
+    [R_SHOULDER - 0.3, H + LIFT],
+    [R_SHOULDER + 0.15 + crest + LIFT, H + LIFT],
+  ];
+  const SK = 8; // down the skirt, which flares out to the rim
+  for (let i = SK; i >= 0; i--) {
+    const t = i / SK;
+    const z = (R_SHOULDER - R_FACE) + t * (H - (R_SHOULDER - R_FACE));
+    path.push([R_SHOULDER + 0.35 * t + crest * Math.min(1, t * 1.6) + LIFT, z]);
+  }
+  const SH = 6; // round the shoulder onto the face
+  const rr = R_SHOULDER - R_FACE;
+  for (let i = SH - 1; i >= 0; i--) {
+    const a = (i / SH) * (Math.PI / 2);
+    path.push([R_FACE + (rr + LIFT) * Math.sin(a), rr - (rr + LIFT) * Math.cos(a)]);
+  }
+  path.push([R_FACE - STRIPE_IN, -LIFT]);
+  const pos = [], idx = [];
+  path.forEach(([r, z], i) => {
+    pos.push(-STRIPE_W / 2, -r, z, STRIPE_W / 2, -r, z);
+    if (i) idx.push(2 * i - 2, 2 * i - 1, 2 * i, 2 * i - 1, 2 * i + 1, 2 * i);
+  });
+  const g = new T.BufferGeometry();
+  g.setAttribute("position", new T.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
 // Which way the top of the resin photo (tex_resin.webp) points in the sensor frame,
 // radians. The photo has the Żabka Z (copper under the resin) upright, and the sensor
 // axes are known against that Z (Flopsstuff's axes photo: +x to the left of the Z,
@@ -134,15 +174,12 @@ export async function buildCap(T, urls) {
   glow.position.z = RESIN_Z + 4;
   inner.add(glow);
 
-  // A yellow arrow outside the rim at the edge with the dot above the Z (sensor -y): the
-  // card's texts call it the arrow, so the owner can compare where the model and the cap face.
-  const arrow = new T.Mesh(
-    new T.CylinderGeometry(0, 3.0, 7.0, 24), // a cone; the bundle has no ConeGeometry
-    new T.MeshStandardMaterial({ color: 0x000000, emissive: 0xffd54f, emissiveIntensity: 1, toneMapped: false }),
-  );
-  arrow.rotation.z = Math.PI; // the cone's tip points +y; turn it to -y, outwards
-  arrow.position.set(0, -(R_SHOULDER + FLUTE_DEPTH + 4.6), H / 2);
-  inner.add(arrow);
+  // A yellow stripe at the edge with the dot above the Z (sensor -y), like a strip of
+  // tape stuck on top, over the rim, down the side and onto the metal face, so the
+  // marked edge reads from any side. The card's texts call it the yellow stripe.
+  inner.add(new T.Mesh(stripeGeometry(T), new T.MeshStandardMaterial({
+    color: 0x000000, emissive: 0xffc928, emissiveIntensity: 1, toneMapped: false, side: T.DoubleSide,
+  })));
 
   return {
     group,
