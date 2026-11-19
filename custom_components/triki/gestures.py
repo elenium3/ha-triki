@@ -97,15 +97,21 @@ KNOB_LIFT_G = 1.0
 # A single frame above the deadband is not a turn (a garbage frame decodes as a
 # huge rate): its angle counts once the next frame confirms the motion.
 KNOB_CONFIRM_FRAMES = 2
-# A knob is turned flat. Frames with the cap tilted more than 60° from level
+# A knob is turned flat. Frames with the cap tilted more than 40° from level
 # (|gravity.z| below this) are skipped: on hardware knocking the token edge-on
-# against the table swung it about the vertical and made 9 steps, while a turn
-# between the fingers keeps the cap within 60° of level for 85 % of the angle.
-KNOB_LEVEL_COS = 0.5
+# against the table swung it about the vertical and made 9 steps. At 60° the
+# 2026-10-29 replay still gave 2 steps for the knocks; at 40° none, while the table
+# spin kept 94 % of its steps and the slow turns of 2026-11-18 all of them. Other
+# Triki projects use 35° (witw2/triki-py).
+KNOB_LEVEL_COS = 0.766
 # A jolt this hard (a shake swing reaches 5-17 g, a hard spin at most 2 g) is not a
 # turn: the partial turn is dropped and the knob is muted for a moment.
 KNOB_SHOCK_G = 1.5
 KNOB_SHOCK_GUARD_S = 0.5
+# A shake starts as a brisk twist: on 2026-11-19 two knob steps fired 0.15-0.24 s
+# before the shake was recognised. Steps are held this long and dropped when a
+# shake, a jolt or free fall comes first (one motion, one gesture).
+KNOB_HOLD_S = 0.3
 # A gap longer than this between two frames counts as this long for the knob
 # angle: the rate in the gap is unknown. Good links show gaps of 115-155 ms,
 # rarely 340 ms; 26 Hz with heavy loss needs more than 150.
@@ -223,6 +229,7 @@ class GestureDetector:
         self._turn_acc = 0.0
         self._turn_idle_since = 0.0
         self._knob_mute_until = 0.0
+        self._knob_held: list[tuple[float, Event]] = []
         self._turn_run = 0  # consecutive frames above the deadband
         self._turn_held = 0.0  # their angle, counted once the run is confirmed
         self._speed_deg = 0.0  # angle and time turned since the last step, for speed
@@ -339,7 +346,8 @@ class GestureDetector:
 
     def flush(self) -> list[Event]:
         """Emit pending multi-press on disconnect."""
-        out: list[Event] = []
+        out: list[Event] = [e for _t, e in self._knob_held]
+        self._knob_held.clear()
         if self._clicks:
             self._emit_clicks(out)
         return out
@@ -517,6 +525,7 @@ class GestureDetector:
         if self._shake_latched or abs(a - 1.0) > KNOB_SHOCK_G or a < THROW_G:
             # a shake, a jolt or free fall: whatever turned was not a knob
             self._turn_acc = 0.0
+            self._knob_held.clear()
             self._knob_mute_until = self.t + KNOB_SHOCK_GUARD_S
         elif self.button or self.t - self._release_t < KNOB_BUTTON_GUARD_S:
             self._turn_acc = 0.0  # a press twists the token: not a turn
@@ -561,7 +570,9 @@ class GestureDetector:
                     # mean rate while turning since the last step, pauses left out
                     data["speed"] = round(self._speed_deg / self._speed_t)
                 self._speed_deg = self._speed_t = 0.0
-                out.append(Event(kind, data))
+                self._knob_held.append((self.t, Event(kind, data)))
+        while self._knob_held and self.t - self._knob_held[0][0] >= KNOB_HOLD_S:
+            out.append(self._knob_held.pop(0)[1])
 
         self._update_face(s, static)
 

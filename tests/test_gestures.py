@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from custom_components.triki.gestures import GestureDetector
+from custom_components.triki.gestures import KNOB_HOLD_S, GestureDetector
 from custom_components.triki.protocol import Sample
 
 from .helpers import frame
@@ -30,6 +30,9 @@ def det():
 
 def secs(x):
     return round(x * RATE)
+
+
+HOLD = secs(KNOB_HOLD_S + 0.05)  # knob steps are reported after the hold
 
 
 def test_static_is_quiet():
@@ -100,10 +103,10 @@ def test_long_press():
 
 def test_knob_ccw_and_cw():
     d = det()
-    ev = feed(d, secs(1.0), gz=185.0)  # ~185 deg about the up axis
+    ev = feed(d, secs(1.0), gz=185.0) + feed(d, HOLD)  # ~185 deg about the up axis
     assert set(types(ev)) == {"rotate_ccw"}
     assert sum(e.data["steps"] for e in ev) == 6
-    ev = feed(d, secs(0.5), gz=-125.0)
+    ev = feed(d, secs(0.5), gz=-125.0) + feed(d, HOLD)
     assert set(types(ev)) == {"rotate_cw"}
     assert sum(e.data["steps"] for e in ev) == 2
 
@@ -395,14 +398,15 @@ def test_brisk_turn_back_and_forth_is_not_a_shake():
 def test_knob_counts_a_fast_spin_despite_its_centripetal_acceleration():
     """The IMU sits off the axis: a brisk spin reads 1.3-1.6 g while perfectly flat."""
     d = det()
-    assert types(feed(d, secs(0.5), gz=720.0, az=1.5)) == ["rotate_ccw"] * 12
+    assert types(feed(d, secs(0.5), gz=720.0, az=1.5) + feed(d, HOLD)) == ["rotate_ccw"] * 12
 
 
 def test_knob_skips_swung_frames_but_keeps_the_partial_turn():
     d = det()
     assert types(feed(d, secs(0.1), gz=200.0)) == []  # 20° of a 30° step
     assert types(feed(d, 5, gz=200.0, az=2.3)) == []  # swung: these frames say nothing
-    assert types(feed(d, secs(0.06), gz=200.0)) == ["rotate_ccw"]  # 20° + 12°: one step
+    ev = feed(d, secs(0.06), gz=200.0) + feed(d, HOLD)
+    assert [t for t in types(ev) if t.startswith("rotate")] == ["rotate_ccw"]  # 20° + 12°
 
 
 def test_single_garbage_frame_is_not_a_turn():
@@ -420,7 +424,7 @@ def test_knob_is_muted_by_free_fall_and_a_hard_jolt():
     ev = feed(d, secs(0.1), gz=200.0, az=0.1)  # free fall: the partial turn is dropped
     ev += feed(d, secs(0.3), gz=200.0)  # and the knob stays muted for 0.5 s
     assert "rotate_ccw" not in types(ev)
-    assert "rotate_ccw" in types(feed(d, secs(0.5), gz=200.0))
+    assert "rotate_ccw" in types(feed(d, secs(0.5), gz=200.0) + feed(d, HOLD))
     feed(d, secs(1.0))
     feed(d, 1, az=4.0)  # a jolt
     assert "rotate_ccw" not in types(feed(d, secs(0.3), gz=200.0))
@@ -553,7 +557,7 @@ def test_face_kept_between_the_bands():
 @pytest.mark.parametrize("rate", [20.0, 90.0, 400.0])
 def test_rotate_reports_its_speed(rate):
     d = det()
-    ev = [e for e in feed(d, secs(720 / rate), gz=rate) if e.type == "rotate_ccw"]
+    ev = [e for e in feed(d, secs(720 / rate), gz=rate) + feed(d, HOLD) if e.type == "rotate_ccw"]
     assert sum(e.data["steps"] for e in ev) >= 22
     for e in ev:
         assert e.data["speed"] == pytest.approx(rate, rel=0.05)
@@ -562,6 +566,27 @@ def test_rotate_reports_its_speed(rate):
 def test_rotate_speed_leaves_pauses_out():
     d = det()
     ev = feed(d, secs(0.25), gz=60.0) + feed(d, secs(0.5)) + feed(d, secs(0.3), gz=60.0)
+    ev += feed(d, HOLD)
     rot = [e for e in ev if e.type == "rotate_ccw"]
     assert [e.data["steps"] for e in rot] == [1]
     assert rot[0].data["speed"] == pytest.approx(60, rel=0.05)
+
+
+def test_a_shake_that_starts_as_a_twist_fires_no_knob_steps():
+    """2026-11-19: two knob steps fired 0.15-0.24 s before the shake was seen."""
+    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, shake=True)
+    feed(d, RATE // 2)
+    ev = feed(d, secs(0.1), gz=900.0)  # the first swing, still without a shock: a turn
+    for i in range(8):  # then the shake proper, with its shock
+        ev += feed(d, secs(0.08), gz=1500.0 if i % 2 else -1500.0, az=4.0)
+    ev += feed(d, secs(1.0))
+    assert "shake" in types(ev)
+    assert not any(t.startswith("rotate") for t in types(ev))
+
+
+def test_knob_steps_arrive_after_the_hold():
+    d = det()
+    ev = feed(d, secs(0.65), gz=-120.0)  # 78 degrees clockwise
+    late = feed(d, secs(0.4))
+    assert types(ev).count("rotate_cw") + types(late).count("rotate_cw") == 2
+    assert "rotate_cw" in types(late)  # the last step waits out the hold

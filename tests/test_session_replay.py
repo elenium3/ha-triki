@@ -32,16 +32,18 @@ SEGMENTS = [
     ("at rest again", 20, 48, {"*": (0, 0)}),
     ("picked up x3, no turn", 90, 115, {"*": (0, 0)}),
     ("finger taps x5", 163, 176, {"tap": (4, 5), "rotate": (0, 1), "shake": (0, 0)}),
-    ("knocked edge-on x5", 265, 285, {"shake": (0, 0), "throw": (0, 0), "rotate": (0, 3)}),
-    ("spun on the table", 689, 752, {"yaw": 0.8, "shake": (0, 0), "tap": (0, 0), "throw": (0, 0)}),
+    ("knocked edge-on x5", 265, 285, {"shake": (0, 0), "throw": (0, 0), "rotate": (0, 0)}),
+    # 0.75: frames tilted past 40° are skipped (the knocks above made steps at 60°);
+    # the table spin wobbles past that now and then and loses 5 % of its ccw steps
+    ("spun on the table", 689, 752, {"yaw": 0.75, "shake": (0, 0), "tap": (0, 0), "throw": (0, 0)}),
     ("picked up and turned", 921, 927.5, {"tap": (0, 0), "shake": (0, 0)}),
     (
         "shaken x4",
         927.5,
         936.5,
-        {"shake": (3, 4), "tap": (0, 0), "throw": (0, 0), "rotate": (0, 1)},
+        {"shake": (3, 4), "tap": (0, 0), "throw": (0, 0), "rotate": (0, 0)},
     ),
-    ("tossed x3 + dropped", 936.5, 948.5, {"throw": (3, 5), "tap": (0, 0), "rotate": (0, 2)}),
+    ("tossed x3 + dropped", 936.5, 948.5, {"throw": (3, 5), "tap": (0, 0), "rotate": (0, 0)}),
 ]
 
 
