@@ -5,10 +5,11 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+from aiohttp import web
 from bleak_retry_connector import close_stale_connections_by_address
 from homeassistant.components import bluetooth
 from homeassistant.components.frontend import add_extra_js_url
-from homeassistant.components.http import StaticPathConfig
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant
@@ -60,13 +61,10 @@ FRONTEND_FILES = (
 
 async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     async_register_websocket(hass)
-    # The content hash in the URL changes after an update with a restart. The files are
-    # also served without the long cache lifetime, so the browser revalidates them on a
-    # page reload and a frontend-only update needs no restart (304 when unchanged).
+    # The content hash in the URL changes after an update with a restart; a frontend-only
+    # update between restarts reaches the browser through "no-cache" (see the view).
     card_hash = await hass.async_add_executor_job(_card_hash)
-    await hass.http.async_register_static_paths(
-        [StaticPathConfig(FRONTEND_URL, str(FRONTEND_DIR), cache_headers=False)]
-    )
+    hass.http.register_view(TrikiFrontendView())
     if "frontend" in hass.config.components:
         add_extra_js_url(hass, f"{FRONTEND_URL}/triki-card.js?v={card_hash}")
     return True
@@ -114,6 +112,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> boo
 
     entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_stop))
     return True
+
+
+class TrikiFrontendView(HomeAssistantView):
+    """The card's files, revalidated by the browser on every load.
+
+    A static path without cache headers still let browsers keep the files by their own
+    heuristic: after a frontend-only update the owner saw the old model until the cache
+    expired. "no-cache" makes the browser ask each time; an unchanged file costs a 304.
+    """
+
+    url = FRONTEND_URL + "/{filename}"
+    name = "triki:frontend"
+    requires_auth = False  # loaded by the browser as module and texture URLs
+
+    async def get(self, _request: web.Request, filename: str) -> web.StreamResponse:
+        if filename not in FRONTEND_FILES:  # a fixed list: no paths, no other files
+            raise web.HTTPNotFound
+        return web.FileResponse(FRONTEND_DIR / filename, headers={"Cache-Control": "no-cache"})
 
 
 def _card_hash() -> str:
