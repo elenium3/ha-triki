@@ -888,10 +888,22 @@ class TrikiCard extends HTMLElement {
     const ent = Object.values(this._hass.entities || {}).find(
       (e) => e.device_id === id && e.entity_id.startsWith("switch.") && e.translation_key === "led");
     if (!ent) return;
-    const was = this._statuses?.[id]?.led;
-    const set = (on) => this._hass.callService("switch", on ? "turn_on" : "turn_off", { entity_id: ent.entity_id }).catch(() => {});
+    // the switch's own state, not the stream's: the blink must end where the switch was
+    const was = this._hass.states?.[ent.entity_id]?.state === "on";
+    const set = (on) => this._hass.callService("switch", on ? "turn_on" : "turn_off", { entity_id: ent.entity_id })
+      .then(() => true, () => false);
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    for (let i = 0; i < 2; i++) { await set(!was); await wait(350); await set(!!was); await wait(250); }
+    for (let i = 0; i < 2; i++) {
+      if (!(await set(!was))) break; // a write failed (fresh link, asleep): stop blinking
+      await wait(350);
+      await set(was);
+      await wait(250);
+    }
+    // a failed write mid-blink left the switch on the wrong side (seen 2026-11-19)
+    for (let i = 0; i < 3 && (this._hass.states?.[ent.entity_id]?.state === "on") !== was; i++) {
+      await set(was);
+      await wait(400);
+    }
   }
 
   _checkMessage(id, msg) {
