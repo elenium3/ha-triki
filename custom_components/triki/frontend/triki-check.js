@@ -165,6 +165,7 @@ export class CheckRun {
       manual: !!s.manual, result: this.results[s.id] || null,
       elapsed: this.phase === "running" ? this._elapsed() : 0,
       limit: s.auto || s.timeout || null, live: {}, ghost: null,
+      online: this._live(this.status),
     };
     if (s.id === "turn_cw" || s.id === "turn_ccw") {
       v.live = { steps: st.steps || 0, wrong: st.wrong || 0, angle: Math.round(st.angle || 0),

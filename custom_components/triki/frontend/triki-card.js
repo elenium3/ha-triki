@@ -32,7 +32,7 @@ const STRINGS = {
     check: { title: "Check", open: "Check",
       steps: { rest: "Lying still", flat: "Level and front", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", press: "Button", flip: "Turn over", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift" },
       text: {
-        identify: "Press the button on the cap you want to check. It blinks its LED.",
+        identify: "Pick the cap below, or press the button on it. It blinks its LED.",
         wake: "Press the button on the cap to wake it.",
         rest: "Put the cap on the table and do not touch it for 10 seconds. This measures the link and the sensor noise.",
         flat: "Lay the cap on the table, dot away from you, let go and press Done. The model learns what level and front are.",
@@ -96,7 +96,7 @@ const STRINGS = {
     check: { title: "Проверка", open: "Проверка",
       steps: { rest: "Покой", flat: "Ровно и перед", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", press: "Кнопка", flip: "Переворот", tap: "Касание", shake: "Встряхивание", throw: "Бросок", drift: "Уход направления" },
       text: {
-        identify: "Нажми кнопку на крышке, которую хочешь проверить. Она мигнёт диодом.",
+        identify: "Выбери крышку ниже или нажми на ней кнопку. Она мигнёт диодом.",
         wake: "Нажми кнопку на крышке, чтобы разбудить её.",
         rest: "Положи крышку на стол и не трогай 10 секунд. Так проверяется связь и шум датчика.",
         flat: "Положи крышку на стол точкой от себя, отпусти и нажми «Готово». Модель запомнит, где «ровно» и где перед.",
@@ -162,7 +162,7 @@ const STRINGS = {
     check: { title: "Test", open: "Test",
       steps: { rest: "Spoczynek", flat: "Poziom i przód", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", press: "Przycisk", flip: "Odwrócenie", tap: "Stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", drift: "Dryf kierunku" },
       text: {
-        identify: "Naciśnij przycisk na kapslu, który chcesz sprawdzić. Mignie diodą.",
+        identify: "Wybierz kapsel poniżej albo naciśnij na nim przycisk. Mignie diodą.",
         wake: "Naciśnij przycisk na kapslu, żeby go obudzić.",
         rest: "Połóż kapsel na stole i nie dotykaj przez 10 sekund. Mierzy to łącze i szum czujnika.",
         flat: "Połóż kapsel na stole kropką od siebie, puść i naciśnij Gotowe. Model zapamięta, gdzie jest poziom i przód.",
@@ -271,6 +271,8 @@ const CSS = `
   .chip.warn { background: rgba(255,152,0,.2); color: #ff9800; }
   .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
   .chip.live .dot { animation: pulse 1.2s infinite; }
+  .checkpanel .dot { display: inline-block; margin-right: 8px; vertical-align: middle; background: var(--disabled-text-color, #777); }
+  .checkpanel .dot.on { background: #66bb6a; }
   @keyframes pulse { 50% { opacity: .3; } }
   .stage { position: relative; aspect-ratio: 16 / 10; min-height: 260px; }
   canvas.gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
@@ -844,9 +846,9 @@ class TrikiCard extends HTMLElement {
     if (!chk.owned.size) { chk.msg = "busy"; this._renderCheck(true); return; }
     chk.renew = setInterval(() => this._checkRenew(), CHECK_RENEW_MS);
     chk.timer = setInterval(() => this._checkTick(), 250);
-    const live = [...chk.owned].filter((id) => this._isLive(this._statuses?.[id]));
-    // one token, already awake: no need to ask which one
-    if (chk.owned.size === 1 && live.length === 1) await this._checkChoose(live[0]);
+    // no need to ask when the card is pinned to one token or holds only one
+    const pinned = this._pick !== "auto" && chk.owned.has(this._pick) ? this._pick : null;
+    if (pinned || chk.owned.size === 1) await this._checkChoose(pinned || [...chk.owned][0]);
     else this._renderCheck(true);
   }
 
@@ -919,6 +921,7 @@ class TrikiCard extends HTMLElement {
   async _checkAction(action) {
     const chk = this._chk, run = chk?.run;
     if (action === "close") { this._checkClose(); return; }
+    if (action.startsWith("pick:")) { this._checkChoose(action.slice(5)); return; }
     if (!run) return;
     const t = this._t.check;
     if (action === "start") {
@@ -970,7 +973,7 @@ class TrikiCard extends HTMLElement {
     const run = chk.run;
     const v = run ? run.view() : null;
     const key = !run ? `pick|${chk.msg}|${[...chk.owned].map((id) => this._isLive(this._statuses?.[id])).join()}`
-      : v.finished ? "summary" : `${v.id}|${v.phase}|${v.result?.status}|${chk.err}|${chk.report ? 1 : 0}`;
+      : v.finished ? "summary" : `${v.id}|${v.phase}|${v.online}|${v.result?.status}|${chk.err}|${chk.report ? 1 : 0}`;
     if (force || key !== chk.key) {
       chk.key = key;
       el.checkPanel.innerHTML = this._checkHtml(v);
@@ -1016,9 +1019,13 @@ class TrikiCard extends HTMLElement {
       return `<h3>${t.title}</h3><p>${t.busy}</p><div class="btns">${btn("close", t.close)}</div>`;
     }
     if (!v) {
-      const many = chk.owned.size > 1;
-      return `<small class="of">${t.title}</small><h3>${many ? t.pick : t.title}</h3>
-        <p>${many ? t.text.identify : t.text.wake}</p><div class="btns">${btn("close", t.close)}</div>`;
+      const caps = [...chk.owned].map((id) => {
+        const st = this._statuses?.[id];
+        const dot = `<span class="dot ${this._isLive(st) ? "on" : ""}"></span>`;
+        return btn(`pick:${id}`, `${dot}${this._fmt("{n}", { n: st?.name || id })}`);
+      }).join("");
+      return `<small class="of">${t.title}</small><h3>${t.pick}</h3>
+        <p>${t.text.identify}</p><div class="btns">${caps}${btn("close", t.close)}</div>`;
     }
     if (v.finished) {
       const rows = chk.run.steps.map((s) => {
@@ -1046,6 +1053,9 @@ class TrikiCard extends HTMLElement {
     let res = "", btns = "";
     if (v.phase === "paused") {
       res = `<div class="res warn"><b>${t.paused}</b></div>`;
+      btns = btn("skip", t.skip) + btn("close", t.close);
+    } else if (v.phase === "ready" && !v.online) {
+      res = `<div class="res warn"><b>${t.text.wake}</b></div>`;
       btns = btn("skip", t.skip) + btn("close", t.close);
     } else if (v.phase === "ready") {
       btns = btn("start", t.start, "primary pulse") + btn("skip", t.skip) + btn("close", t.close);
