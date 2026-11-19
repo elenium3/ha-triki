@@ -76,6 +76,7 @@ def status(dev: TrikiDevice) -> dict[str, Any]:
             "motion_gestures": dev.options.motion_gestures,
             "multi_press": dev.options.multi_press,
             "shake": dev.options.shake,
+            "tilt": dev.options.tilt,
         },
     }
 

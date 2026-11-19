@@ -204,6 +204,7 @@ class TrikiDevice:
             multi_press=options.multi_press,
             knob=options.knob,
             shake=options.shake,
+            tilt=options.tilt,
         )
         self._capture = Capture(hass, name) if options.capture else None
 

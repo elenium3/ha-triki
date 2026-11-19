@@ -30,7 +30,7 @@ const STRINGS = {
       err: { moving: "It is moving: hold still for a second", not_flat: "It is not lying flat", asleep: "The cap is asleep: wake it first", no_data: "No data yet: wake the cap" } },
     button: "Button", rate: "Hz", history: "Last 10 s", nodevice: "No Triki token found",
     check: { title: "Check", open: "Check",
-      steps: { rest: "Lying still", flat: "Level and front", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", press: "Button", flip: "Turn over", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift" },
+      steps: { rest: "Lying still", flat: "Level and front", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", lean: "Lean in the hand", press: "Button", flip: "Turn over", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift" },
       text: {
         identify: "Pick the cap below, or press the button on it. It blinks its LED.",
         wake: "Press the button on the cap to wake it.",
@@ -39,6 +39,7 @@ const STRINGS = {
         tilt: "Lift the edge with the dot by 2–3 cm and hold it. The model should tilt like the faint hint.",
         turn_cw: "Turn the cap on the table a quarter turn clockwise: the stripe goes from the far edge to the right. Let go, regrip and turn another quarter. Then press Done.",
         turn_ccw: "The same counter-clockwise: two quarter turns, letting go in between. Then press Done.",
+        lean: "Hold the cap level in your hand, stripe towards you. Lean it to the right until a step comes, level it, then lean it to the left.",
         tap: "Tap the table next to the cap with a finger 2–3 times, a second apart.",
         shake: "Pick the cap up and give it 2–3 short shakes.",
         throw: "Toss the cap 10–20 cm up and catch it. You can skip this.",
@@ -68,6 +69,9 @@ const STRINGS = {
         steps: "{steps} steps, expected {expected}.",
         wrong_way: "Steps came in the opposite direction.",
         knob_off: "The knob is off in the options: steps are not checked.",
+        lean_right: "Leaning to the right gave no step.",
+        lean_left: "Leaning to the left gave no step.",
+        lean_wrong: "A step came for the other side: hold the stripe towards you.",
         missing: "Not received: {missing}.",
         not_flat: "Lay the cap flat.",
         not_flipped: "The cap was not turned over.",
@@ -94,7 +98,7 @@ const STRINGS = {
     reset: "Выровнять направление",
     led: "Диод", button: "Кнопка", rate: "Гц", history: "Последние 10 с",
     check: { title: "Проверка", open: "Проверка",
-      steps: { rest: "Покой", flat: "Ровно и перед", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", press: "Кнопка", flip: "Переворот", tap: "Касание", shake: "Встряхивание", throw: "Бросок", drift: "Уход направления" },
+      steps: { rest: "Покой", flat: "Ровно и перед", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", lean: "Наклон в руке", press: "Кнопка", flip: "Переворот", tap: "Касание", shake: "Встряхивание", throw: "Бросок", drift: "Уход направления" },
       text: {
         identify: "Выбери крышку ниже или нажми на ней кнопку. Она мигнёт диодом.",
         wake: "Нажми кнопку на крышке, чтобы разбудить её.",
@@ -105,6 +109,7 @@ const STRINGS = {
         turn_ccw: "То же против часовой: две четверти оборота, между ними можно отпустить. Потом нажми «Готово».",
         tap: "Постучи пальцем по столу рядом с крышкой 2–3 раза, с паузой в секунду.",
         shake: "Возьми крышку в руку и коротко встряхни 2–3 раза.",
+        lean: "Держи крышку в руке ровно, полосой к себе. Наклони вправо, пока не придёт шаг, выровняй, потом наклони влево.",
         throw: "Подбрось крышку на 10–20 см и поймай. Этот шаг можно пропустить.",
         press: "Нажми кнопку по порядку:",
         flip: "Переверни крышку на другую сторону, подожди секунду и верни обратно.",
@@ -132,6 +137,9 @@ const STRINGS = {
         steps: "Шагов {steps}, ожидалось {expected}.",
         wrong_way: "Шаги приходили в обратную сторону.",
         knob_off: "Крутилка выключена в настройках, шаги не проверяются.",
+        lean_right: "Наклон вправо не дал шага.",
+        lean_left: "Наклон влево не дал шага.",
+        lean_wrong: "Пришёл шаг в другую сторону: держи крышку полосой к себе.",
         missing: "Не дождались: {missing}.",
         not_flat: "Положи крышку плашмя.",
         not_flipped: "Крышку не перевернул.",
@@ -160,7 +168,7 @@ const STRINGS = {
       err: { moving: "Kapsel się rusza: przytrzymaj chwilę nieruchomo", not_flat: "Kapsel nie leży płasko", asleep: "Kapsel śpi: najpierw go obudź", no_data: "Brak danych: obudź kapsel" } },
     reset: "Wyrównaj kierunek", led: "Dioda", button: "Przycisk", rate: "Hz", history: "Ostatnie 10 s",
     check: { title: "Test", open: "Test",
-      steps: { rest: "Spoczynek", flat: "Poziom i przód", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", press: "Przycisk", flip: "Odwrócenie", tap: "Stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", drift: "Dryf kierunku" },
+      steps: { rest: "Spoczynek", flat: "Poziom i przód", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", lean: "Przechył w dłoni", press: "Przycisk", flip: "Odwrócenie", tap: "Stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", drift: "Dryf kierunku" },
       text: {
         identify: "Wybierz kapsel poniżej albo naciśnij na nim przycisk. Mignie diodą.",
         wake: "Naciśnij przycisk na kapslu, żeby go obudzić.",
@@ -171,6 +179,7 @@ const STRINGS = {
         turn_ccw: "To samo w lewo: dwie ćwiartki obrotu, między nimi możesz puścić. Potem naciśnij Gotowe.",
         tap: "Stuknij palcem w stół obok kapsla 2–3 razy, co sekundę.",
         shake: "Weź kapsel do ręki i krótko potrząśnij 2–3 razy.",
+        lean: "Trzymaj kapsel poziomo w dłoni, paskiem do siebie. Przechyl w prawo, aż przyjdzie krok, wyrównaj, potem przechyl w lewo.",
         throw: "Podrzuć kapsel na 10–20 cm i złap. Ten krok możesz pominąć.",
         press: "Naciśnij przycisk po kolei:",
         flip: "Odwróć kapsel na drugą stronę, poczekaj sekundę i odwróć z powrotem.",
@@ -198,6 +207,9 @@ const STRINGS = {
         steps: "{steps} kroków, oczekiwano {expected}.",
         wrong_way: "Kroki szły w przeciwną stronę.",
         knob_off: "Pokrętło jest wyłączone w opcjach: kroki nie są sprawdzane.",
+        lean_right: "Przechył w prawo nie dał kroku.",
+        lean_left: "Przechył w lewo nie dał kroku.",
+        lean_wrong: "Przyszedł krok w drugą stronę: trzymaj kapsel paskiem do siebie.",
         missing: "Nie odebrano: {missing}.",
         not_flat: "Połóż kapsel płasko.",
         not_flipped: "Kapsel nie został odwrócony.",
@@ -1008,7 +1020,8 @@ class TrikiCard extends HTMLElement {
         el.checkPanel.querySelectorAll("li").forEach((li, i) => li.classList.toggle("ok", i < live.got));
       }
       if ((v.id === "rest" || v.id === "drift") && live.moved) set("cHint", t.reason.moved);
-      if (["tap", "shake", "throw"].includes(v.id)) set("cCount", `${live.count} / ${live.want}`);
+      if (["tap", "shake", "throw", "lean"].includes(v.id)) set("cCount", `${live.count} / ${live.want}`);
+      if (v.id === "lean") set("cHint", live.hint ? t.reason[live.hint] : "");
       if (v.extra && v.phase === "running") {
         const list = Object.entries(v.extra).map(([k, n]) => `${this._t.gestures[k] || k} ×${n}`).join(", ");
         set("cHint", this._fmt(t.reason.extra, { extra: list }));
@@ -1055,8 +1068,8 @@ class TrikiCard extends HTMLElement {
     let live = "";
     if (v.id === "turn_cw" || v.id === "turn_ccw") {
       live = `<div class="big"><div><small>${t.count}</small><b id="cSteps">0</b></div><div><small>${t.angle}</small><b id="cAngle">0°</b></div></div><div class="hint" id="cWrong"></div>`;
-    } else if (["tap", "shake", "throw"].includes(v.id)) {
-      live = `<div class="big"><div><small>${t.times}</small><b id="cCount">0 / ${v.live.want}</b></div></div><div class="hint" id="cHint"></div>`;
+    } else if (["tap", "shake", "throw", "lean"].includes(v.id)) {
+      live = `<div class="big"><div><small>${v.id === "lean" ? t.count : t.times}</small><b id="cCount">0 / ${v.live.want}</b></div></div><div class="hint" id="cHint"></div>`;
     } else if (["tilt", "flip", "press", "rest", "drift"].includes(v.id)) {
       live = `<div class="hint" id="cHint"></div>`;
     }

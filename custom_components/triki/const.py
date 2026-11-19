@@ -17,6 +17,7 @@ CONF_MOTION_GESTURES = "motion_gestures"
 CONF_MULTI_PRESS = "multi_press"
 CONF_KNOB = "knob"
 CONF_SHAKE = "shake"
+CONF_TILT = "tilt"
 
 CONF_SLEEP_TIMEOUT = "sleep_timeout"
 
@@ -34,6 +35,7 @@ DEFAULT_MOTION_GESTURES = False
 DEFAULT_MULTI_PRESS = False
 DEFAULT_KNOB = False
 DEFAULT_SHAKE = False
+DEFAULT_TILT = False
 DEFAULT_MULTI_PRESS_WINDOW = 0.5  # s between releasing and pressing again
 
 BUS_EVENT = "triki_event"

@@ -354,3 +354,51 @@ test("the receiver's address never reaches the report", () => {
   assert.equal(run.results.rest.values.via, "hm-ble-esp32");
   assert.doesNotMatch(run.report(), /[0-9A-F]{2}(:[0-9A-F]{2}){5}/i);
 });
+
+test("the lean step is there only with the tilt option", () => {
+  assert.ok(!new CheckRun({ options: OPTS }).steps.some((s) => s.id === "lean"));
+  assert.ok(new CheckRun({ options: { ...OPTS, tilt: true } }).steps.some((s) => s.id === "lean"));
+});
+
+test("lean: right then left passes; repeats while held are fine", () => {
+  const { run } = rig({ ...OPTS, tilt: true });
+  goTo(run, "lean");
+  run.start();
+  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
+  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" }); // held: a repeat
+  assert.equal(run.view().live.count, 1);
+  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" });
+  assert.equal(run.results.lean.status, "pass");
+  assert.equal(run.results.lean.values.repeats, 1);
+});
+
+test("lean: the other side first warns; a knob step during it is a false alarm", () => {
+  const { run, clock } = rig({ ...OPTS, tilt: true });
+  goTo(run, "lean");
+  run.start();
+  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" }); // held the wrong way round
+  assert.equal(run.view().live.hint, "lean_wrong");
+  run.feedEvent("rotate_cw", { steps: 1 }); // the knob, not the lean
+  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
+  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" });
+  const r = run.results.lean;
+  assert.equal(r.status, "warn");
+  assert.match(r.values.extra, /rotate_cw×1/);
+
+  const again = rig({ ...OPTS, tilt: true });
+  goTo(again.run, "lean");
+  again.run.start();
+  again.run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
+  again.clock.advance(41_000);
+  assert.equal(again.run.results.lean.reason, "lean_left");
+  void clock;
+});
+
+test("lean follows invert_rotation", () => {
+  const { run } = rig({ ...OPTS, tilt: true, invert_rotation: true });
+  goTo(run, "lean");
+  run.start();
+  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" });
+  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
+  assert.equal(run.results.lean.status, "pass");
+});

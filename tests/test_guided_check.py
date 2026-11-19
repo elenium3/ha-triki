@@ -136,6 +136,7 @@ async def test_status_tells_the_card_what_to_expect(
         "motion_gestures": False,
         "multi_press": False,
         "shake": False,
+        "tilt": False,
     }
     assert "face" in status
 

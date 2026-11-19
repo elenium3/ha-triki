@@ -49,7 +49,7 @@ SEGMENTS = [
 
 def _replay():
     parser = FrameParser()
-    det = gestures.GestureDetector(52, knob_step_deg=KNOB_STEP, motion_gestures=True)
+    det = gestures.GestureDetector(52, knob_step_deg=KNOB_STEP, motion_gestures=True, tilt=True)
     events: list[tuple[float, str, dict]] = []
     yaw: list[tuple[float, float, bool]] = []  # t, signed degrees about gravity, button
     with gzip.open(FIXTURE, "rt") as fh:
@@ -74,6 +74,11 @@ def _steps(evs, kind):
 def test_hardware_session():
     events, yaw = _replay()
     assert events, "the fixture produced no events at all"
+    # nothing in this session is a lean in the hand: knocks and the handling
+    # around them made 4 tilt steps while the lean was read from the lagging
+    # gravity estimate
+    leans = [(t, k) for t, k, d in events if d.get("source") == gestures.TILT_SOURCE]
+    assert leans == []
     problems = []
     for label, lo, hi, expected in SEGMENTS:
         evs = [(t, k, d) for t, k, d in events if lo <= t <= hi]

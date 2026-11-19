@@ -33,6 +33,7 @@ export function buildSteps(options = {}) {
     { id: "tilt", timeout: 30 },
     { id: "turn_cw", manual: true, timeout: 60, dir: -1 },
     { id: "turn_ccw", manual: true, timeout: 60, dir: 1 },
+    { id: "lean", timeout: 40, need: "tilt" },
     { id: "press", timeout: 60 },
     { id: "flip", timeout: 60 },
     { id: "tap", timeout: 30, need: "motion_gestures" },
@@ -183,6 +184,8 @@ export class CheckRun {
       v.live = { moved: !!st.moved };
     } else if (s.id === "tap" || s.id === "shake" || s.id === "throw") {
       v.live = { count: st[s.id] || 0, want: s.id === "tap" ? 2 : 1 };
+    } else if (s.id === "lean") {
+      v.live = { count: st.got || 0, want: 2, hint: st.hint || null };
     }
     v.optional = !!s.optional;
     v.extra = st.extra || null;
@@ -201,7 +204,7 @@ export class CheckRun {
     if (meta.version) lines.push(`integration ${meta.version}`);
     if (this.status?.firmware) lines.push(`firmware ${this.status.firmware}`);
     const o = this.options;
-    lines.push(`options knob=${!!o.knob} step=${o.knob_step} invert=${!!o.invert_rotation} motion=${!!o.motion_gestures} multi_press=${!!o.multi_press}`);
+    lines.push(`options knob=${!!o.knob} step=${o.knob_step} invert=${!!o.invert_rotation} motion=${!!o.motion_gestures} multi_press=${!!o.multi_press} tilt=${!!o.tilt}`);
     for (const s of this.steps) {
       const r = this.results[s.id];
       if (!r) continue;
@@ -283,6 +286,10 @@ export class CheckRun {
 
   _onEvent(kind, data) {
     const s = this.step, st = this._st;
+    if (s.id === "lean" && data.source === "tilt") {
+      this._leanEvent(kind);
+      return;
+    }
     if (GESTURES.includes(kind) && !(EXPECTED[s.id] || []).includes(kind)) {
       st.extra ??= {};
       st.extra[kind] = (st.extra[kind] || 0) + 1;
@@ -319,6 +326,28 @@ export class CheckRun {
     }
   }
 
+  // Right, then left. A lean held on one side repeats its step: those are counted,
+  // not held against it. A step for the side not asked for means the cap is held
+  // the other way round, or the sides are wired backwards.
+  _leanTargets() {
+    const cw = this.options.invert_rotation ? "rotate_ccw" : "rotate_cw";
+    return [cw, cw === "rotate_cw" ? "rotate_ccw" : "rotate_cw"];
+  }
+
+  _leanEvent(kind) {
+    const st = this._st, targets = this._leanTargets(), got = st.got || 0;
+    if (kind === targets[got]) {
+      st.got = got + 1;
+      st.hint = null;
+      if (st.got >= targets.length) this._finish(this._judge());
+    } else if (got > 0 && kind === targets[got - 1]) {
+      st.repeats = (st.repeats || 0) + 1;
+    } else {
+      st.wrong = (st.wrong || 0) + 1;
+      st.hint = "lean_wrong";
+    }
+  }
+
   _flipProgress(st) {
     const face = this.status?.face;
     if (st.start == null) st.start = opposite[face] ? face : null;
@@ -351,6 +380,12 @@ export class CheckRun {
         const n = st[s.id] || 0, want = s.id === "tap" ? 2 : 1;
         return n >= want ? { status: "pass", values: { count: n } }
           : { status: "fail", reason: "not_detected", values: { count: n } };
+      }
+      case "lean": {
+        const got = st.got || 0;
+        const values = { repeats: st.repeats || 0, wrong: st.wrong || 0 };
+        if (got < 2) return { status: "fail", reason: st.wrong ? "lean_wrong" : got ? "lean_left" : "lean_right", values };
+        return st.wrong ? { status: "warn", reason: "lean_wrong", values } : { status: "pass", values };
       }
       case "rest": return this._judgeRest(st);
       case "tilt":

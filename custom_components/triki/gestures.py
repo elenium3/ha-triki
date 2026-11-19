@@ -138,6 +138,25 @@ BIAS_FAST_FRAMES = 50  # plain average for the first frames, then a slow EMA
 BIAS_ALPHA = 0.002  # ~10 s at 52 Hz: a slow turn below the deadband barely moves it
 BIAS_MAX_DPS = 10.0  # per axis; more is not an offset
 
+# Tilt in the hand (the "tilt" option): the token is held level, cap up or PCB up,
+# with the stripe of the card's model towards the owner, and leaned to a side.
+# Heading-free like the knob: the lean is read from gravity alone, so it does not
+# drift (xardag's BeatSurfer "W dloni" mode does the same with a calibrated zero).
+# One step when the lean passes TILT_ON_DEG, then one per TILT_REPEAT_S while it
+# is held; the next lean needs a return within TILT_OFF_DEG of level first.
+TILT_ON_DEG = 25.0
+TILT_OFF_DEG = 10.0
+# Beyond this the token stands on its edge or is turned over, not leaned.
+TILT_MAX_DEG = 60.0
+TILT_PITCH_MAX_DEG = 30.0  # leaned forward or back as much: not a side lean
+# Held still this long at the lean before the first step.
+TILT_CONFIRM_S = 0.2
+TILT_REPEAT_S = 0.4
+# Held, not swung: Baartek's music controller gates on 0.8-1.2 g the same way.
+TILT_ACCEL_TOL_G = 0.2
+TILT_STILL_DPS = 80.0
+TILT_SOURCE = "tilt"
+
 KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
 MOTION_EVENTS = frozenset({"rotate_cw", "rotate_ccw", "shake", "tap", "throw", "flip"})
 EXPERIMENTAL_EVENTS = frozenset({"tap", "throw", "flip"})  # the "motion gestures" option
@@ -180,6 +199,7 @@ class GestureDetector:
         multi_press: bool = True,
         knob: bool = True,
         shake: bool = True,
+        tilt: bool = False,
     ) -> None:
         self.dt = 1.0 / rate_hz
         # survives reset(): a reconnect of the same token keeps its offset
@@ -193,6 +213,7 @@ class GestureDetector:
         self.multi_press = multi_press
         self.knob = knob
         self.shake = shake
+        self.tilt = tilt
         self.reset()
 
     # ------------------------------------------------------------------ state
@@ -234,6 +255,10 @@ class GestureDetector:
         self._turn_held = 0.0  # their angle, counted once the run is confirmed
         self._speed_deg = 0.0  # angle and time turned since the last step, for speed
         self._speed_t = 0.0
+        # tilt in the hand: armed again only after a return to level
+        self._tilt_armed = False
+        self._tilt_dir = 0
+        self._tilt_next = 0.0
         # tap
         self._prev_accel: tuple[float, float, float] | None = None
         self._rest_since: float | None = None
@@ -341,7 +366,12 @@ class GestureDetector:
                 allowed.add("shake")
             if self.motion_gestures:
                 allowed |= EXPERIMENTAL_EVENTS
-            out[:] = [e for e in out if e.type not in MOTION_EVENTS or e.type in allowed]
+            out[:] = [
+                e
+                for e in out
+                if e.type not in MOTION_EVENTS
+                or (self.tilt if e.data.get("source") == TILT_SOURCE else e.type in allowed)
+            ]
         return out
 
     def flush(self) -> list[Event]:
@@ -351,6 +381,61 @@ class GestureDetector:
         if self._clicks:
             self._emit_clicks(out)
         return out
+
+    def _tilt(self, s: Sample, a: float, disturbed: bool) -> None:
+        """Side lean in the hand.
+
+        The knob is not muted meanwhile: a lean turns the token about a level
+        axis, which has next to nothing about gravity, and a mute cost the table
+        spin of the 2026-10-29 replay 4 % of its steps (its wobble reads as a lean).
+
+        Read from the raw accelerometer of calm frames, not the gravity estimate:
+        its low-pass lags a quick lean by a few tenths of a second, and handling
+        the token (picking it up, knocking it) then left a stale 40° lean that
+        made steps on the 2026-10-29 replay.
+        """
+        if disturbed:
+            self._tilt_armed = False  # level again first: the swing may end tilted
+            self._tilt_dir = 0
+            return
+        calm = abs(a - 1.0) <= TILT_ACCEL_TOL_G and s.gyro_mag <= TILT_STILL_DPS
+        if not calm:
+            # moving: no verdict, but a pending step waits for a full calm window
+            self._tilt_next = max(self._tilt_next, self.t + TILT_CONFIRM_S)
+            return
+        ux, uy, uz = s.ax / a, s.ay / a, s.az / a
+        side = 1.0 if uz < 0 else -1.0  # PCB up mirrors left and right
+        roll = math.degrees(math.atan2(side * ux, math.sqrt(uy * uy + uz * uz)))
+        pitch = math.degrees(math.atan2(uy, math.sqrt(ux * ux + uz * uz)))
+        if abs(roll) < TILT_OFF_DEG and abs(pitch) < TILT_PITCH_MAX_DEG:
+            self._tilt_armed = True
+            self._tilt_dir = 0
+            return
+        if not (TILT_ON_DEG <= abs(roll) <= TILT_MAX_DEG and abs(pitch) <= TILT_PITCH_MAX_DEG):
+            self._tilt_dir = 0
+            return
+        d = 1 if roll > 0 else -1
+        if self._tilt_dir != d:
+            if not self._tilt_armed:
+                return  # still the last lean, or picked up leaned
+            self._tilt_dir = d
+            self._tilt_next = self.t + TILT_CONFIRM_S
+        if self.button or self.t - self._release_t < KNOB_BUTTON_GUARD_S:
+            self._tilt_next = max(self._tilt_next, self.t + TILT_CONFIRM_S)
+        elif self.t >= self._tilt_next:
+            self._tilt_armed = False
+            self._tilt_next = self.t + TILT_REPEAT_S
+            cw = (d > 0) != self.invert_rotation
+            # held like the knob's steps: a shake that starts as a lean drops it
+            self._knob_held.append(
+                (
+                    self.t,
+                    Event(
+                        "rotate_cw" if cw else "rotate_ccw",
+                        {"steps": 1, "degrees": self.knob_step, "source": TILT_SOURCE},
+                    ),
+                )
+            )
 
     # ----------------------------------------------------------------- button
     def _emit_clicks(self, out: list[Event]) -> None:
@@ -519,10 +604,14 @@ class GestureDetector:
             frames.clear()
             self._turn_acc = 0.0
 
+        disturbed = self._shake_latched or abs(a - 1.0) > KNOB_SHOCK_G or a < THROW_G
+        if self.tilt:
+            self._tilt(s, a, disturbed)
+
         # knob: rotation rate about the vertical (gravity) axis. Shaking swings the
         # token around every axis: a hard jolt or a latched shake drops the partial
         # turn and mutes the knob for a moment.
-        if self._shake_latched or abs(a - 1.0) > KNOB_SHOCK_G or a < THROW_G:
+        if disturbed:
             # a shake, a jolt or free fall: whatever turned was not a knob
             self._turn_acc = 0.0
             self._knob_held.clear()
