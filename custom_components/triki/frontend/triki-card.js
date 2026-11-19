@@ -405,7 +405,7 @@ class TrikiCard extends HTMLElement {
   static getConfigElement() { return document.createElement("triki-card-editor"); }
 
   setConfig(config) {
-    this._config = { show_values: true, show_history: true, ...config };
+    this._config = { show_values: true, show_history: true, show_controls: true, ...config };
     if (this._built) this._build();
   }
 
@@ -485,13 +485,13 @@ class TrikiCard extends HTMLElement {
         <div class="checkpanel" id="checkPanel"></div>
         ${c.show_values ? `<div class="values"><div><h4>${t.gyro}</h4>${axisRows("g")}</div><div><h4>${t.accel}</h4>${axisRows("a")}</div></div>` : ""}
         ${c.show_history ? `<div class="chart"><small>${t.gyro} · ${t.history}</small><canvas class="hist" id="hist"></canvas></div>` : ""}
-        <div class="actions">
+        <div class="actions"${c.show_controls ? "" : ' style="display:none"'}>
           <button id="cal" disabled><ha-icon icon="mdi:target"></ha-icon><span class="lbl">${t.calibrate}</span></button>
           <button id="reset" disabled><ha-icon icon="mdi:compass-outline"></ha-icon><span class="lbl">${t.reset}</span></button>
           <button id="led" disabled><ha-icon icon="mdi:led-on"></ha-icon><span class="lbl">${t.led}</span></button>
           <button id="check"><ha-icon icon="mdi:clipboard-check-outline"></ha-icon><span class="lbl">${t.check.open}</span></button>
         </div>
-        <div class="help"><div class="front"><span class="pic"><img src="${asset("tex_resin.webp")}" alt=""><i></i></span><p>${t.help.mark}</p></div><p>${t.help.cal}</p><p>${t.help.align}</p></div>
+        <div class="help"${c.show_controls ? "" : ' style="display:none"'}><div class="front"><span class="pic"><img src="${asset("tex_resin.webp")}" alt=""><i></i></span><p>${t.help.mark}</p></div><p>${t.help.cal}</p><p>${t.help.align}</p></div>
         </div>
         </div>
       </ha-card>`;
@@ -1311,7 +1311,7 @@ class TrikiCardEditor extends HTMLElement {
       this._form = document.createElement("ha-form");
       this._form.computeLabel = (s) => ({
         device_id: "Triki", title: "Title", show_values: "Gyro and accelerometer bars",
-        show_history: "Gyro history", model: "3D model",
+        show_history: "Gyro history", show_controls: "Buttons and help (calibrate, align, LED, check)", model: "3D model",
       })[s.name] || s.name;
       this._form.addEventListener("value-changed", (ev) => {
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: ev.detail.value } }));
@@ -1325,6 +1325,7 @@ class TrikiCardEditor extends HTMLElement {
       { name: "title", selector: { text: {} } },
       { name: "show_values", selector: { boolean: {} } },
       { name: "show_history", selector: { boolean: {} } },
+      { name: "show_controls", selector: { boolean: {} } },
       { name: "model", selector: { select: { mode: "dropdown", options: [
         { value: "cap", label: "Triki (built in)" }, { value: "glb", label: "Flopsstuff textured" }] } } },
     ];

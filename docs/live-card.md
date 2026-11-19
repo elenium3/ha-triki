@@ -18,6 +18,7 @@ device_id: 0123456789abcdef0123456789abcdef  # optional with a single token
 title: Triki                                  # optional, defaults to the token's name
 show_values: true                             # gyro and accelerometer bars
 show_history: true                            # 10 s gyro graph
+show_controls: true                           # buttons (calibrate, align, LED, check) and help
 ```
 
 The token has to be awake for the model to move: press or shake it. While it
