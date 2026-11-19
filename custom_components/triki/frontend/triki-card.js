@@ -46,7 +46,7 @@ const STRINGS = {
         flip: "Turn the cap over, wait a second, then turn it back.",
         drift: "Leave the cap lying for 30 seconds. This measures how far the direction drifts without motion.",
       },
-      start: "Start", done: "Done", redo: "Redo", skip: "Skip", next: "Next", close: "Close", copy: "Copy report", copied: "Copied",
+      start: "Start", done: "Done", redo: "Redo", skip: "Skip", next: "Next", close: "Close", report: "Report text",
       paused: "The link dropped. The step starts over when the cap is back.",
       busy: "This cap is being checked in another window.", other: "Check running",
       stepOf: "Step {n} of {total}", count: "Steps", times: "Times", sec: "s", pick: "Which cap?", angle: "Turn", wrong: "wrong way",
@@ -110,7 +110,7 @@ const STRINGS = {
         flip: "Переверни крышку на другую сторону, подожди секунду и верни обратно.",
         drift: "Оставь крышку лежать 30 секунд. Так меряется, насколько уплывает направление без движения.",
       },
-      start: "Начать", done: "Готово", redo: "Повторить", skip: "Пропустить", next: "Дальше", close: "Закрыть", copy: "Скопировать отчёт", copied: "Скопировано",
+      start: "Начать", done: "Готово", redo: "Повторить", skip: "Пропустить", next: "Дальше", close: "Закрыть", report: "Текст отчёта",
       paused: "Связь пропала. Шаг начнётся заново, когда крышка вернётся.",
       busy: "Эту крышку уже проверяют в другом окне.", other: "Идёт проверка",
       stepOf: "Шаг {n} из {total}", count: "Шаги", times: "Раз", sec: "с", pick: "Какую крышку проверяем?", angle: "Поворот", wrong: "не в ту сторону",
@@ -176,7 +176,7 @@ const STRINGS = {
         flip: "Odwróć kapsel na drugą stronę, poczekaj sekundę i odwróć z powrotem.",
         drift: "Zostaw kapsel na 30 sekund. Mierzy to, jak bardzo kierunek ucieka bez ruchu.",
       },
-      start: "Start", done: "Gotowe", redo: "Powtórz", skip: "Pomiń", next: "Dalej", close: "Zamknij", copy: "Kopiuj raport", copied: "Skopiowano",
+      start: "Start", done: "Gotowe", redo: "Powtórz", skip: "Pomiń", next: "Dalej", close: "Zamknij", report: "Tekst raportu",
       paused: "Łącze zerwane. Krok zacznie się od nowa, gdy kapsel wróci.",
       busy: "Ten kapsel jest już sprawdzany w innym oknie.", other: "Trwa test",
       stepOf: "Krok {n} z {total}", count: "Kroki", times: "Razy", sec: "s", pick: "Który kapsel?", angle: "Obrót", wrong: "w złą stronę",
@@ -272,6 +272,8 @@ const CSS = `
   .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
   .chip.live .dot { animation: pulse 1.2s infinite; }
   .checkpanel .dot { display: inline-block; margin-right: 8px; vertical-align: middle; background: var(--disabled-text-color, #777); }
+  .checkpanel details.report { margin-top: 10px; color: var(--secondary-text-color); }
+  .checkpanel details.report textarea { width: 100%; box-sizing: border-box; margin-top: 6px; font: 12px monospace; background: transparent; color: inherit; border: 1px solid var(--divider-color, #444); border-radius: 6px; }
   .checkpanel .dot.on { background: #66bb6a; }
   @keyframes pulse { 50% { opacity: .3; } }
   .stage { position: relative; aspect-ratio: 16 / 10; min-height: 260px; }
@@ -956,10 +958,6 @@ class TrikiCard extends HTMLElement {
     } else if (action === "redo") { run.redo(); chk.err = ""; }
     else if (action === "skip") { run.skip(); chk.err = ""; }
     else if (action === "next") run.next();
-    else if (action === "copy") {
-      const text = run.report({ version: VERSION });
-      try { await navigator.clipboard.writeText(text); this._toast(t.copied); } catch { chk.report = text; }
-    }
     this._renderCheck(true);
   }
 
@@ -985,7 +983,7 @@ class TrikiCard extends HTMLElement {
     const run = chk.run;
     const v = run ? run.view() : null;
     const key = !run ? `pick|${chk.msg}|${[...chk.owned].map((id) => this._isLive(this._statuses?.[id])).join()}`
-      : v.finished ? "summary" : `${v.id}|${v.phase}|${v.online}|${v.result?.status}|${chk.err}|${chk.report ? 1 : 0}`;
+      : v.finished ? "summary" : `${v.id}|${v.phase}|${v.online}|${v.result?.status}|${chk.err}`;
     if (force || key !== chk.key) {
       chk.key = key;
       el.checkPanel.innerHTML = this._checkHtml(v);
@@ -1046,8 +1044,8 @@ class TrikiCard extends HTMLElement {
         return `<span>${t.steps[s.id]}</span><b class="${r.status}">${t.status[r.status]}</b>${detail ? `<span class="v">${detail}</span>` : ""}`;
       }).join("");
       return `<small class="of">${t.title}</small><h3>${t.summary}</h3><div class="sum">${rows}</div>
-        ${chk.report ? `<textarea readonly rows="6" style="width:100%">${this._fmt("{r}", { r: chk.report })}</textarea>` : ""}
-        <div class="btns">${btn("copy", t.copy)}${btn("close", t.close, "primary")}</div>`;
+        <details class="report"><summary>${t.report}</summary><textarea readonly rows="9">${this._fmt("{r}", { r: chk.run.report({ version: VERSION }) })}</textarea></details>
+        <div class="btns">${btn("close", t.close, "primary")}</div>`;
     }
     const of = this._fmt(t.stepOf, { n: v.index + 1, total: v.total });
     let body = `<p>${t.text[v.id]}</p>`;
