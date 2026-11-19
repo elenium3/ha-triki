@@ -13,6 +13,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import async_capture_events
 
+from custom_components.triki import device as device_mod
 from custom_components.triki.const import BUS_EVENT
 from custom_components.triki.protocol import (
     BATTERY_LEVEL_UUID,
@@ -839,6 +840,36 @@ async def test_sleep_gate_clears_on_the_first_advert_after_the_gap(
     assert est.await_count == 1
     assert dev._await_sleep is False
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_a_token_that_never_sleeps_is_reconnected(hass: HomeAssistant, setup) -> None:
+    """Advertising on and on after an idle drop: the gate gives up and reconnects."""
+    dev = setup.runtime_data
+    await advertise(hass, setup, make_client())
+    dev._last_activity -= 10_000
+    dev._idle_check(None)
+    await hass.async_block_till_done()
+    assert dev._await_sleep is True
+    dev._last_attempt = 0
+    dev._no_connect_until = 0
+    assert (await poll(hass, setup, service_info(), make_client())).await_count == 0
+
+    dev._await_since -= device_mod._AWAIT_SLEEP_MAX_S  # a minute of advertising later
+    dev._last_attempt = 0
+    assert (await poll(hass, setup, service_info(), make_client())).await_count == 1
+    assert dev._await_sleep is False
+
+
+async def test_an_open_check_skips_the_sleep_gate(hass: HomeAssistant, setup) -> None:
+    dev = setup.runtime_data
+    await advertise(hass, setup, make_client())
+    dev._last_activity -= 10_000
+    dev._idle_check(None)
+    await hass.async_block_till_done()
+    assert dev._await_sleep is True
+    assert dev.start_check("card-session-1")  # the owner opened the check, presses the cap
+    dev._last_attempt = 0
+    assert (await poll(hass, setup, service_info(), make_client())).await_count == 1
 
 
 def test_options_from_a_hand_edited_store_are_sanitised() -> None:

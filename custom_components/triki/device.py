@@ -108,6 +108,10 @@ _WAKE_GAP_S = 5.0
 # for the next wake-up. Must outlast the few seconds it keeps advertising after we
 # drop the link, or we would reconnect to the same still-awake token.
 _SLEEP_GAP_S = 15.0
+# A token still advertising this long after an idle drop is not going to sleep by
+# itself (seen 2026-11-19: it advertised every 1.1 s for minutes, and presses could
+# not get through the gate). Waiting on is pointless then: reconnect.
+_AWAIT_SLEEP_MAX_S = 60.0
 # The LED write fails now and then with a GATT error on a fresh link (seen by
 # other clients too); a short retry is enough.
 _LED_WRITE_TIMEOUT_S = 5.0
@@ -216,6 +220,7 @@ class TrikiDevice:
         self._no_connect_until = 0.0
         self._await_sleep = False
         self._awake_seen = 0.0
+        self._await_since = 0.0
         self._connect_task: asyncio.Task[Any] | None = None
         self._last_drop = 0.0
         self._last_skip: str | None = None
@@ -633,6 +638,17 @@ class TrikiDevice:
         now = time.monotonic()
         age = bluetooth.MONOTONIC_TIME() - service_info.time
         reason = None
+        if self._await_sleep and (self.checking or now - self._await_since >= _AWAIT_SLEEP_MAX_S):
+            # a card is checking this token, or it never stopped advertising: the
+            # owner is pressing it to wake it, and waiting longer would only refuse him
+            _LOGGER.debug(
+                "%s: %s, reconnecting",
+                self.name,
+                "a check is open" if self.checking else "still advertising since the idle drop",
+            )
+            self._await_sleep = False
+            self._no_connect_until = 0.0
+            self._notify()
         if self._await_sleep:
             # The token keeps advertising for a few seconds after we drop the link;
             # reconnecting then just resets its sleep timer. Only once its
@@ -1177,7 +1193,7 @@ class TrikiDevice:
         if 0 < sleep_timeout <= idle:
             _LOGGER.debug("%s: idle for %ss, disconnecting", self.name, sleep_timeout)
             self._await_sleep = True
-            self._awake_seen = time.monotonic()
+            self._awake_seen = self._await_since = time.monotonic()
             self._no_connect_until = time.monotonic() + _IDLE_COOLDOWN_S
             self._create_task(self.async_disconnect(), "idle")
             return
