@@ -46,7 +46,7 @@
           "sleep_timeout": "After this long without activity the link is dropped. The token then advertises for about 3 minutes before it sleeps, and the button is not seen until it has slept. 0 keeps the token awake around the clock, which empties a CR2032 in about a week; while the battery is at 30 % or less, 0 acts as 300.",
           "knob_step": "How far the token has to turn on the table for one rotate event. 30° gives 12 events per full turn; smaller steps flood slow lights.",
           "invert_rotation": "Swap rotate_cw and rotate_ccw, for a token used upside down or a dimmer that feels backwards.",
-          "wake_as_press": "The press that wakes the token ends before the link is up, so it is reported as wake. Also emit press on wake (a wake caused by movement then looks like a press too).",
+          "wake_as_press": "On by default. Only the button wakes the token, so the press that woke it arrives as press (with source: wake) right after wake. It is left out when the token had not really slept, for example after a Home Assistant restart or a dropped link, so nothing toggles by itself. Turn it off if your automations already use wake to catch the first press.",
           "shake": "Off by default. Several quick back-and-forth swings of the wrist. Turn on to test.",
           "tilt": "Off by default. Hold the token level with the stripe of the card's model towards you and lean it to the right (rotate_cw) or left (rotate_ccw) by more than 25°: one step, then one every 0.4 s while it stays leaned. Level it before the next lean.",
           "knob": "Off by default. Reports turns around the vertical axis as rotate_cw / rotate_ccw. Turn on to test.",

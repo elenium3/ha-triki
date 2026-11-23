@@ -12,7 +12,7 @@ from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, EVENT_HOMEASSISTANT_STOP, Platform
-from homeassistant.core import Event, HomeAssistant
+from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
@@ -21,6 +21,7 @@ from homeassistant.helpers.typing import ConfigType
 from .const import (
     CONF_IDLE_TIMEOUT,
     CONF_SLEEP_TIMEOUT,
+    CONF_WAKE_AS_PRESS,
     DEFAULT_IDLE_TIMEOUT,
     DEFAULT_SLEEP_TIMEOUT,
     DOMAIN,
@@ -29,6 +30,7 @@ from .const import (
     ISSUE_SLEEP_NEVER,
     MANUFACTURER,
     MODEL,
+    WAKE_PRESS_MARK,
 )
 from .device import TrikiDevice
 from .models import TrikiOptions
@@ -84,8 +86,24 @@ async def async_migrate_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> b
     return True
 
 
+@callback
+def _async_wake_press_on_once(hass: HomeAssistant, entry: TrikiConfigEntry) -> None:
+    """0.3.0: only the button wakes the token, so the waking press is reported by
+    default. The old default (off) was saved with any change of options, so it is
+    rarely a choice: turn it on once. A marker in the entry's data, not a version
+    bump, so an older release still loads the entry after a downgrade."""
+    if entry.data.get(WAKE_PRESS_MARK):
+        return
+    options = dict(entry.options)
+    options[CONF_WAKE_AS_PRESS] = True
+    hass.config_entries.async_update_entry(
+        entry, data={**entry.data, WAKE_PRESS_MARK: True}, options=options
+    )
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> bool:
     address: str = entry.data[CONF_ADDRESS]
+    _async_wake_press_on_once(hass, entry)
     # A link left open by a previous Home Assistant process (crash, kill) stays
     # up in BlueZ; the token then neither advertises nor accepts a second link.
     await close_stale_connections_by_address(address)

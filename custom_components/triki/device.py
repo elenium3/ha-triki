@@ -117,6 +117,12 @@ _WAKE_GAP_S = 5.0
 # for the next wake-up. Must outlast the few seconds it keeps advertising after we
 # drop the link, or we would reconnect to the same still-awake token.
 _SLEEP_GAP_S = 15.0
+# Only the button wakes the token (firmware 3.2.1-A: picking it up, shaking it or
+# knocking the table did not, 2026-11-23), so a wake from real sleep is a press.
+# "Real sleep" means we heard nothing from it for _SLEEP_GAP_S before the advert:
+# after a Home Assistant start or a dropped link it keeps advertising instead.
+# A press is reported only if the link came up this soon after that advert.
+_WAKE_PRESS_MAX_S = 10.0
 # The LED write fails now and then with a GATT error on a fresh link (seen by
 # other clients too); a short retry is enough.
 _LED_WRITE_TIMEOUT_S = 5.0
@@ -226,6 +232,11 @@ class TrikiDevice:
         self._no_connect_until = 0.0
         self._await_sleep = False
         self._awake_seen = 0.0
+        # the last time the token was heard (advert) or known silent (link drop),
+        # host monotonic seconds; a long gap before an advert means it had slept
+        self._last_heard = 0.0
+        self._slept_until: float | None = None  # the advert that ended a sleep
+        self._wake_press_pending = False
         self._connect_task: asyncio.Task[Any] | None = None
         self._last_drop = 0.0
         self._last_skip: str | None = None
@@ -542,6 +553,7 @@ class TrikiDevice:
         # Home Assistant 2026.10 delivers every advertisement of an address;
         # older versions only changed ones (the token's payload never changes),
         # which is why they also need the 1 s poll of the last advertisement.
+        self._last_heard = bluetooth.MONOTONIC_TIME()  # a start is not a silence
         register_every = getattr(bluetooth, "async_register_advertisement_callback", None)
         if register_every is not None:
             self.every_advertisement = True
@@ -594,7 +606,15 @@ class TrikiDevice:
             return
         info = bluetooth.async_last_service_info(self.hass, self.address, connectable=True)
         if info is not None:
+            self._heard(info.time)
             self._maybe_connect(info, _POLL_FRESH_S)
+
+    @callback
+    def _heard(self, t: float) -> None:
+        """An advert at ``t``: after a silence of _SLEEP_GAP_S it ended a sleep."""
+        if t - self._last_heard >= _SLEEP_GAP_S:
+            self._slept_until = t
+        self._last_heard = max(self._last_heard, t)
 
     @callback
     def _on_every_advertisement(self, service_info: bluetooth.BluetoothServiceInfoBleak) -> None:
@@ -611,6 +631,7 @@ class TrikiDevice:
         now = time.monotonic()
         self.stats.adverts += 1
         self._advert_times.append(service_info.time)
+        self._heard(service_info.time)
         rssi_changed = service_info.rssi != self.rssi
         self.rssi = service_info.rssi
         # an awake token advertises several times a second: one state write and
@@ -820,11 +841,18 @@ class TrikiDevice:
             # Measured from the start of this attempt: a slow link must not turn a
             # resume into a wake.
             resumed = self._last_drop and t0 - self._last_drop < _WAKE_GAP_S
+            slept_until, self._slept_until = self._slept_until, None
             if not resumed:
                 self._emit("wake")
-                if self.options.wake_as_press:
-                    # the press that woke the token is over before the link is up
-                    self._emit("press", {"count": 1, "source": "wake"})
+                if (
+                    self.options.wake_as_press
+                    and slept_until is not None
+                    and bluetooth.MONOTONIC_TIME() - slept_until <= _WAKE_PRESS_MAX_S
+                ):
+                    # the press that woke the token is over before the link is up;
+                    # reported on the first frame, unless the button is still held
+                    # (then the stream reports the press itself)
+                    self._wake_press_pending = True
             self._notify()
             self._create_task(self._async_read_info(client), "info")
 
@@ -1015,6 +1043,9 @@ class TrikiDevice:
             )
         self._client = None
         self._last_drop = bluetooth.MONOTONIC_TIME()
+        # no adverts while linked: the silence before the next one counts from here
+        self._last_heard = max(self._last_heard, self._last_drop)
+        self._wake_press_pending = False
         self._battery_event.set()  # do not keep a stream pause waiting on a dead link
         was_connected = self.connected
         self.connected = False
@@ -1136,6 +1167,11 @@ class TrikiDevice:
                 self._streaming = True
                 self._cancel_timer("_unsub_watchdog")
             sample = Sample.from_frame(frame)
+            if self._wake_press_pending:
+                self._wake_press_pending = False
+                if not sample.button:
+                    self._emit("press", {"count": 1, "source": "wake"})
+                    active = True
             # frames of one notification arrived together: spread them one
             # sample period apart, ending at the arrival time
             t_frame = now - (len(frames) - 1 - i) * dt

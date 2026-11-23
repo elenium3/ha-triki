@@ -46,7 +46,7 @@
           "sleep_timeout": "Po tym czasie bez aktywności połączenie jest zrywane. Token rozgłasza się potem około 3 minut, zanim zaśnie, a przycisk nie jest widoczny, dopóki nie zaśnie. 0 nie pozwala tokenowi zasnąć, co rozładowuje baterię CR2032 w około tydzień; przy baterii 30 % lub niżej 0 działa jak 300.",
           "knob_step": "O ile token musi się obrócić na stole, aby powstało jedno zdarzenie. 30° daje 12 zdarzeń na pełny obrót; mniejsze kroki zasypują wolne lampy zdarzeniami.",
           "invert_rotation": "Zamień rotate_cw i rotate_ccw, gdy token leży do góry nogami albo ściemniacz działa odwrotnie.",
-          "wake_as_press": "Naciśnięcie, które budzi token, kończy się zanim powstanie połączenie, więc jest zgłaszane jako wake. Zgłaszaj też press przy wybudzeniu (wybudzenie ruchem też wygląda wtedy jak naciśnięcie).",
+          "wake_as_press": "Domyślnie włączone. Token budzi tylko przycisk, więc naciśnięcie, które go obudziło, przychodzi jako press (z source: wake) zaraz po wake. Jest pomijane, gdy token tak naprawdę nie spał, na przykład po restarcie Home Assistanta albo po zerwanym połączeniu, więc nic nie przełącza się samo. Wyłącz, jeśli Twoje automatyzacje już łapią pierwsze naciśnięcie przez wake.",
           "shake": "Domyślnie wyłączone. Kilka szybkich ruchów nadgarstkiem tam i z powrotem. Włącz, aby przetestować.",
           "tilt": "Domyślnie wyłączone. Trzymaj kapsel poziomo, paskiem modelu z karty do siebie, i przechyl go w prawo (rotate_cw) lub w lewo (rotate_ccw) o ponad 25°: jeden krok, potem co 0,4 s, dopóki jest przechylony. Przed kolejnym przechyłem wróć do poziomu.",
           "knob": "Domyślnie wyłączone. Zgłasza obroty wokół osi pionowej jako rotate_cw / rotate_ccw. Włącz, aby przetestować.",

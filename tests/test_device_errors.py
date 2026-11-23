@@ -529,22 +529,90 @@ async def test_idle_check_keeps_link_while_button_held(hass: HomeAssistant, setu
     assert dev._unsub_idle is not None  # re-armed
 
 
-async def test_wake_as_press_emits_press(hass: HomeAssistant, setup) -> None:
-    from pytest_homeassistant_custom_component.common import async_capture_events
+def _stream(client):
+    """The stream notification callback of a connected client."""
+    from custom_components.triki.protocol import NUS_TX_UUID
 
-    bus = async_capture_events(hass, "triki_event")
+    return next(c.args[1] for c in client.start_notify.await_args_list if c.args[0] == NUS_TX_UUID)
+
+
+async def _wake_from_sleep(hass: HomeAssistant, setup, *, button: bool = False, slept: float = 60):
+    """The token was silent for ``slept`` s, then a press woke it and it streams."""
+    from .helpers import frame
+
+    bus = async_capture_events(hass, BUS_EVENT)
     dev = setup.runtime_data
-    dev.options = replace(dev.options, wake_as_press=True)
-    await advertise(hass, setup, make_client())
+    dev._last_heard -= slept
+    client = make_client()
+    await advertise(hass, setup, client)
+    _stream(client)(None, bytearray(frame(button=button)))
+    await hass.async_block_till_done()
+    return bus
+
+
+async def test_a_wake_from_sleep_is_a_press(hass: HomeAssistant, setup) -> None:
+    """Only the button wakes the token: after a real sleep the wake is a press."""
+    bus = await _wake_from_sleep(hass, setup)
     assert [e.data["type"] for e in bus] == ["wake", "press"]
     assert bus[1].data["source"] == "wake"
+    assert bus[1].data["count"] == 1
 
 
-async def test_wake_alone_by_default(hass: HomeAssistant, setup) -> None:
-    from pytest_homeassistant_custom_component.common import async_capture_events
+async def test_no_press_without_a_silence_first(hass: HomeAssistant, setup) -> None:
+    """Right after Home Assistant starts the token may still be advertising from a
+    dropped link: it did not sleep, nobody pressed it."""
+    bus = await _wake_from_sleep(hass, setup, slept=0)
+    assert [e.data["type"] for e in bus] == ["wake"]
 
-    bus = async_capture_events(hass, "triki_event")
-    await advertise(hass, setup, make_client())
+
+async def test_no_press_on_a_reconnect_without_sleep(hass: HomeAssistant, setup) -> None:
+    """A drop, then adverts all along, then a link after the resume window: a wake
+    for the card, but the token never slept, so no press."""
+    from .helpers import frame
+
+    bus = await _wake_from_sleep(hass, setup)
+    dev = setup.runtime_data
+    dev._handle_disconnected()
+    await hass.async_block_till_done()
+    dev._last_drop -= 30  # the resume window is long over
+    dev._last_heard = dev._last_drop + 25  # it kept advertising meanwhile
+    dev._last_attempt = 0
+    client = make_client()
+    await advertise(hass, setup, client)
+    _stream(client)(None, bytearray(frame()))
+    await hass.async_block_till_done()
+    assert [e.data["type"] for e in bus] == ["wake", "press", "wake"]
+
+
+async def test_no_extra_press_while_the_waking_press_is_held(hass: HomeAssistant, setup) -> None:
+    """Still held when the stream starts: the stream reports the press itself."""
+    bus = await _wake_from_sleep(hass, setup, button=True)
+    assert [e.data["type"] for e in bus] == ["wake"]
+
+
+async def test_no_press_when_the_link_came_much_later(hass: HomeAssistant, setup) -> None:
+    """A press that woke the token 30 s ago is stale by the time the link is up."""
+    from .helpers import frame
+
+    bus = async_capture_events(hass, BUS_EVENT)
+    dev = setup.runtime_data
+    dev._last_heard -= 60
+    with patch(ESTABLISH, AsyncMock(side_effect=BleakError("busy"))):
+        dev._on_advertisement(service_info(), None)  # the waking advert, no link
+        await hass.async_block_till_done()
+    dev._slept_until -= 30
+    dev._last_attempt = 0
+    client = make_client()
+    await advertise(hass, setup, client)
+    _stream(client)(None, bytearray(frame()))
+    await hass.async_block_till_done()
+    assert [e.data["type"] for e in bus] == ["wake"]
+
+
+async def test_wake_as_press_off(hass: HomeAssistant, setup) -> None:
+    dev = setup.runtime_data
+    dev.options = replace(dev.options, wake_as_press=False)
+    bus = await _wake_from_sleep(hass, setup)
     assert [e.data["type"] for e in bus] == ["wake"]
 
 

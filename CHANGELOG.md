@@ -44,6 +44,13 @@ All notable changes to this project are documented here. The format follows
   `shakes`, the 1.5 s of stream before each of the last three shakes.
 
 ### Changed
+- The press that wakes the token arrives as `press` (with `source: wake`) right
+  after `wake`: *Treat wake-up as a press* is on by default and existing installs
+  are switched on once. Only the button wakes the token, so a wake from sleep is
+  a press; it is left out when the token had not really slept (after a Home
+  Assistant restart or a dropped link). An automation that used `wake` to catch
+  the first press now gets a `press` as well: turn the option off or drop the
+  `wake` trigger.
 - The pitch and roll sensors are called *Tilt forward-back* and *Tilt
   left-right*, the names the card uses. Entity ids stay `_pitch` and `_roll`.
 - One motion, one gesture: knob steps are held 0.3 s and dropped if the motion
@@ -81,6 +88,7 @@ All notable changes to this project are documented here. The format follows
   no longer offered as a new device.
 - The LED switch keeps its last known state across Home Assistant restarts. It
   read unknown until the token next woke, which could take hours.
+- Docs: the token wakes only on a button press, not on motion.
 - Docs: the IMU axes in `docs/protocol.md`. +z points out of the green PCB (Ż)
   side, not the metal side. The status byte section says what is known.
 

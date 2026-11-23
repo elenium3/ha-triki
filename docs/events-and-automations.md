@@ -10,7 +10,7 @@ device-independent automations.
 | `event_type` | Data | When |
 |---|---|---|
 | `wake` | | The token woke up and the link is established. Not emitted on a quick resume after a weak-signal drop. |
-| `press` | `count: 1`; `source: wake` for synthetic presses | Button released (immediately, or after the multi-press window if that option is on). |
+| `press` | `count: 1`; `source: wake` for the press that woke the token | Button released (immediately, or after the multi-press window if that option is on). |
 | `double_press`, `triple_press` | `count` | Multi-press option on. |
 | `long_press` | | Button held for 0.8 s. Reported while still held; the release does not produce a `press`. |
 | `rotate_cw`, `rotate_ccw` | `steps`, `degrees`, `speed` | Turned around the vertical axis by at least one knob step, flat on a surface or held within 40° of level. Several steps can arrive in one event after a fast turn. Muted while the button is down and for 0.8 s after release, and for 0.5 s after a jolt, a shake or free fall. |
@@ -433,7 +433,9 @@ follow each other.
 
 - Multi-press delays single presses by the window (0.3–0.5 s). If you do not use
   double or triple press, leave the option off and presses are instant.
-- The press that wakes a sleeping token is reported as `wake`, not `press`. If
-  you want the first press to count, enable *Treat wake-up as a press*.
+- The press that wakes a sleeping token arrives as `wake` and then `press` with
+  `source: wake` (*Treat wake-up as a press*, on by default). Use `press` for
+  "the button was pressed"; `wake` alone also fires after a Home Assistant
+  restart or a dropped link, when nobody pressed anything.
 - Holding the link (sleep timeout 0) makes the token react at any time but costs
   battery; see [Configuration](configuration.md#idle-and-sleep-how-the-link-behaves).
