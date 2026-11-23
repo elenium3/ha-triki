@@ -116,6 +116,15 @@ KNOB_SHOCK_GUARD_S = 0.5
 # before the shake was recognised. Steps are held this long and dropped when a
 # shake, a jolt or free fall comes first (one motion, one gesture).
 KNOB_HOLD_S = 0.3
+# Picking the token up turns it too, but mostly about other axes than the vertical:
+# in a labelled run (2026-11-23, tests/fixtures/handling-2026-11-23) the turning
+# about gravity was 0.04-0.82 of the gyro energy in the 0.5 s before the false
+# steps of ten pick-ups, and 0.86-1.00 before the wanted steps of turns on the
+# table. While the share over KNOB_PURITY_WINDOW_S is below KNOB_PURITY the turn
+# is not counted (the partial turn waits) and steps still held are dropped: 24
+# false steps became 2, 35 of 37 wanted ones stayed, slow turns lost none.
+KNOB_PURITY = 0.65
+KNOB_PURITY_WINDOW_S = 0.5
 # A gap longer than this between two frames counts as this long for the knob
 # angle: the rate in the gap is unknown. Good links show gaps of 115-155 ms,
 # rarely 340 ms; 26 Hz with heavy loss needs more than 150.
@@ -264,6 +273,8 @@ class GestureDetector:
         self._turn_idle_since = 0.0
         self._knob_mute_until = 0.0
         self._knob_held: list[tuple[float, Event]] = []
+        # t, gyro energy, its part about gravity: how pure the recent turning is
+        self._purity_win: deque[tuple[float, float, float]] = deque()
         self._turn_run = 0  # consecutive frames above the deadband
         self._turn_held = 0.0  # their angle, counted once the run is confirmed
         self._speed_deg = 0.0  # angle and time turned since the last step, for speed
@@ -459,6 +470,23 @@ class GestureDetector:
                     ),
                 )
             )
+
+    def _turn_purity(self, s: Sample) -> float:
+        """Share of the gyro energy about gravity over KNOB_PURITY_WINDOW_S.
+
+        1.0 while the token hardly turns: noise says nothing about handling.
+        """
+        bx, by, bz = self.gyro_bias or (0.0, 0.0, 0.0)
+        w = (s.gx - bx, s.gy - by, s.gz - bz)
+        about = _dot(w, self.gravity) if self.gravity is not None else 0.0
+        win = self._purity_win
+        win.append((self.t, w[0] * w[0] + w[1] * w[1] + w[2] * w[2], about * about))
+        while win and self.t - win[0][0] > KNOB_PURITY_WINDOW_S:
+            win.popleft()
+        total = sum(x[1] for x in win)
+        if total < len(win) * KNOB_DEADBAND_DPS * KNOB_DEADBAND_DPS:
+            return 1.0
+        return sum(x[2] for x in win) / total
 
     # ----------------------------------------------------------------- button
     def _emit_clicks(self, out: list[Event]) -> None:
@@ -659,6 +687,7 @@ class GestureDetector:
         # knob: rotation rate about the vertical (gravity) axis. Shaking swings the
         # token around every axis: a hard jolt or a latched shake drops the partial
         # turn and mutes the knob for a moment.
+        purity = self._turn_purity(s)  # every frame, so the window has no gaps
         if disturbed:
             # a shake, a jolt or free fall: whatever turned was not a knob
             self._turn_acc = 0.0
@@ -672,6 +701,9 @@ class GestureDetector:
             pass  # being swung: this frame says nothing about turning, keep the rest
         elif self.gravity is not None and abs(self.gravity[2]) < KNOB_LEVEL_COS:
             pass  # held edge-on: handled, not turned
+        elif purity < KNOB_PURITY:
+            # handled, not turned: steps still held go, the partial turn waits
+            self._knob_held = [(t, e) for t, e in self._knob_held if e.data.get("source")]
         elif self.gravity is not None:
             bx, by, bz = self.gyro_bias or (0.0, 0.0, 0.0)
             rate = _dot((s.gx - bx, s.gy - by, s.gz - bz), self.gravity)

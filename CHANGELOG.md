@@ -50,6 +50,10 @@ All notable changes to this project are documented here. The format follows
   `shakes`, the 1.5 s of stream before each of the last three shakes.
 
 ### Changed
+- The knob no longer turns when the token is picked up. Picking it up turns it
+  mostly about other axes than the vertical; while that is so the knob does
+  not count. In a labelled run, ten pick-ups made 2 knob steps instead of 24,
+  and turns on the table kept 35 of 37 steps.
 - The press that wakes the token arrives as `press` (with `source: wake`) right
   after `wake`: *Treat wake-up as a press* is on by default and existing installs
   are switched on once. Only the button wakes the token, so a wake from sleep is
