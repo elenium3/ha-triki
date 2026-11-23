@@ -191,7 +191,7 @@ test("a 45 degree knob step expects 4 steps; the knob off measures the turn only
   run.start();
   turn(run, clock, 180, 0);
   run.done();
-  assert.equal(run.results.turn_ccw.status, "skip");
+  assert.equal(run.results.turn_ccw.status, "pass");
   assert.equal(run.results.turn_ccw.reason, "knob_off");
 });
 
@@ -673,6 +673,23 @@ test("handle: a nudge is not a pick-up; what fires is a false alarm and counts f
   assert.equal(r.status, "warn");
   assert.match(r.values.extra, /rotate_cw×1/);
   assert.deepEqual(keys(run), ["shake=false", "tilt=false"]);
+});
+
+test("handle: holding it still in the hand is not putting it down", () => {
+  const { run, clock } = rig();
+  goTo(run, "handle");
+  run.start();
+  for (let i = 0; i < 30; i++) { // picked up
+    run.feedMotion(motion(clock, { gyro: [80, 60, 20], accel: [0.3, 0.2, -0.9] }));
+    clock.advance(33);
+  }
+  for (let i = 0; i < 60; i++) { // held for 2 s: a hand trembles
+    run.feedMotion(motion(clock, { gyro: [15, 12, 8], accel: [0.1, 0.1, -0.99] }));
+    clock.advance(33);
+  }
+  assert.equal(run.view().live.count, 0);
+  for (let i = 0; i < 36; i++) { run.feedMotion(motion(clock)); clock.advance(33); } // on the table
+  assert.equal(run.view().live.count, 1);
 });
 
 test("handle: too few pick-ups by the time limit fail", () => {

@@ -19,12 +19,32 @@ Edit a dashboard, add a card and search for **Triki live 3D**, or in YAML:
 type: custom:triki-card
 device_id: 0123456789abcdef0123456789abcdef  # optional with a single token
 title: Triki                                  # optional, defaults to the token's name
+show_model: true                              # the 3D model and its angles
+show_status: true                             # chips: state, rate, signal, battery
 show_values: true                             # gyro and accelerometer bars
 show_history: true                            # 10 s gyro graph
-show_controls: true                           # buttons (calibrate, align, LED, check) and help
+buttons: [calibrate, align, led, check]       # which buttons; [] hides the row
+show_help: true                               # the help under the buttons
+model: cap                                    # cap (built in) or glb (textured)
 ```
 
-The token has to be awake for the model to move: press or shake it. While it
+Every part can be hidden on its own. A card with only the LED switch:
+
+```yaml
+type: custom:triki-card
+show_model: false
+show_status: false
+show_values: false
+show_history: false
+buttons: [led]
+show_help: false
+```
+
+Without the model, a check or a calibration still shows it while it runs: their
+hints are drawn on it. Calibrate and Check appear for admins only. The older
+`show_controls: false` still works and hides every button and the help.
+
+The token has to be awake for the model to move: press its button. While it
 sleeps the card shows the last state greyed out.
 
 **Several tokens.** Without `device_id` the card shows a row of tabs: **Auto**
@@ -62,18 +82,18 @@ gestures that are turned on, and judges each step. Any step can be skipped.
 | Sleep and wake (optional, ~4 min) | the link drops as after idling, the token dozes (presses not seen) and sleeps, then one press must wake it: it fails if it reconnects while dozing or never falls asleep |
 
 A gesture that fires during a step that did not ask for it is reported. When
-the results point to a setting, the summary suggests it and **Apply** saves it;
+the results point to a setting, the summary suggests it and **Save to options** saves it;
 nothing changes without that press. It suggests only clear cases:
 
 | Seen in the check | Suggestion |
 |---|---|
-| Both turns gave steps the other way round while the hand turned the asked way | swap *Swap rotation direction* |
+| Both turns gave steps the other way round while the hand turned the asked way | switch *Invert rotation direction* |
 | More than 30 % of the frames lost at more than 26 Hz | sensor rate 26 Hz |
 | The double press came as two presses | a multi-press window that fits the measured gap (up to 0.8 s) |
 | Shake or *Tilt in the hand* fired by itself twice or more | turn that gesture off |
 
-Applying reloads the integration's entry, as saving the options form does: the
-link drops and the token reconnects on its next press.
+Saving reloads the integration's entry, as saving the options form does: the
+link drops and the token reconnects (if it is asleep, on its next press).
 
 **Models.** `model: cap` (the default) is a procedural model built from calipered
 dimensions, in the sensor frame; its resin glows while the LED is on and sinks
@@ -88,10 +108,9 @@ while the button is held. `model: glb` uses Flopsstuff's textured model.
 - **Heading drifts.** There is no compass, so yaw is only the integrated gyro.
   **Align direction** on the card opens a step with a picture of the green side, the dot above the Z circled: lay the cap with that edge away and press Done. A
   dozing token keeps its heading over the reconnect; a Home Assistant restart
-  loses it. The calibration itself is stored and never resets; the card's
-  "When to calibrate?" note says this in the owner's language. The angles are
-  labelled tilt sideways (roll), tilt forward (pitch) and turn (yaw), and each
-  button carries a one-line hint.
+  loses it. The calibration itself is stored and never resets; the help under
+  the buttons says when to use each. The angles are labelled left-right
+  (roll), forward-back (pitch) and turn about the axis (yaw).
 - **Data path:** the card subscribes over Home Assistant's websocket
   (`triki/subscribe`). The integration sends the pose and the last frame at up
   to 30 messages per second while a card is open, and nothing when none is.

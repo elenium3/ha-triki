@@ -122,11 +122,13 @@ automation:
 
 | Entity | Notes |
 |---|---|
-| `event.<name>_action` | `wake`, `press`, `double_press`, `triple_press` (`count`), `long_press`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`, `speed`), `shake`, `tap`, `throw`, `flip` |
+| `event.<name>_action` | `wake`, `press`, `double_press`, `triple_press` (`count`), `long_press`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`, `speed`), `tilt_left` / `tilt_right` (`repeat`), `shake`, `tap`, `throw`, `flip` |
 | `binary_sensor.<name>_button` | live button state, off while asleep |
 | `binary_sensor.<name>_connected` | diagnostic |
 | `switch.<name>_led` | the green LED (configuration switch); changeable only while connected |
 | `sensor.<name>_battery` | measured by the token during a short stream pause while it is idle, at most every 30 min; a repair notice asks for a new cell at 30 % or less |
+| `sensor.<name>_readiness` | whether a press reaches Home Assistant now: `connected`, `dozing` (about 3 min after an idle disconnect: presses are not seen), `asleep` (a press wakes it), `not_responding` |
+| `sensor.<name>_link_quality` | % of the motion frames that arrived in the last session; a repair notice after three lossy sessions in a row |
 | `sensor.<name>_face_up` | `cap_up` (metal side up), `pcb_up` (green side up) or `edge`, once the token has lain still for 0.3 s; kept while asleep |
 | `sensor.<name>_signal_strength`, `_pitch`, `_roll` | disabled by default |
 
@@ -137,7 +139,7 @@ Every gesture is also fired on the bus as `triki_event` with `device_id`,
 
 The integration also ships a dashboard card, `custom:triki-card`: a 3D model of
 the token that moves with it, with live gyro and accelerometer readings. Add
-**Triki live 3D** from the card picker; see [Live 3D card](docs/live-card.md).
+**Triki live 3D** from the card picker; see [Live 3D card](docs/live-card.md). Every part of the card (model, status chips, bars, graph, each button, help) can be hidden on its own.
 
 <p align="center">
   <img src="docs/images/card-anim.gif" width="420" alt="The live card in motion: the cap held in the hand is turned like a knob and back (Knob events pop up), tilted to the side, pressed (Button lights up) and flipped onto its green side (a Flip event), while the angles, the gyro and accelerometer bars and the 10 s gyro graph follow">

@@ -7,6 +7,10 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- The card's parts can be hidden one by one: `show_model`, `show_status`,
+  `buttons` (a list of calibrate, align, led, check) and `show_help`, next to
+  `show_values` and `show_history`. `show_controls: false` still hides every
+  button and the help.
 - The card's check has new steps: **Pick up and put down** (gestures that fire
   while the cap is picked up are reported as false), **Sleep and wake**
   (optional: drops the link as after idling, follows the doze and checks that
@@ -104,6 +108,13 @@ All notable changes to this project are documented here. The format follows
   after a dropped link is adverts Home Assistant missed (a weak link, or the
   cap carried out of range and back): it no longer makes a press nobody
   pressed, and an idle-dropped cap is no longer reconnected while it dozes.
+- The card's texts, checked by a fresh reader against the code: only the
+  button wakes the cap (not a shake), the knob steps need two quarter turns
+  (not a full turn), the tilt step needs about 1 cm (not 2-3), the lean step
+  says how far; a pick-up counts once the cap lies still on the table again,
+  not while it is held; the knob steps with the knob off say so up front and
+  pass on the model alone; *Apply* is *Save to options* and says that the link
+  drops. Russian texts use «Вы» and treat the cap as «она» throughout.
 - Tilt in the hand counts leans up to 80° (was 60°): asked for more than 25°,
   people lean to 70-85°, and half the leans of a check went unseen.
 - The check: closing the tab ends the check at once (the sleep step held it

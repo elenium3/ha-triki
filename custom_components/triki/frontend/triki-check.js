@@ -34,7 +34,11 @@ const TILT = ["tilt_left", "tilt_right"];
 export const HANDLE_WANT = 5;
 const HANDLE_MOVE_DPS = 40;
 const HANDLE_MOVE_G = 0.15;
-const HANDLE_STILL_S = 0.8; // still this long: put down (or held still), one handling over
+const HANDLE_STILL_S = 0.8; // lying still this long: put down, one pick-up over
+// Lying on the table, not held: a hand trembles at 30-110 deg/s (the 2026-11-23
+// check), the table reads 0.1. Held still in the hand is not a put-down.
+const HANDLE_REST_DPS = 10;
+const HANDLE_REST_G = 0.05;
 const HANDLE_MIN_S = 0.4; // shorter motion is a nudge, not a pick-up
 const HANDLE_END_S = 1.5; // the last one put down and still this long: the step is over
 
@@ -377,9 +381,12 @@ export class CheckRun {
     const t = this.now() / 1000;
     const a = Math.hypot(...(m.accel || [0, 0, 1]));
     const moving = gyro > HANDLE_MOVE_DPS || Math.abs(a - 1) > HANDLE_MOVE_G;
+    const resting = gyro < HANDLE_REST_DPS && Math.abs(a - 1) < HANDLE_REST_G;
     if (moving) {
       st.moveFrom ??= t;
       st.lastMove = t;
+    } else if (!resting) {
+      if (st.moveFrom != null) st.lastMove = t; // held in the hand: still picked up
     } else if (st.moveFrom != null && t - st.lastMove >= HANDLE_STILL_S) {
       if (st.lastMove - st.moveFrom >= HANDLE_MIN_S) st.count = (st.count || 0) + 1;
       st.moveFrom = null;
@@ -619,7 +626,7 @@ export class CheckRun {
     if (Math.abs(angle) < TURN_MIN_DEG) return { status: "fail", reason: "short", values };
     if (Math.sign(angle) !== s.dir) return { status: "fail", reason: "direction", values };
     if (Math.abs(angle) > TURN_MAX_DEG) return { status: "fail", reason: "long", values };
-    if (!this.options.knob) return { status: "skip", reason: "knob_off", values };
+    if (!this.options.knob) return { status: "pass", reason: "knob_off", values };
     const expected = Math.abs(angle) / this._knobStep();
     values.expected = +expected.toFixed(1);
     const off = Math.abs((st.steps || 0) - expected);
