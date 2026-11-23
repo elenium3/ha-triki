@@ -33,7 +33,7 @@ and a Raspberry Pi 5 adapter):
 | tap | Confirmed on the table: 4 of 5 finger taps. Not detected when the token is knocked against something while being moved in the hand (by design: it must be at rest before the jolt). |
 | throw | Confirmed: 3 tosses and a drop gave 5 events, a catch can count twice. |
 | flip | Confirmed on a real turn-over. Also fires when the token is held upside down in the hand for 0.3 s. |
-| tilt in the hand | Experimental: no false steps from knocks or tosses on the recorded sessions, but a real lean and which side counts as right have not been checked on hardware yet. |
+| tilt in the hand | Confirmed: 5 steps right (`rotate_cw`) and 5 left (`rotate_ccw`) in the card's check, no wrong side; no false steps from knocks or tosses on the recorded sessions. |
 
 ## Bus event
 

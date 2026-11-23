@@ -35,8 +35,8 @@ All notable changes to this project are documented here. The format follows
   more than a slow one.
 - *Tilt in the hand* option, off by default: hold the token level and lean it
   right or left past 25° for `rotate_cw` / `rotate_ccw` (with `source: tilt`),
-  one step and then one every 0.4 s while it stays leaned. Experimental: which
-  side counts as right is not yet confirmed on hardware.
+  one step and then one every 0.4 s while it stays leaned. Checked on
+  hardware: right gives `rotate_cw`, left `rotate_ccw`.
 - Russian translation of the integration (setup, options, repairs, entity
   names).
 - Diagnostics: `measured_rate`, `gyro_bias`, `link_via` (the receiver the
@@ -56,7 +56,10 @@ All notable changes to this project are documented here. The format follows
   sample period per frame: with half the frames lost the knob used to report
   half the steps.
 - The gyro's zero offset is learned while the token lies still and subtracted
-  from knob turns; it is kept across reconnects.
+  from knob turns and the card's 3D model; it is kept across reconnects.
+  "Still" means the readings spread by under 0.5 °/s over half a second, so a
+  steady hand does not count, and an offset learned wrongly is replaced the
+  next time the token lies on the table.
 - For 30 s after Home Assistant starts, a token heard only through a local
   adapter waits for the Bluetooth proxies instead of connecting at once: the
   link used to go through the Pi's adapter at −85 dBm before the proxies had
@@ -78,12 +81,6 @@ All notable changes to this project are documented here. The format follows
   read unknown until the token next woke, which could take hours.
 - Docs: the IMU axes in `docs/protocol.md`. +z points out of the green PCB (Ż)
   side, not the metal side. The status byte section says what is known.
-
-### Not verified on hardware yet
-- The left/right sign of *Tilt in the hand*.
-- `face_up` in daily use.
-- The heading of the 3D model over minutes of use: a fix for its drift after
-  delayed bursts is in, but it has not been checked live.
 
 ## [0.2.5] - 2026-11-14
 
