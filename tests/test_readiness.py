@@ -46,10 +46,29 @@ async def test_states_through_an_idle_drop(hass: HomeAssistant, setup) -> None:
 
     # the adverts stop: the timer the last one armed says it is asleep now
     dev._awake_seen -= device_mod._SLEEP_GAP_S
+    dev._doze_started -= device_mod._DOZE_S
     dev._doze_check(None)
     await hass.async_block_till_done()
     assert hass.states.get(READINESS).state == "asleep"
     assert dev.doze_left_s is None
+
+
+async def test_missed_adverts_early_in_the_doze_are_not_sleep(hass: HomeAssistant, setup) -> None:
+    """A weak link misses the adverts for a while: the token cannot have slept a
+    minute after the drop, so it is still dozing and no advert connects to it."""
+    dev = setup.runtime_data
+    await connect(hass, setup)
+    await idle_drop(hass, setup)
+    dev._doze_started -= 60
+    dev._awake_seen -= 30  # nothing heard for 30 s
+    dev._doze_check(None)
+    assert dev.readiness == "dozing"
+    dev._last_attempt = dev._no_connect_until = 0
+    with patch(ESTABLISH, AsyncMock()) as est:
+        dev._on_advertisement(service_info(), None)
+        await hass.async_block_till_done()
+    assert est.await_count == 0
+    assert dev.readiness == "dozing"
 
 
 async def test_an_overdue_doze_counts_down_to_zero(hass: HomeAssistant, setup) -> None:

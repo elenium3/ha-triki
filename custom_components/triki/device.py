@@ -123,6 +123,11 @@ _SLEEP_GAP_S = 15.0
 # press meanwhile starts it over (firmware 3.2.1-A, 2026-11-23: neither the rate
 # nor the payload of its adverts changes, so the press itself is not seen).
 _DOZE_S = 180.0
+# It never sleeps sooner than this after a drop (the doze measured 181 s): a
+# silence before it is adverts Home Assistant missed (a weak link, or the token
+# out of range for a while), not sleep. Taking such a silence for sleep made a
+# press nobody pressed, and reconnected to a dozing token.
+_DOZE_MIN_S = 165.0
 # Readiness states, see TrikiDevice.readiness.
 READINESS = ("connected", "dozing", "asleep", "not_responding")
 # Only the button wakes the token (firmware 3.2.1-A: picking it up, shaking it or
@@ -435,9 +440,12 @@ class TrikiDevice:
         return True
 
     @callback
-    def _hold_check(self, ttl: float) -> None:
-        """Keep the check for ``ttl`` more, never less than it already has."""
-        until = max(self._check_until, time.monotonic() + ttl)
+    def _hold_check(self, ttl: float, *, shorten: bool = False) -> None:
+        """Keep the check for ``ttl`` more, never less than it already has
+        unless ``shorten``."""
+        until = time.monotonic() + ttl
+        if not shorten:
+            until = max(self._check_until, until)
         self._check_until = until
         self._cancel_timer("_unsub_check")
         self._unsub_check = async_call_later(
@@ -558,9 +566,14 @@ class TrikiDevice:
             return "connected"
         if self.unresponsive:
             return "not_responding"
-        if self._await_sleep and time.monotonic() - self._awake_seen < _SLEEP_GAP_S:
+        if self._await_sleep and not self._slept_now():
             return "dozing"
         return "asleep"
+
+    def _slept_now(self) -> bool:
+        """Dropped on idle: the adverts stopped, and late enough to be sleep."""
+        now = time.monotonic()
+        return now - self._awake_seen >= _SLEEP_GAP_S and now - self._doze_started >= _DOZE_MIN_S
 
     @property
     def doze_left_s(self) -> int | None:
@@ -574,11 +587,17 @@ class TrikiDevice:
     def _arm_doze_check(self) -> None:
         """Dozing turns into asleep with no event of its own: the adverts stop."""
         self._cancel_timer("_unsub_doze")
-        self._unsub_doze = async_call_later(self.hass, _SLEEP_GAP_S + 0.5, self._doze_check)
+        now = time.monotonic()
+        delay = max(
+            _SLEEP_GAP_S - (now - self._awake_seen), _DOZE_MIN_S - (now - self._doze_started)
+        )
+        self._unsub_doze = async_call_later(self.hass, max(0.0, delay) + 0.5, self._doze_check)
 
     @callback
     def _doze_check(self, _now: Any) -> None:
         self._cancel_timer("_unsub_doze")
+        if self._await_sleep and not self.connected and not self._slept_now():
+            self._arm_doze_check()  # the gap is there, the doze is not over yet
         self._notify()
 
     @property
@@ -719,8 +738,9 @@ class TrikiDevice:
 
     @callback
     def _heard(self, t: float) -> None:
-        """An advert at ``t``: after a silence of _SLEEP_GAP_S it ended a sleep."""
-        if t - self._last_heard >= _SLEEP_GAP_S:
+        """An advert at ``t``: after a silence of _SLEEP_GAP_S it ended a sleep,
+        unless the token cannot have slept yet (see _DOZE_MIN_S)."""
+        if t - self._last_heard >= _SLEEP_GAP_S and t - self._last_drop >= _DOZE_MIN_S:
             self._slept_until = t
         self._last_heard = max(self._last_heard, t)
 
@@ -809,7 +829,7 @@ class TrikiDevice:
             # The gap is judged before this advert refreshes the mark: with the
             # per-advertisement callback this call only ever sees fresh adverts,
             # and the first one after the gap *is* the wake-up to connect on.
-            slept = now - self._awake_seen >= _SLEEP_GAP_S
+            slept = self._slept_now()
             if age < max_age:
                 self._awake_seen = now
                 if not slept:
@@ -921,7 +941,11 @@ class TrikiDevice:
             if isinstance(source, str):
                 self.stats.last_source = source
             self.connected = True
-            self._check_sleeping = False  # it slept and woke: the sleep step is over
+            if self._check_sleeping and self.checking:
+                # it slept and woke: the sleep step is over, and so is the long
+                # hold; a card that is gone must not keep the token from automations
+                self._hold_check(_CHECK_TTL_S, shorten=True)
+            self._check_sleeping = False
             self._last_activity = self._session_t0 = time.monotonic()
             self.stats.connects += 1
             self.stats.last_link_s = round(t_link - t0, 2)

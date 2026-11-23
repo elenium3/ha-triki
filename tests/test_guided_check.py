@@ -133,6 +133,7 @@ async def test_status_tells_the_card_what_to_expect(
         "knob": False,
         "knob_step": 30,
         "invert_rotation": False,
+        "wake_as_press": True,
         "motion_gestures": False,
         "multi_press": False,
         "shake": False,
@@ -187,11 +188,14 @@ async def test_the_sleep_step_drops_the_link_and_keeps_the_wait(
         await hass.async_block_till_done()
         assert est.await_count == 0
         dev._awake_seen -= 30  # it slept; the next advert is a press
+        dev._doze_started -= device_mod._DOZE_S
         dev._on_advertisement(service_info(), None)
         await hass.async_block_till_done()
     assert est.await_count == 1
     assert dev.connected
     assert not dev._check_sleeping
+    # awake again: the long hold is over, a card that is gone ends it soon
+    assert dev._check_until - device_mod.time.monotonic() <= device_mod._CHECK_TTL_S + 1
 
 
 async def test_only_the_checking_card_can_ask_for_sleep(
@@ -202,8 +206,32 @@ async def test_only_the_checking_card_can_ask_for_sleep(
     ws = await hass_ws_client(hass)
     await ws.send_json({"id": 1, "type": "triki/check", "action": "sleep", "session": SESSION})
     msg = await ws.receive_json()
-    assert not msg["success"]
+    assert not msg["success"]  # no check open
     assert dev.connected
+
+    assert dev.start_check(SESSION)
+    await ws.send_json({"id": 2, "type": "triki/check", "action": "sleep", "session": "other"})
+    msg = await ws.receive_json()
+    assert not msg["success"]  # another card's check
+    assert dev.connected
+    assert dev.checking
+
+
+async def test_a_closed_connection_ends_the_check(
+    hass: HomeAssistant, setup, hass_ws_client
+) -> None:
+    """A tab closed in the sleep step must not hold the token from automations."""
+    dev = setup.runtime_data
+    await connect(hass, setup)
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "triki/check", "action": "start", "session": SESSION})
+    assert (await ws.receive_json())["success"]
+    await ws.send_json({"id": 2, "type": "triki/check", "action": "sleep", "session": SESSION})
+    assert (await ws.receive_json())["success"]
+    assert dev.checking
+    await ws.close()
+    await hass.async_block_till_done()
+    assert not dev.checking
 
 
 async def test_the_sleep_step_holds_the_check_without_renewals(hass: HomeAssistant, setup) -> None:

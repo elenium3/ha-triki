@@ -84,6 +84,7 @@ def status(dev: TrikiDevice) -> dict[str, Any]:
             "knob": dev.options.knob,
             "knob_step": dev.options.knob_step,
             "invert_rotation": dev.options.invert_rotation,
+            "wake_as_press": dev.options.wake_as_press,
             "motion_gestures": dev.options.motion_gestures,
             "multi_press": dev.options.multi_press,
             "shake": dev.options.shake,
@@ -224,15 +225,22 @@ def ws_check(
     if dev is None:
         connection.send_error(msg["id"], "not_found", "No such Triki token")
         return
+    session = msg["session"]
+    # a closed tab or a lost connection ends the check now, not when it lapses
+    # (the sleep step holds it for minutes)
+    key = (DOMAIN, "check", dev.address, session)
     if msg["action"] == "stop":
-        dev.stop_check(msg["session"])
+        connection.subscriptions.pop(key, None)
+        dev.stop_check(session)
     elif msg["action"] == "sleep":
         if not dev.check_sleep(msg["session"]):
             connection.send_error(msg["id"], "not_ready", "Not connected, or not this check")
             return
-    elif not dev.start_check(msg["session"]):
+    elif not dev.start_check(session):
         connection.send_error(msg["id"], "busy", "Another check of this token is running")
         return
+    else:
+        connection.subscriptions[key] = lambda: dev.stop_check(session)
     connection.send_result(msg["id"])
 
 
