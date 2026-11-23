@@ -46,9 +46,24 @@ per token in its config entry;
 model: gestures and sensors measure against gravity and do not use it.
 
 **Check** (admins only) walks through the link, the knob, the presses and the
-gestures that are turned on, and judges each step. When the results point to a
-setting, the summary suggests it and **Apply** saves it; nothing changes
-without that press. It suggests only clear cases:
+gestures that are turned on, and judges each step. Any step can be skipped.
+
+| Step | What it measures |
+|---|---|
+| Lying still | frames received against streamed (link loss), sensor noise, the receiver |
+| Starting position, Tilt | the model's calibration |
+| Knob clockwise, counter-clockwise | steps against the angle turned, wrong-way steps |
+| Pick up and put down | five pick-ups the way the owner usually picks it up; every gesture that fires meanwhile is a false one |
+| Lean in the hand | right and left, three times each |
+| Button | press, double press, long press; the gap of a double press that came as two |
+| Turn over, Tap, Toss | the face and the motion gestures |
+| Shake | three shakes; a burst of fast rotation with no shake event is a miss (*2 of 3 recognised*) |
+| Direction drift | how far the heading moves in 30 s at rest |
+| Sleep and wake (optional, ~4 min) | the link drops as after idling, the token dozes (presses not seen) and sleeps, then one press must wake it: it fails if it reconnects while dozing or never falls asleep |
+
+A gesture that fires during a step that did not ask for it is reported. When
+the results point to a setting, the summary suggests it and **Apply** saves it;
+nothing changes without that press. It suggests only clear cases:
 
 | Seen in the check | Suggestion |
 |---|---|
@@ -93,6 +108,7 @@ while the button is held. `model: glb` uses Flopsstuff's textured model.
 | `triki/devices` | | `[{device_id, name}]` |
 | `triki/subscribe` | `device_id` (optional with one token) | events: `status`, `motion`, `event` |
 | `triki/reset_heading` | `device_id` (optional with one token) | |
+| `triki/check` (admin) | `device_id`, `session`, `action`: `start` (or renew, every few seconds), `stop`, `sleep` (drop the link as after idling, for the sleep step) | error `busy` when another card checks this token, `not_ready` for `sleep` while not connected |
 | `triki/apply` (admin) | `device_id`, `options`: any of `invert_rotation`, `sample_rate`, `multi_press_window`, `shake`, `tilt` | `{applied}`; the entry reloads |
 
 When the entry reloads (options saved), each subscription gets a `reload` event

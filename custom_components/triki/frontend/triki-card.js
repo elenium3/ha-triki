@@ -31,7 +31,7 @@ const STRINGS = {
       err: { moving: "It is moving: hold still for a second", not_flat: "It is not lying flat", asleep: "The cap is asleep: wake it first", no_data: "No data yet: wake the cap" } },
     button: "Button", rate: "Hz", history: "Last 10 s", nodevice: "No Triki token found",
     check: { title: "Check", open: "Check",
-      steps: { rest: "Lying still", flat: "Starting position", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", lean: "Lean in the hand", press: "Button", flip: "Turn over", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift" },
+      steps: { rest: "Lying still", flat: "Starting position", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", handle: "Pick up and put down", lean: "Lean in the hand", press: "Button", flip: "Turn over", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift", sleep: "Sleep and wake" },
       text: {
         identify: "Pick the cap below, or press the button on it.",
         wake: "Press the button on the cap to wake it.",
@@ -40,9 +40,11 @@ const STRINGS = {
         tilt: "Lift the edge with the dot by 2–3 cm and hold it. The model should tilt like the faint hint.",
         turn_cw: "Turn the cap on the table a quarter turn clockwise: the stripe goes from the far edge to the right. Let go, regrip and turn another quarter. Then press Done.",
         turn_ccw: "The same counter-clockwise: two quarter turns, letting go in between. Then press Done.",
-        lean: "Hold the cap level in your hand, stripe towards you. Lean it to the right until a step comes, level it, then lean it to the left.",
+        lean: "Hold the cap level in your hand, stripe towards you. Lean it right until an event comes, level it, lean it left, level it. Three times.",
         tap: "Tap the table next to the cap with a finger 2–3 times, a second apart.",
-        shake: "Pick the cap up and give it 2–3 short shakes.",
+        shake: "Take the cap in your hand and shake it 3 times, a couple of seconds apart, the way you will use it.",
+        handle: "Pick the cap up off the table the way you do before using it, hold it and put it back. 5 times, each a bit differently. Do not turn or lean it on purpose: whatever fires is a false alarm.",
+        sleep: "Put the cap down and do not touch it. Home Assistant now drops the link as after idling: for about 3 minutes the cap dozes off and presses are not seen. When this says Asleep, press the button once. You can skip this.",
         throw: "Toss the cap 10–20 cm up and catch it. You can skip this.",
         press: "Press the button in this order:",
         flip: "Turn the cap over, wait a second, then turn it back.",
@@ -51,7 +53,7 @@ const STRINGS = {
       start: "Start", done: "Done", redo: "Redo", skip: "Skip", next: "Next", close: "Close", report: "Report text",
       paused: "The link dropped. The step starts over when the cap is back.",
       busy: "This cap is being checked in another window.", other: "Check running",
-      stepOf: "Step {n} of {total}", count: "Steps", times: "Times", sec: "s", pick: "Which cap?", angle: "Turn", wrong: "wrong way",
+      stepOf: "Step {n} of {total}", sleepStage: ["Disconnecting…", "Dozing off: do not touch, ~{left} s left", "Asleep: press the button once", "Woke up"], lifts: "Pick-ups", recognised: "Recognised", tries: "Tries: {n}", count: "Steps", times: "Times", sec: "s", pick: "Which cap?", angle: "Turn", wrong: "wrong way",
       status: { pass: "Good", warn: "Remarks", fail: "Failed", skip: "Skipped" },
       summary: "Result", flipStage: ["Lay it flat first", "Turn it over", "Now turn it back", "Done"],
       sug: { title: "Suggested changes", apply: "Apply", err: "Not saved: {e}",
@@ -61,7 +63,7 @@ const STRINGS = {
         multi_press_window: "Your double press came as two presses: allow {value} s between them (now {from} s).",
         shake: "Shake fired by itself ×{count}: turn it off.",
         tilt: "Tilt in the hand fired by itself ×{count}: turn it off." },
-      values: { rest: "{rate} Hz of {asked}, {loss_pct}% lost, noise {noise_dps}°/s, via {via}", turn: "{steps} steps for {angle}°", drift: "{drift_deg_min}°/min" },
+      values: { rest: "{rate} Hz of {asked}, {loss_pct}% lost, noise {noise_dps}°/s, via {via}", turn: "{steps} steps for {angle}°", drift: "{drift_deg_min}°/min", handle: "Pick-ups: {count}.", shake: "{count} of {tries}", sleep: "dozed {doze_s} s" },
       reason: {
         loss: "{loss_pct}% of the frames are lost. Move the cap closer to the receiver ({via}).",
         noise: "The sensor is noisy: the table shakes or the cap was touched.",
@@ -87,6 +89,14 @@ const STRINGS = {
         drift: "The direction drifts {drift_deg_min}°/min.",
         wrong_press: "That was {got}; now {want}.",
         not_detected: "The gesture was not recognised.",
+        shake_missed: "{count} of {tries} shakes recognised.",
+        handle_few: "Picked up {count} of 5 times.",
+        woke_dozing: "It connected while dozing off: it should have slept first.",
+        no_drop: "The link did not drop.",
+        no_sleep: "It did not fall asleep in time. Was it pressed while dozing? Each press starts the 3 minutes over.",
+        no_wake: "The press did not wake it.",
+        long_doze: "It dozed {doze_s} s: was it pressed meanwhile?",
+        no_wake_press: "It woke, but the press did not come as a press.",
         extra: "Something fired that was not asked for: {extra}.",
       } },
     gestures: {
@@ -107,7 +117,7 @@ const STRINGS = {
     reset: "Выровнять направление",
     led: "Диод", button: "Кнопка", rate: "Гц", history: "Последние 10 с",
     check: { title: "Проверка", open: "Проверка",
-      steps: { rest: "Покой", flat: "Исходное положение", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", lean: "Наклон в руке", press: "Кнопка", flip: "Переворот", tap: "Касание", shake: "Встряхивание", throw: "Бросок", drift: "Уход направления" },
+      steps: { rest: "Покой", flat: "Исходное положение", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", handle: "Взять и положить", lean: "Наклон в руке", press: "Кнопка", flip: "Переворот", tap: "Касание", shake: "Встряхивание", throw: "Бросок", drift: "Уход направления", sleep: "Сон и пробуждение" },
       text: {
         identify: "Выбери крышку ниже или нажми на ней кнопку.",
         wake: "Нажми кнопку на крышке, чтобы разбудить её.",
@@ -117,8 +127,10 @@ const STRINGS = {
         turn_cw: "Поверни крышку на столе на четверть оборота по часовой: полоска уйдёт с дальнего края вправо. Отпусти, перехвати и поверни ещё на четверть. Потом нажми «Готово».",
         turn_ccw: "То же против часовой: две четверти оборота, между ними можно отпустить. Потом нажми «Готово».",
         tap: "Постучи пальцем по столу рядом с крышкой 2–3 раза, с паузой в секунду.",
-        shake: "Возьми крышку в руку и коротко встряхни 2–3 раза.",
-        lean: "Держи крышку в руке ровно, полосой к себе. Наклони вправо, пока не придёт шаг, выровняй, потом наклони влево.",
+        shake: "Возьми крышку в руку и встряхни 3 раза с паузой в пару секунд, так, как будешь делать в жизни.",
+        handle: "Возьми крышку со стола, как обычно перед тем, как ей что-то сделать, подержи и положи обратно. 5 раз, каждый раз немного по-разному. Специально не крути и не наклоняй: всё, что сработает, — ложное.",
+        sleep: "Положи крышку и не трогай. Home Assistant сейчас отключит её, как после простоя: около 3 минут она засыпает, и нажатия в это время не видны. Когда здесь появится «Спит», нажми кнопку один раз. Можно пропустить.",
+        lean: "Держи крышку в руке ровно, полосой к себе. Наклони вправо, пока не придёт событие, выровняй, наклони влево, выровняй. Так 3 раза.",
         throw: "Подбрось крышку на 10–20 см и поймай. Этот шаг можно пропустить.",
         press: "Нажми кнопку по порядку:",
         flip: "Переверни крышку на другую сторону, подожди секунду и верни обратно.",
@@ -127,7 +139,7 @@ const STRINGS = {
       start: "Начать", done: "Готово", redo: "Повторить", skip: "Пропустить", next: "Дальше", close: "Закрыть", report: "Текст отчёта",
       paused: "Связь пропала. Шаг начнётся заново, когда крышка вернётся.",
       busy: "Эту крышку уже проверяют в другом окне.", other: "Идёт проверка",
-      stepOf: "Шаг {n} из {total}", count: "Шаги", times: "Раз", sec: "с", pick: "Какую крышку проверяем?", angle: "Поворот", wrong: "не в ту сторону",
+      stepOf: "Шаг {n} из {total}", sleepStage: ["Отключаю…", "Засыпает: не трогай, ещё ~{left} с", "Спит: нажми кнопку один раз", "Проснулась"], lifts: "Подъёмы", recognised: "Распознано", tries: "Попыток: {n}", count: "Шаги", times: "Раз", sec: "с", pick: "Какую крышку проверяем?", angle: "Поворот", wrong: "не в ту сторону",
       status: { pass: "Хорошо", warn: "Есть замечания", fail: "Не прошло", skip: "Пропущено" },
       summary: "Итог", flipStage: ["Сначала положи плашмя", "Переверни", "Теперь верни обратно", "Готово"],
       sug: { title: "Предлагаю изменить", apply: "Применить", err: "Не сохранилось: {e}",
@@ -137,7 +149,7 @@ const STRINGS = {
         multi_press_window: "Твоё двойное нажатие пришло как два одиночных: разрешить {value} с между нажатиями (сейчас {from} с).",
         shake: "Встряхивание срабатывало само ×{count}: выключить.",
         tilt: "Наклон в руке срабатывал сам ×{count}: выключить." },
-      values: { rest: "{rate} Гц из {asked}, потери {loss_pct}%, шум {noise_dps}°/с, через {via}", turn: "{steps} шагов за {angle}°", drift: "{drift_deg_min}°/мин" },
+      values: { rest: "{rate} Гц из {asked}, потери {loss_pct}%, шум {noise_dps}°/с, через {via}", turn: "{steps} шагов за {angle}°", drift: "{drift_deg_min}°/мин", handle: "Подъёмов: {count}.", shake: "{count} из {tries}", sleep: "засыпала {doze_s} с" },
       reason: {
         loss: "Теряется {loss_pct}% кадров. Поставь крышку ближе к приёмнику ({via}).",
         noise: "Датчик шумит: стол дрожит или крышку задели.",
@@ -163,6 +175,14 @@ const STRINGS = {
         drift: "Направление уплывает на {drift_deg_min}°/мин.",
         wrong_press: "Это было «{got}», сейчас нужно «{want}».",
         not_detected: "Жест не распознан.",
+        shake_missed: "Распознано {count} из {tries} встряхиваний.",
+        handle_few: "Подъёмов {count} из 5.",
+        woke_dozing: "Подключилась, пока засыпала: должна была сначала уснуть.",
+        no_drop: "Связь не отключилась.",
+        no_sleep: "Не уснула вовремя. Нажимали, пока засыпала? Каждое нажатие начинает 3 минуты заново.",
+        no_wake: "Нажатие не разбудило крышку.",
+        long_doze: "Засыпала {doze_s} с: нажимали в это время?",
+        no_wake_press: "Проснулась, но нажатие не пришло как нажатие.",
         extra: "Сработало то, о чём не просили: {extra}.",
       } },
     nodevice: "Трики не найден",
@@ -185,7 +205,7 @@ const STRINGS = {
       err: { moving: "Kapsel się rusza: przytrzymaj chwilę nieruchomo", not_flat: "Kapsel nie leży płasko", asleep: "Kapsel śpi: najpierw go obudź", no_data: "Brak danych: obudź kapsel" } },
     reset: "Wyrównaj kierunek", led: "Dioda", button: "Przycisk", rate: "Hz", history: "Ostatnie 10 s",
     check: { title: "Test", open: "Test",
-      steps: { rest: "Spoczynek", flat: "Pozycja wyjściowa", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", lean: "Przechył w dłoni", press: "Przycisk", flip: "Odwrócenie", tap: "Stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", drift: "Dryf kierunku" },
+      steps: { rest: "Spoczynek", flat: "Pozycja wyjściowa", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", handle: "Podnieś i odłóż", lean: "Przechył w dłoni", press: "Przycisk", flip: "Odwrócenie", tap: "Stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", drift: "Dryf kierunku", sleep: "Sen i wybudzenie" },
       text: {
         identify: "Wybierz kapsel poniżej albo naciśnij na nim przycisk.",
         wake: "Naciśnij przycisk na kapslu, żeby go obudzić.",
@@ -195,8 +215,10 @@ const STRINGS = {
         turn_cw: "Obróć kapsel na stole o ćwierć obrotu w prawo: pasek przejdzie z dalekiej krawędzi w prawo. Puść, przełóż palce i obróć o kolejną ćwiartkę. Potem naciśnij Gotowe.",
         turn_ccw: "To samo w lewo: dwie ćwiartki obrotu, między nimi możesz puścić. Potem naciśnij Gotowe.",
         tap: "Stuknij palcem w stół obok kapsla 2–3 razy, co sekundę.",
-        shake: "Weź kapsel do ręki i krótko potrząśnij 2–3 razy.",
-        lean: "Trzymaj kapsel poziomo w dłoni, paskiem do siebie. Przechyl w prawo, aż przyjdzie krok, wyrównaj, potem przechyl w lewo.",
+        shake: "Weź kapsel do ręki i potrząśnij nim 3 razy z kilkusekundową przerwą, tak jak na co dzień.",
+        handle: "Podnieś kapsel ze stołu tak jak zwykle, zanim coś nim zrobisz, przytrzymaj i odłóż. 5 razy, za każdym razem trochę inaczej. Niczego specjalnie nie obracaj ani nie przechylaj: wszystko, co zadziała, jest fałszywe.",
+        sleep: "Odłóż kapsel i nie dotykaj go. Home Assistant rozłączy go teraz jak po bezczynności: przez około 3 minuty zasypia i naciśnięcia nie są widoczne. Gdy pojawi się tu „Śpi”, naciśnij przycisk raz. Można pominąć.",
+        lean: "Trzymaj kapsel poziomo w dłoni, paskiem do siebie. Przechyl w prawo, aż przyjdzie zdarzenie, wyrównaj, przechyl w lewo, wyrównaj. Tak 3 razy.",
         throw: "Podrzuć kapsel na 10–20 cm i złap. Ten krok możesz pominąć.",
         press: "Naciśnij przycisk po kolei:",
         flip: "Odwróć kapsel na drugą stronę, poczekaj sekundę i odwróć z powrotem.",
@@ -205,7 +227,7 @@ const STRINGS = {
       start: "Start", done: "Gotowe", redo: "Powtórz", skip: "Pomiń", next: "Dalej", close: "Zamknij", report: "Tekst raportu",
       paused: "Łącze zerwane. Krok zacznie się od nowa, gdy kapsel wróci.",
       busy: "Ten kapsel jest już sprawdzany w innym oknie.", other: "Trwa test",
-      stepOf: "Krok {n} z {total}", count: "Kroki", times: "Razy", sec: "s", pick: "Który kapsel?", angle: "Obrót", wrong: "w złą stronę",
+      stepOf: "Krok {n} z {total}", sleepStage: ["Rozłączam…", "Zasypia: nie dotykaj, jeszcze ~{left} s", "Śpi: naciśnij przycisk raz", "Obudzony"], lifts: "Podniesienia", recognised: "Rozpoznane", tries: "Prób: {n}", count: "Kroki", times: "Razy", sec: "s", pick: "Który kapsel?", angle: "Obrót", wrong: "w złą stronę",
       status: { pass: "Dobrze", warn: "Uwagi", fail: "Nie przeszło", skip: "Pominięto" },
       summary: "Wynik", flipStage: ["Najpierw połóż płasko", "Odwróć", "Teraz odwróć z powrotem", "Gotowe"],
       sug: { title: "Proponowane zmiany", apply: "Zastosuj", err: "Nie zapisano: {e}",
@@ -215,7 +237,7 @@ const STRINGS = {
         multi_press_window: "Twoje podwójne naciśnięcie przyszło jako dwa pojedyncze: pozwól na {value} s między nimi (teraz {from} s).",
         shake: "Potrząśnięcie działało samo ×{count}: wyłącz je.",
         tilt: "Przechył w dłoni działał sam ×{count}: wyłącz go." },
-      values: { rest: "{rate} Hz z {asked}, utrata {loss_pct}%, szum {noise_dps}°/s, przez {via}", turn: "{steps} kroków na {angle}°", drift: "{drift_deg_min}°/min" },
+      values: { rest: "{rate} Hz z {asked}, utrata {loss_pct}%, szum {noise_dps}°/s, przez {via}", turn: "{steps} kroków na {angle}°", drift: "{drift_deg_min}°/min", handle: "Podniesień: {count}.", shake: "{count} z {tries}", sleep: "zasypiał {doze_s} s" },
       reason: {
         loss: "Ginie {loss_pct}% ramek. Przysuń kapsel bliżej odbiornika ({via}).",
         noise: "Czujnik szumi: stół drży albo kapsel był dotknięty.",
@@ -241,6 +263,14 @@ const STRINGS = {
         drift: "Kierunek ucieka o {drift_deg_min}°/min.",
         wrong_press: "To było „{got}”, teraz „{want}”.",
         not_detected: "Gest nie został rozpoznany.",
+        shake_missed: "Rozpoznano {count} z {tries} potrząśnięć.",
+        handle_few: "Podniesień: {count} z 5.",
+        woke_dozing: "Połączył się, zanim zasnął: powinien najpierw zasnąć.",
+        no_drop: "Połączenie się nie rozłączyło.",
+        no_sleep: "Nie zasnął na czas. Czy był naciskany w trakcie? Każde naciśnięcie zaczyna 3 minuty od nowa.",
+        no_wake: "Naciśnięcie go nie obudziło.",
+        long_doze: "Zasypiał {doze_s} s: czy był w tym czasie naciskany?",
+        no_wake_press: "Obudził się, ale naciśnięcie nie przyszło jako naciśnięcie.",
         extra: "Zadziałało coś, o co nie proszono: {extra}.",
       } },
     nodevice: "Nie znaleziono kapsla Triki",
@@ -1001,6 +1031,16 @@ class TrikiCard extends HTMLElement {
       if (run.start()) {
         chk.ref = this._target ? [...this._target] : null; // the hint moves from here
         chk.err = "";
+        if (run.step.id === "sleep") {
+          // the server drops the link as after idling; the step follows the status
+          try {
+            await this._send({ type: "triki/check", action: "sleep", device_id: chk.id, session: chk.session });
+          } catch (err) {
+            const e = err?.error || err;
+            chk.err = e?.message || e?.code || "?";
+            run.redo();
+          }
+        }
       }
     } else if (action === "done") {
       if (run.step.external) {
@@ -1067,7 +1107,11 @@ class TrikiCard extends HTMLElement {
         el.checkPanel.querySelectorAll("li").forEach((li, i) => li.classList.toggle("ok", i < live.got));
       }
       if ((v.id === "rest" || v.id === "drift") && live.moved) set("cHint", t.reason.moved);
-      if (["tap", "shake", "throw", "lean"].includes(v.id)) set("cCount", `${live.count} / ${live.want}`);
+      if (["tap", "shake", "throw", "lean", "handle"].includes(v.id)) set("cCount", `${live.count} / ${live.want}`);
+      if (v.id === "shake") set("cHint", live.tries > live.count ? this._fmt(t.tries, { n: live.tries }) : "");
+      if (v.id === "sleep" && v.phase === "running") {
+        set("cHint", this._fmt(t.sleepStage[live.stage] || "", { left: live.left ?? "—" }));
+      }
       if (v.id === "lean") set("cHint", live.hint ? t.reason[live.hint] : "");
       if (v.extra && v.phase === "running") {
         const list = Object.entries(v.extra).map(([k, n]) => `${this._t.gestures[k] || k} ×${n}`).join(", ");
@@ -1123,9 +1167,10 @@ class TrikiCard extends HTMLElement {
     let live = "";
     if (v.id === "turn_cw" || v.id === "turn_ccw") {
       live = `<div class="big"><div><small>${t.count}</small><b id="cSteps">0</b></div><div><small>${t.angle}</small><b id="cAngle">0°</b></div></div><div class="hint" id="cWrong"></div>`;
-    } else if (["tap", "shake", "throw", "lean"].includes(v.id)) {
-      live = `<div class="big"><div><small>${v.id === "lean" ? t.count : t.times}</small><b id="cCount">0 / ${v.live.want}</b></div></div><div class="hint" id="cHint"></div>`;
-    } else if (["tilt", "flip", "press", "rest", "drift"].includes(v.id)) {
+    } else if (["tap", "shake", "throw", "lean", "handle"].includes(v.id)) {
+      const label = { lean: t.count, shake: t.recognised, handle: t.lifts }[v.id] || t.times;
+      live = `<div class="big"><div><small>${label}</small><b id="cCount">0 / ${v.live.want}</b></div></div><div class="hint" id="cHint"></div>`;
+    } else if (["tilt", "flip", "press", "rest", "drift", "sleep"].includes(v.id)) {
       live = `<div class="hint" id="cHint"></div>`;
     }
     let res = "", btns = "";
@@ -1164,6 +1209,9 @@ class TrikiCard extends HTMLElement {
       if (id === "rest" && r.values) parts.push(this._fmt(t.values.rest, vals));
       if ((id === "turn_cw" || id === "turn_ccw") && r.values && r.reason !== "steps") parts.push(this._fmt(t.values.turn, vals));
       if (id === "drift" && r.values && r.reason !== "drift") parts.push(this._fmt(t.values.drift, vals));
+      if (id === "handle" && r.values) parts.push(this._fmt(t.values.handle, vals));
+      if (id === "shake" && r.values && r.reason !== "shake_missed") parts.push(this._fmt(t.values.shake, vals));
+      if (id === "sleep" && r.values?.doze_s != null && r.reason !== "long_doze") parts.push(this._fmt(t.values.sleep, vals));
     }
     return parts.join(" ");
   }

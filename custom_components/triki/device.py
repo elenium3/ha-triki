@@ -289,6 +289,9 @@ class TrikiDevice:
         # a guided check from the card: gestures reach only that card, the stream
         # stays at full rate and the link is not dropped as idle
         self._check_owner: str | None = None
+        # the check's sleep step: the link was dropped as after idling, and this
+        # check must not skip the wait for sleep that it is there to test
+        self._check_sleeping = False
         self._check_until = 0.0
         self._unsub_check: CALLBACK_TYPE | None = None
         # live motion (the Lovelace card): called at most every LIVE_INTERVAL_S
@@ -419,8 +422,19 @@ class TrikiDevice:
             self._end_check()
 
     @callback
+    def check_sleep(self, owner: str) -> bool:
+        """The check's sleep step: drop the link now, as after idling."""
+        if not self.checking or self._check_owner != owner or not self.connected:
+            return False
+        _LOGGER.debug("%s: the check asks it to sleep", self.name)
+        self._check_sleeping = True
+        self._sleep_now()
+        return True
+
+    @callback
     def _end_check(self) -> None:
         self._cancel_timer("_unsub_check")
+        self._check_sleeping = False
         self._check_owner = None
         self._check_until = 0.0
         self._last_activity = time.monotonic()  # idle timers count from the end of the check
@@ -767,7 +781,7 @@ class TrikiDevice:
         now = time.monotonic()
         age = bluetooth.MONOTONIC_TIME() - service_info.time
         reason = None
-        if self._await_sleep and self.checking:
+        if self._await_sleep and self.checking and not self._check_sleeping:
             # a card is checking this token: the owner is pressing it to wake it
             _LOGGER.debug("%s: a check is open, reconnecting", self.name)
             self._await_sleep = False
@@ -893,6 +907,7 @@ class TrikiDevice:
             if isinstance(source, str):
                 self.stats.last_source = source
             self.connected = True
+            self._check_sleeping = False  # it slept and woke: the sleep step is over
             self._last_activity = self._session_t0 = time.monotonic()
             self.stats.connects += 1
             self.stats.last_link_s = round(t_link - t0, 2)
@@ -1378,6 +1393,15 @@ class TrikiDevice:
         self._unsub_idle = async_call_later(self.hass, _IDLE_CHECK_S, self._idle_check)
 
     @callback
+    def _sleep_now(self) -> None:
+        """Drop the link and let the token doze off and sleep before reconnecting."""
+        self._await_sleep = True
+        self._awake_seen = self._doze_started = time.monotonic()
+        self._arm_doze_check()
+        self._no_connect_until = time.monotonic() + _IDLE_COOLDOWN_S
+        self._create_task(self.async_disconnect(), "idle")
+
+    @callback
     def _idle_check(self, _now: Any) -> None:
         self._cancel_timer("_unsub_idle")
         if not self.connected:
@@ -1386,11 +1410,7 @@ class TrikiDevice:
         sleep_timeout, idle_timeout = self.sleep_timeout, self.options.idle_timeout
         if 0 < sleep_timeout <= idle:
             _LOGGER.debug("%s: idle for %ss, disconnecting", self.name, sleep_timeout)
-            self._await_sleep = True
-            self._awake_seen = self._doze_started = time.monotonic()
-            self._arm_doze_check()
-            self._no_connect_until = time.monotonic() + _IDLE_COOLDOWN_S
-            self._create_task(self.async_disconnect(), "idle")
+            self._sleep_now()
             return
         if (
             0 < idle_timeout <= idle

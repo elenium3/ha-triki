@@ -205,7 +205,7 @@ def ws_calibrate(
 _CHECK_SCHEMA: dict[Any, Any] = {
     vol.Required("type"): f"{DOMAIN}/check",
     vol.Optional("device_id"): str,
-    vol.Required("action"): vol.In(["start", "stop"]),
+    vol.Required("action"): vol.In(["start", "stop", "sleep"]),
     vol.Required("session"): vol.All(str, vol.Length(min=8, max=64)),
 }
 
@@ -217,14 +217,19 @@ def ws_check(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
 ) -> None:
     """The card's guided check. ``start`` begins or renews it (the card renews
-    every few seconds; it lapses on its own otherwise), ``stop`` ends it. While it
-    runs, gestures reach the card only, not automations."""
+    every few seconds; it lapses on its own otherwise), ``stop`` ends it, ``sleep``
+    drops the link as after idling for the sleep step. While it runs, gestures
+    reach the card only, not automations."""
     dev = _find(hass, msg.get("device_id"))
     if dev is None:
         connection.send_error(msg["id"], "not_found", "No such Triki token")
         return
     if msg["action"] == "stop":
         dev.stop_check(msg["session"])
+    elif msg["action"] == "sleep":
+        if not dev.check_sleep(msg["session"]):
+            connection.send_error(msg["id"], "not_ready", "Not connected, or not this check")
+            return
     elif not dev.start_check(msg["session"]):
         connection.send_error(msg["id"], "busy", "Another check of this token is running")
         return

@@ -154,3 +154,53 @@ async def test_link_source_name_drops_the_address(hass: HomeAssistant, setup) ->
         assert dev.link_source_name == "hm-ble-esp32"
     with patch.object(device_mod.bluetooth, "async_scanner_by_source", return_value=None):
         assert dev.link_source_name is None  # never the bare address
+
+
+async def test_the_sleep_step_drops_the_link_and_keeps_the_wait(
+    hass: HomeAssistant, setup, hass_ws_client
+) -> None:
+    """The check's sleep step: the link drops as after idling, and the open check
+    does not reconnect to the dozing token (the step is there to test the wait)."""
+    from unittest.mock import AsyncMock
+
+    from .conftest import ESTABLISH, make_client, service_info
+
+    dev = setup.runtime_data
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "triki/check", "action": "start", "session": SESSION})
+    assert (await ws.receive_json())["success"]
+    await ws.send_json({"id": 2, "type": "triki/check", "action": "sleep", "session": SESSION})
+    msg = await ws.receive_json()
+    assert not msg["success"] and msg["error"]["code"] == "not_ready"  # not connected yet
+
+    await connect(hass, setup)
+    await ws.send_json({"id": 3, "type": "triki/check", "action": "sleep", "session": SESSION})
+    assert (await ws.receive_json())["success"]
+    await hass.async_block_till_done()
+    assert not dev.connected
+    assert dev.readiness == "dozing"
+    assert dev.checking
+
+    dev._last_attempt = dev._no_connect_until = 0
+    with patch(ESTABLISH, AsyncMock(return_value=make_client())) as est:
+        dev._on_advertisement(service_info(), None)  # still advertising: dozing
+        await hass.async_block_till_done()
+        assert est.await_count == 0
+        dev._awake_seen -= 30  # it slept; the next advert is a press
+        dev._on_advertisement(service_info(), None)
+        await hass.async_block_till_done()
+    assert est.await_count == 1
+    assert dev.connected
+    assert not dev._check_sleeping
+
+
+async def test_only_the_checking_card_can_ask_for_sleep(
+    hass: HomeAssistant, setup, hass_ws_client
+) -> None:
+    dev = setup.runtime_data
+    await connect(hass, setup)
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "triki/check", "action": "sleep", "session": SESSION})
+    msg = await ws.receive_json()
+    assert not msg["success"]
+    assert dev.connected

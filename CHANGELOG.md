@@ -7,6 +7,11 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- The card's check has new steps: **Pick up and put down** (gestures that fire
+  while the cap is picked up are reported as false), **Sleep and wake**
+  (optional: drops the link as after idling, follows the doze and checks that
+  a press wakes the cap). Shake now asks for three shakes and reports the
+  misses, the lean for three each way.
 - **Readiness** sensor: whether a press reaches Home Assistant now.
   *Connected*; *Dozing off: presses not seen* for about 3 minutes after an
   idle disconnect; *Asleep: a press wakes it*; *Not responding*. The card
