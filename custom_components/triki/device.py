@@ -155,6 +155,10 @@ _BATTERY_CHECK_S = 60.0  # how often to look for an idle moment once a refresh i
 _SILENT_AFTER_DROP_S = 60.0
 CALIBRATION_KEY = "calibration"
 _CHECK_TTL_S = 30.0  # a guided check ends unless its card renews it this often
+# The sleep step waits out the doze with nothing to do in the card, often in a
+# background tab whose timers the browser slows to one a minute: hold the check
+# for the whole step from here.
+_CHECK_SLEEP_TTL_S = 420.0
 _BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before pausing
 # Live motion for the card: at most this often, and only while someone listens.
 LIVE_INTERVAL_S = 1 / 30
@@ -393,9 +397,7 @@ class TrikiDevice:
             return False
         started = not self.checking
         self._check_owner = owner
-        self._check_until = time.monotonic() + _CHECK_TTL_S
-        self._cancel_timer("_unsub_check")
-        self._unsub_check = async_call_later(self.hass, _CHECK_TTL_S, self._check_expired)
+        self._hold_check(_CHECK_TTL_S)
         if started:
             _LOGGER.debug("%s: guided check started", self.name)
             self._last_activity = time.monotonic()
@@ -428,13 +430,25 @@ class TrikiDevice:
             return False
         _LOGGER.debug("%s: the check asks it to sleep", self.name)
         self._check_sleeping = True
+        self._hold_check(_CHECK_SLEEP_TTL_S)
         self._sleep_now()
         return True
 
     @callback
+    def _hold_check(self, ttl: float) -> None:
+        """Keep the check for ``ttl`` more, never less than it already has."""
+        until = max(self._check_until, time.monotonic() + ttl)
+        self._check_until = until
+        self._cancel_timer("_unsub_check")
+        self._unsub_check = async_call_later(
+            self.hass, until - time.monotonic(), self._check_expired
+        )
+
+    @callback
     def _end_check(self) -> None:
         self._cancel_timer("_unsub_check")
-        self._check_sleeping = False
+        # _check_sleeping stays until the next link: a check that ends or lapses
+        # mid-doze and starts again must not skip the wait it was testing
         self._check_owner = None
         self._check_until = 0.0
         self._last_activity = time.monotonic()  # idle timers count from the end of the check

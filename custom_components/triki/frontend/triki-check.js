@@ -273,7 +273,8 @@ export class CheckRun {
       for (const [k, n] of Object.entries(res.extraCounts || {})) extra[k] = (extra[k] || 0) + n;
     }
     if (o.shake && (extra.shake || 0) >= FALSE_ALARMS) out.push({ key: "shake", value: false, from: true, count: extra.shake });
-    if (o.tilt && (extra.tilt || 0) >= FALSE_ALARMS) out.push({ key: "tilt", value: false, from: true, count: extra.tilt });
+    const tilts = (extra.tilt_left || 0) + (extra.tilt_right || 0);
+    if (o.tilt && tilts >= FALSE_ALARMS) out.push({ key: "tilt", value: false, from: true, count: tilts });
     return out;
   }
 
@@ -424,7 +425,7 @@ export class CheckRun {
     if (TILT.includes(kind)) {
       // a lean step outside the lean step: tilt in the hand fired by itself
       st.extra ??= {};
-      st.extra.tilt = (st.extra.tilt || 0) + 1;
+      st.extra[kind] = (st.extra[kind] || 0) + 1;
       return;
     }
     if (GESTURES.includes(kind) && !(EXPECTED[s.id] || []).includes(kind)) {

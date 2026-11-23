@@ -204,3 +204,24 @@ async def test_only_the_checking_card_can_ask_for_sleep(
     msg = await ws.receive_json()
     assert not msg["success"]
     assert dev.connected
+
+
+async def test_the_sleep_step_holds_the_check_without_renewals(hass: HomeAssistant, setup) -> None:
+    """A background tab renews once a minute at best: the check must outlast the
+    doze, and a check that lapses and starts again must still wait for sleep."""
+    dev = setup.runtime_data
+    await connect(hass, setup)
+    assert dev.start_check(SESSION)
+    t0 = device_mod.time.monotonic()
+    assert dev.check_sleep(SESSION)
+    await hass.async_block_till_done()
+    later = t0 + 200
+    with patch.object(device_mod.time, "monotonic", return_value=later):
+        async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=200))
+        await hass.async_block_till_done()
+        assert dev.checking  # a renewal at 30 s would have been missed
+        assert dev.start_check(SESSION)  # a renewal does not shorten the hold
+        assert dev._check_until >= t0 + device_mod._CHECK_SLEEP_TTL_S - 1
+    dev._end_check()  # lapsed after all, then the card starts again
+    assert dev.start_check(SESSION)
+    assert dev._check_sleeping  # the wait for sleep is not skipped
