@@ -18,6 +18,7 @@ from .const import (
     CONF_RATE,
     CONF_SHAKE,
     CONF_SLEEP_TIMEOUT,
+    CONF_TILT,
     CONF_WAKE_AS_PRESS,
     DEFAULT_IDLE_TIMEOUT,
     DEFAULT_INVERT_ROTATION,
@@ -28,6 +29,7 @@ from .const import (
     DEFAULT_MULTI_PRESS_WINDOW,
     DEFAULT_SHAKE,
     DEFAULT_SLEEP_TIMEOUT,
+    DEFAULT_TILT,
     DEFAULT_WAKE_AS_PRESS,
 )
 from .protocol import DEFAULT_RATE, SUPPORTED_RATES
@@ -43,6 +45,7 @@ class TrikiOptions:
     wake_as_press: bool = DEFAULT_WAKE_AS_PRESS
     knob: bool = DEFAULT_KNOB
     shake: bool = DEFAULT_SHAKE
+    tilt: bool = DEFAULT_TILT
     motion_gestures: bool = DEFAULT_MOTION_GESTURES
     multi_press: bool = DEFAULT_MULTI_PRESS
     multi_press_window: float = DEFAULT_MULTI_PRESS_WINDOW
@@ -65,6 +68,7 @@ class TrikiOptions:
             wake_as_press=bool(o.get(CONF_WAKE_AS_PRESS, DEFAULT_WAKE_AS_PRESS)),
             knob=bool(o.get(CONF_KNOB, DEFAULT_KNOB)),
             shake=bool(o.get(CONF_SHAKE, DEFAULT_SHAKE)),
+            tilt=bool(o.get(CONF_TILT, DEFAULT_TILT)),
             motion_gestures=bool(o.get(CONF_MOTION_GESTURES, DEFAULT_MOTION_GESTURES)),
             multi_press=bool(o.get(CONF_MULTI_PRESS, DEFAULT_MULTI_PRESS)),
             multi_press_window=max(

@@ -47,6 +47,8 @@ async def async_get_config_entry_diagnostics(
             "roll": dev.roll,
         },
         "link": asdict(dev.stats),
+        "link_via": dev.link_source_name,
+        "shakes": list(dev.shake_log),
         "advertisements": dev.advertisement_cadence,
         "last_advertisement": None
         if info is None

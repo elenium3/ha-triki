@@ -2,13 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
+from pathlib import Path
+
+from aiohttp import web
 from bleak_retry_connector import close_stale_connections_by_address
 from homeassistant.components import bluetooth
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_ADDRESS, EVENT_HOMEASSISTANT_STOP, Platform
 from homeassistant.core import Event, HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.typing import ConfigType
 
 from .const import (
     CONF_IDLE_TIMEOUT,
@@ -24,6 +32,7 @@ from .const import (
 )
 from .device import TrikiDevice
 from .models import TrikiOptions
+from .websocket import async_register as async_register_websocket
 
 PLATFORMS = [
     Platform.BINARY_SENSOR,
@@ -33,6 +42,32 @@ PLATFORMS = [
 ]
 
 type TrikiConfigEntry = ConfigEntry[TrikiDevice]
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+# The live card (custom:triki-card) and its 3D model, served by the integration.
+FRONTEND_URL = f"/{DOMAIN}_frontend"
+FRONTEND_DIR = Path(__file__).parent / "frontend"
+FRONTEND_FILES = (
+    "triki-card.js",
+    "triki-cap.js",
+    "triki-check.js",
+    "triki-three.js",
+    "triki.glb",
+    "tex_metal.webp",
+    "tex_resin.webp",
+)
+
+
+async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
+    async_register_websocket(hass)
+    # The content hash in the URL changes after an update with a restart; a frontend-only
+    # update between restarts reaches the browser through "no-cache" (see the view).
+    card_hash = await hass.async_add_executor_job(_card_hash)
+    hass.http.register_view(TrikiFrontendView())
+    if "frontend" in hass.config.components:
+        add_extra_js_url(hass, f"{FRONTEND_URL}/triki-card.js?v={card_hash}")
+    return True
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> bool:
@@ -77,6 +112,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: TrikiConfigEntry) -> boo
 
     entry.async_on_unload(hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _async_stop))
     return True
+
+
+class TrikiFrontendView(HomeAssistantView):
+    """The card's files, revalidated by the browser on every load.
+
+    A static path without cache headers still let browsers keep the files by their own
+    heuristic: after a frontend-only update the owner saw the old model until the cache
+    expired. "no-cache" makes the browser ask each time; an unchanged file costs a 304.
+    """
+
+    url = FRONTEND_URL + "/{filename}"
+    name = "triki:frontend"
+    requires_auth = False  # loaded by the browser as module and texture URLs
+
+    async def get(self, _request: web.Request, filename: str) -> web.StreamResponse:
+        if filename not in FRONTEND_FILES:  # a fixed list: no paths, no other files
+            raise web.HTTPNotFound
+        return web.FileResponse(FRONTEND_DIR / filename, headers={"Cache-Control": "no-cache"})
+
+
+def _card_hash() -> str:
+    digest = hashlib.sha256()
+    for name in FRONTEND_FILES:
+        digest.update((FRONTEND_DIR / name).read_bytes())
+    return digest.hexdigest()[:12]
 
 
 def _async_update_sleep_issue(

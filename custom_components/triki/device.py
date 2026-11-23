@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import re
 import time
 from collections import deque
 from collections.abc import Callable, Coroutine
@@ -34,13 +35,16 @@ from bleak_retry_connector import (
     establish_connection,
 )
 from homeassistant.components import bluetooth
+from homeassistant.components.bluetooth import BaseHaRemoteScanner
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import EVENT_HOMEASSISTANT_STARTED
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.typing import UNDEFINED
+from homeassistant.util import dt as dt_util
 
 from .capture import Capture
 from .const import (
@@ -58,6 +62,7 @@ from .const import (
 )
 from .gestures import GestureDetector
 from .models import TrikiOptions
+from .orientation import CalibrationError, Orientation
 from .protocol import (
     BATTERY_LEVEL_UUID,
     CTRL_UUID,
@@ -78,6 +83,12 @@ _LOGGER = logging.getLogger(__name__)
 _FRESH_ADV_S = 10.0
 _IDLE_CHECK_S = 2.0
 _RECONNECT_BACKOFF_S = 3.0
+# Right after Home Assistant starts, the proxies have not reported the token yet,
+# so a wake-up heard only by the host's own adapter would link through it, often
+# far weaker (−85 dBm on hci0 after a restart on 2026-11-18). An advert through a
+# local adapter waits this long after the start for a proxy to hear it too.
+_PROXY_GRACE_S = 30.0
+_SHAKE_LOG_LEN = 3  # recorded shakes kept for diagnostics
 # Home Assistant only calls advertisement callbacks when the advertised data
 # changes. Triki always advertises the same payload, so after the first wake-up
 # the callback goes silent for minutes. We therefore also poll the last seen
@@ -128,7 +139,21 @@ _BATTERY_CHECK_S = 60.0  # how often to look for an idle moment once a refresh i
 # minutes. One that stays silent this long has locked up (seen with a weak
 # cell: nothing until the cell is pulled) or was carried out of range.
 _SILENT_AFTER_DROP_S = 60.0
+CALIBRATION_KEY = "calibration"
+_CHECK_TTL_S = 30.0  # a guided check ends unless its card renews it this often
 _BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before pausing
+# Live motion for the card: at most this often, and only while someone listens.
+LIVE_INTERVAL_S = 1 / 30
+# The pose is integrated on the token's sample clock, not on arrival times. A proxy
+# sometimes holds notifications back for a second or two and then delivers them in a
+# burst; on arrival times that is one long gap (dropped by the filter) and then frames
+# an instant apart, so the turn made meanwhile was lost. The sample clock steps one
+# sample period per frame and only re-syncs to arrival time after a long silence.
+CLOCK_RESYNC_S = 5.0
+# The LSM6DSL runs about 2 % faster than its nominal rate (53.0 frames/s at 52 Hz on
+# the owner's tokens); the factor is measured per token over windows of this length.
+ODR_WINDOW_S = 20.0
+ODR_SCALE_RANGE = (0.98, 1.06)
 
 
 @dataclass(slots=True)
@@ -145,7 +170,7 @@ class LinkStats:
     rate_switches: int = 0  # idle <-> active stream rate changes over the live link
     led_write_retries: int = 0  # LED writes that needed a second (or third) try
     parser_dropped_bytes: int = 0
-    last_source: str | None = None  # scanner the last connect went through
+    last_source: str | None = None  # scanner the last link went through (the advert's until known)
     last_link_s: float | None = None  # time to establish the last link
     last_session_s: float | None = None  # how long the last link lasted
 
@@ -188,6 +213,7 @@ class TrikiDevice:
             multi_press=options.multi_press,
             knob=options.knob,
             shake=options.shake,
+            tilt=options.tilt,
         )
         self._capture = Capture(hass, name) if options.capture else None
 
@@ -213,7 +239,12 @@ class TrikiDevice:
         self._battery_refreshed = float("-inf")
         self._battery_event = asyncio.Event()  # set by a battery notification
         self._battery_pause = False  # the stream is stopped for a measurement right now
+        self._pause_level: int | None = None  # the highest level reported in this pause
         self._unsub_adv: CALLBACK_TYPE | None = None
+        self._unsub_started: CALLBACK_TYPE | None = None
+        self._proxy_grace_until = 0.0
+        # the stream around each recent shake, for diagnostics (see SHAKE_RECORD_S)
+        self.shake_log: deque[dict[str, Any]] = deque(maxlen=_SHAKE_LOG_LEN)
         self._unsub_poll: CALLBACK_TYPE | None = None
         self._unsub_idle: CALLBACK_TYPE | None = None
         self._unsub_battery: CALLBACK_TYPE | None = None
@@ -222,7 +253,23 @@ class TrikiDevice:
         self._streaming = False
 
         self._state_listeners: list[Callable[[], None]] = []
-        self._event_listeners: list[Callable[[str, dict[str, Any]], None]] = []
+        # (callback, also while a guided check runs)
+        self._event_listeners: list[tuple[Callable[[str, dict[str, Any]], None], bool]] = []
+        # a guided check from the card: gestures reach only that card, the stream
+        # stays at full rate and the link is not dropped as idle
+        self._check_owner: str | None = None
+        self._check_until = 0.0
+        self._unsub_check: CALLBACK_TYPE | None = None
+        # live motion (the Lovelace card): called at most every LIVE_INTERVAL_S
+        self._motion_listeners: list[Callable[[dict[str, Any]], None]] = []
+        self._orientation = Orientation()
+        self._clk_t: float | None = None  # sample-clock time of the last frame
+        self._odr_scale = 1.0
+        self._odr_anchor: tuple[float, int, int] | None = None  # (arrival, frames, rate)
+        self._logo_angle: float | None = None
+        self._load_calibration()
+        self._last_sample: Sample | None = None
+        self._last_live_pub = 0.0
 
         # public state
         self.connected = False
@@ -264,9 +311,189 @@ class TrikiDevice:
         return lambda: self._state_listeners.remove(cb)
 
     @callback
-    def async_add_event_listener(self, cb: Callable[[str, dict[str, Any]], None]) -> CALLBACK_TYPE:
-        self._event_listeners.append(cb)
-        return lambda: self._event_listeners.remove(cb)
+    def async_add_event_listener(
+        self, cb: Callable[[str, dict[str, Any]], None], *, during_check: bool = False
+    ) -> CALLBACK_TYPE:
+        """Gestures as they are recognised.
+
+        While a guided check runs (see :meth:`start_check`) only listeners added
+        with ``during_check`` hear them, and nothing goes on the bus: turning the
+        token for the check must not dim the lights.
+        """
+        item = (cb, during_check)
+        self._event_listeners.append(item)
+        return lambda: self._event_listeners.remove(item)
+
+    @property
+    def link_source_name(self) -> str | None:
+        """The name of the scanner (adapter or proxy) the current link went through."""
+        source = self.stats.last_source
+        if not self.connected or not source:
+            return None
+        scanner = bluetooth.async_scanner_by_source(self.hass, source)
+        name = getattr(scanner, "name", None)
+        if not name:
+            return None  # an address alone says nothing to a person, and it is private
+        # HA names scanners "hm-ble-esp32 (D0:EF:76:33:5A:0E)": keep the name only
+        return re.sub(r"\s*\((?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\)\s*$", "", name) or None
+
+    # ------------------------------------------------------------ guided check
+    @property
+    def checking(self) -> bool:
+        return self._check_owner is not None and time.monotonic() < self._check_until
+
+    @property
+    def check_owner(self) -> str | None:
+        return self._check_owner if self.checking else None
+
+    @callback
+    def start_check(self, owner: str) -> bool:
+        """Start or renew a guided check for ``owner`` (one card session).
+
+        Returns False when another session holds a check that has not expired.
+        A check ends by itself ``_CHECK_TTL_S`` after the last renewal, so a
+        closed browser tab cannot leave the token silent.
+        """
+        if self.checking and self._check_owner != owner:
+            return False
+        started = not self.checking
+        self._check_owner = owner
+        self._check_until = time.monotonic() + _CHECK_TTL_S
+        self._cancel_timer("_unsub_check")
+        self._unsub_check = async_call_later(self.hass, _CHECK_TTL_S, self._check_expired)
+        if started:
+            _LOGGER.debug("%s: guided check started", self.name)
+            self._last_activity = time.monotonic()
+            if (
+                self.connected
+                and self.stream_rate != self.options.rate
+                and not self._rate_write_pending
+            ):
+                self._create_task(self._async_set_rate(self.options.rate), "checkrate")
+            self._notify()
+        return True
+
+    @callback
+    def stop_check(self, owner: str) -> None:
+        if self._check_owner != owner:
+            return
+        self._end_check()
+
+    @callback
+    def _check_expired(self, _now: Any) -> None:
+        self._unsub_check = None
+        if self._check_owner is not None and time.monotonic() >= self._check_until:
+            _LOGGER.debug("%s: guided check expired", self.name)
+            self._end_check()
+
+    @callback
+    def _end_check(self) -> None:
+        self._cancel_timer("_unsub_check")
+        self._check_owner = None
+        self._check_until = 0.0
+        self._last_activity = time.monotonic()  # idle timers count from the end of the check
+        self._notify()
+
+    @callback
+    def async_add_motion_listener(self, cb: Callable[[dict[str, Any]], None]) -> CALLBACK_TYPE:
+        """Live motion snapshots (see :meth:`motion_snapshot`) while frames arrive."""
+        self._motion_listeners.append(cb)
+        return lambda: self._motion_listeners.remove(cb)
+
+    def motion_snapshot(self) -> dict[str, Any] | None:
+        """Pose and the last frame, for the live card; None before any frame."""
+        s = self._last_sample
+        if s is None or not self._orientation.ready:
+            return None
+        bias = self._detector.gyro_bias or (0.0, 0.0, 0.0)
+        roll, pitch, yaw = self._orientation.euler
+        return {
+            "quaternion": [round(c, 5) for c in self._orientation.quaternion],
+            "euler": [round(roll, 1), round(pitch, 1), round(yaw, 1)],
+            "gyro": [round(s.gx - bias[0], 1), round(s.gy - bias[1], 1), round(s.gz - bias[2], 1)],
+            "accel": [round(s.ax, 3), round(s.ay, 3), round(s.az, 3)],
+            "button": s.button,
+            # for the guided check's link figures: frames since setup, the rate
+            # asked for and the host's clock (frames over time = the real rate)
+            "frames": self.stats.frames,
+            "rate": self.stream_rate,
+            "ts": round(time.monotonic(), 3),
+        }
+
+    # ------------------------------------------------------------ calibration
+    def _load_calibration(self) -> None:
+        cal = self.entry.data.get(CALIBRATION_KEY) or {}
+        mount = cal.get("mount")
+        if isinstance(mount, list) and len(mount) == 4:
+            self._orientation.mount = (
+                float(mount[0]),
+                float(mount[1]),
+                float(mount[2]),
+                float(mount[3]),
+            )
+        logo = cal.get("logo")
+        self._logo_angle = float(logo) if isinstance(logo, (int, float)) else None
+
+    @property
+    def logo_angle(self) -> float | None:
+        """Degrees: how the metal logo is turned against the PCB on this token.
+
+        The crown is crimped on at any angle, so this differs from token to token.
+        It is set by the owner in the card (matching a picture to the real cap) and
+        only used to draw the model.
+        """
+        return self._logo_angle
+
+    @property
+    def calibrated(self) -> bool:
+        return self._orientation.mount != (1.0, 0.0, 0.0, 0.0)
+
+    @callback
+    def calibrate(self, step: str, angle: float | None = None) -> None:
+        """The card's calibration: ``flat``, ``logo`` or ``clear``.
+
+        ``flat`` (lying on the table) levels the cap on that table and zeroes the
+        heading so the front points away from the viewer; it raises
+        :class:`CalibrationError` when the token is not lying still. ``logo``
+        stores the logo's angle in degrees. Both are kept in the config entry's data.
+        """
+        o = self._orientation
+        if step == "clear":
+            o.mount = (1.0, 0.0, 0.0, 0.0)
+            self._logo_angle = None
+        elif step == "logo":
+            if angle is None:
+                raise CalibrationError("no_angle")
+            self._logo_angle = round((angle + 180.0) % 360.0 - 180.0, 1)
+        elif not self.streaming:
+            raise CalibrationError("asleep")
+        elif step == "flat":
+            o.calibrate_flat()
+            o.reset_heading()
+        else:
+            raise CalibrationError("unknown_step")
+        data = dict(self.entry.data)
+        data[CALIBRATION_KEY] = {
+            "mount": [round(c, 6) for c in o.mount],
+            "logo": self._logo_angle,
+        }
+        self.hass.config_entries.async_update_entry(self.entry, data=data)
+        self._notify()
+
+    @property
+    def waiting_for_sleep(self) -> bool:
+        """Dropped on idle: no reconnect until the token has really slept."""
+        return self._await_sleep and not self.connected
+
+    @property
+    def streaming(self) -> bool:
+        """Frames are arriving on the current link."""
+        return self._streaming
+
+    @callback
+    def reset_heading(self) -> None:
+        """Make the token's current heading yaw 0 (it drifts: there is no compass)."""
+        self._orientation.reset_heading()
 
     @callback
     def _notify(self) -> None:
@@ -286,8 +513,12 @@ class TrikiDevice:
         _LOGGER.debug("%s: event %s %s", self.name, kind, data)
         if self._capture:
             self._capture.write({"event": kind, "data": data})
-        for cb in list(self._event_listeners):
-            cb(kind, data)
+        checking = self.checking
+        for cb, during_check in list(self._event_listeners):
+            if during_check or not checking:
+                cb(kind, data)
+        if checking:
+            return
         self.hass.bus.async_fire(
             BUS_EVENT,
             {
@@ -302,6 +533,12 @@ class TrikiDevice:
     @callback
     def async_start(self) -> None:
         self._stopping = False
+        if not self.hass.is_running:
+            # set up during the start: proxies get their grace once it is over
+            self._proxy_grace_until = float("inf")
+            self._unsub_started = self.hass.bus.async_listen_once(
+                EVENT_HOMEASSISTANT_STARTED, self._on_ha_started
+            )
         # Home Assistant 2026.10 delivers every advertisement of an address;
         # older versions only changed ones (the token's payload never changes),
         # which is why they also need the 1 s poll of the last advertisement.
@@ -320,8 +557,21 @@ class TrikiDevice:
             self.hass, self._poll_awake, timedelta(seconds=_POLL_S)
         )
 
+    @callback
+    def _on_ha_started(self, _event: Any) -> None:
+        self._unsub_started = None
+        self._proxy_grace_until = time.monotonic() + _PROXY_GRACE_S
+
+    def _local_source(self, source: str) -> bool:
+        scanner = bluetooth.async_scanner_by_source(self.hass, source)
+        return scanner is not None and not isinstance(scanner, BaseHaRemoteScanner)
+
     async def async_stop(self) -> None:
         self._stopping = True
+        if self._unsub_started is not None:
+            self._unsub_started()
+            self._unsub_started = None
+        self._cancel_timer("_unsub_check")
         self._cancel_timer("_unsub_silence")
         for attr in ("_unsub_adv", "_unsub_poll"):
             unsub = getattr(self, attr)
@@ -416,6 +666,12 @@ class TrikiDevice:
         now = time.monotonic()
         age = bluetooth.MONOTONIC_TIME() - service_info.time
         reason = None
+        if self._await_sleep and self.checking:
+            # a card is checking this token: the owner is pressing it to wake it
+            _LOGGER.debug("%s: a check is open, reconnecting", self.name)
+            self._await_sleep = False
+            self._no_connect_until = 0.0
+            self._notify()
         if self._await_sleep:
             # The token keeps advertising for a few seconds after we drop the link;
             # reconnecting then just resets its sleep timer. Only once its
@@ -429,6 +685,7 @@ class TrikiDevice:
                 self._awake_seen = now
             if slept:
                 self._await_sleep = False
+                self._notify()
             else:
                 reason = "waiting for the token to sleep after an idle disconnect"
         if reason is None:
@@ -441,6 +698,8 @@ class TrikiDevice:
                 reason = "idle cooldown"
             elif now - self._last_attempt < _RECONNECT_BACKOFF_S:
                 reason = "reconnect backoff"
+            elif now < self._proxy_grace_until and self._local_source(service_info.source):
+                reason = "Home Assistant just started: waiting for a proxy to hear it"
         if reason:
             if reason.split(" (")[0] != self._last_skip:
                 self._last_skip = reason.split(" (")[0]
@@ -524,6 +783,12 @@ class TrikiDevice:
                 self._expected_disconnect = True
                 await client.disconnect()
                 return
+            # habluetooth picks the path itself at connect time, among every scanner
+            # that heard the token: the advert's source is a guess until now.
+            # `_connected_scanner` is habluetooth's own record of that path.
+            source = getattr(getattr(client, "_connected_scanner", None), "source", None)
+            if isinstance(source, str):
+                self.stats.last_source = source
             self.connected = True
             self._last_activity = self._session_t0 = time.monotonic()
             self.stats.connects += 1
@@ -539,8 +804,9 @@ class TrikiDevice:
             self._schedule_idle_check()
             self._schedule_battery_check()
             _LOGGER.debug(
-                "%s: connected, streaming at %s Hz (advert age %.1fs, link %.1fs, setup %.1fs: notify %.1fs, write %.1fs)",
+                "%s: connected via %s, streaming at %s Hz (advert age %.1fs, link %.1fs, setup %.1fs: notify %.1fs, write %.1fs)",
                 self.name,
+                self.link_source_name or "an unnamed scanner",
                 self.options.rate,
                 adv_age,
                 t_link - t0,
@@ -630,10 +896,12 @@ class TrikiDevice:
             # that value is taken under load (27 % against 82 % at rest on the
             # same cell) and would make the sensor flap
             return
+        # inside a pause the token has sent a low series (21-27 %) interleaved with
+        # the real one (82-94 %) and the cell recovers upward: the pause keeps the
+        # highest value and publishes it once at its end
+        if self._pause_level is None or level > self._pause_level:
+            self._pause_level = level
         self._battery_event.set()
-        if level != self.battery:
-            self.battery = level
-            self._notify()
 
     async def _async_session_setup(self, client: BleakClient) -> tuple[float, float]:
         if self._capture:
@@ -652,6 +920,8 @@ class TrikiDevice:
         t = time.monotonic()
         self._stale_notifs = self._dup_notifs = 0
         self._last_chunk = None
+        self._clk_t = None
+        self._odr_anchor = None
         self._streaming = False
         self.stream_rate = self.options.rate
         await client.start_notify(
@@ -748,6 +1018,10 @@ class TrikiDevice:
         self._battery_event.set()  # do not keep a stream pause waiting on a dead link
         was_connected = self.connected
         self.connected = False
+        # the next link takes tilt from the accelerometer again; the heading is
+        # carried over (a dozing token lies where it was), so a calibration lasts
+        self._orientation.reset(keep_heading=True)
+        self._last_sample = None
         for attr in ("_unsub_idle", "_unsub_battery", "_unsub_watchdog"):
             self._cancel_timer(attr)
         for ev in self._detector.flush():
@@ -821,6 +1095,31 @@ class TrikiDevice:
         self._last_chunk, self._last_chunk_t = chunk, now
         self._on_notify(char, data)
 
+    def _sample_clock(self, now: float) -> float:
+        """The time of the next frame on the token's clock (see CLOCK_RESYNC_S)."""
+        rate = self.stream_rate or self.options.rate
+        anchor = self._odr_anchor
+        if anchor is None or anchor[2] != rate:
+            self._odr_anchor = (now, 0, rate)
+        else:
+            t0, n, _ = anchor
+            n += 1
+            if now - t0 >= ODR_WINDOW_S:
+                est = n / ((now - t0) * rate)
+                # a lossy window reads low: only plausible ones count
+                if ODR_SCALE_RANGE[0] <= est <= ODR_SCALE_RANGE[1]:
+                    self._odr_scale += 0.5 * (est - self._odr_scale)
+                self._odr_anchor = (now, 0, rate)
+            else:
+                self._odr_anchor = (t0, n, rate)
+        clk = self._clk_t
+        if clk is None or now - clk > CLOCK_RESYNC_S:
+            clk = now
+        else:
+            clk = min(clk + 1.0 / (rate * self._odr_scale), now)
+        self._clk_t = clk
+        return clk
+
     @callback
     def _on_notify(self, _char: Any, data: bytearray) -> None:
         if self._capture:
@@ -839,8 +1138,21 @@ class TrikiDevice:
             sample = Sample.from_frame(frame)
             # frames of one notification arrived together: spread them one
             # sample period apart, ending at the arrival time
-            for ev in self._detector.update(sample, now - (len(frames) - 1 - i) * dt):
+            t_frame = now - (len(frames) - 1 - i) * dt
+            self._orientation.update(sample, self._sample_clock(now), self._detector.gyro_bias)
+            self._last_sample = sample
+            for ev in self._detector.update(sample, t_frame):
                 active = True
+                if ev.type == "shake" and self._detector.shake_window is not None:
+                    self.shake_log.append(
+                        {
+                            "at": dt_util.utcnow().isoformat(timespec="seconds"),
+                            "rate": self.stream_rate,
+                            # s before the shake, ms since the previous arrival, |a| g,
+                            # |gyro| °/s, button
+                            "frames": self._detector.shake_window,
+                        }
+                    )
                 self._emit(ev.type, ev.data)
             if sample.button != self.button:
                 self.button = sample.button
@@ -871,6 +1183,12 @@ class TrikiDevice:
             self._last_tilt_pub = now
         if changed:
             self._notify()
+        if self._motion_listeners and now - self._last_live_pub >= LIVE_INTERVAL_S:
+            self._last_live_pub = now
+            snap = self.motion_snapshot()
+            if snap is not None:
+                for cb in list(self._motion_listeners):
+                    cb(snap)
 
     # ------------------------------------------------------------ timers
     @callback
@@ -914,7 +1232,7 @@ class TrikiDevice:
         self._cancel_timer("_unsub_idle")
         if not self.connected:
             return
-        idle = 0.0 if self.button else time.monotonic() - self._last_activity
+        idle = 0.0 if self.button or self.checking else time.monotonic() - self._last_activity
         sleep_timeout, idle_timeout = self.sleep_timeout, self.options.idle_timeout
         if 0 < sleep_timeout <= idle:
             _LOGGER.debug("%s: idle for %ss, disconnecting", self.name, sleep_timeout)
@@ -988,6 +1306,7 @@ class TrikiDevice:
         runs while the token has been idle for a while and rarely.
         """
         self._battery_event.clear()
+        self._pause_level = None
         self._battery_pause = True
         try:
             async with asyncio.timeout(_STOP_TIMEOUT_S):
@@ -1008,7 +1327,10 @@ class TrikiDevice:
                     break
                 self._battery_event.clear()
                 values += 1
-            if values and self.battery is not None:
+            if values and self._pause_level is not None:
+                if self._pause_level != self.battery:
+                    self.battery = self._pause_level
+                    self._notify()
                 self._on_rest_level(self.battery)
                 _LOGGER.debug(
                     "%s: battery %s%% after a %.1fs stream pause (%d value%s)",
@@ -1098,6 +1420,7 @@ class TrikiDevice:
         if (
             self._battery_refresh_due()
             and not self.button
+            and not self.checking
             and idle >= _BATTERY_IDLE_FOR_REFRESH_S
             and not self._rate_write_pending
         ):

@@ -195,3 +195,43 @@ async def test_idle_disconnect_does_not_arm_the_silence_check(hass: HomeAssistan
     dev._idle_check(None)
     await hass.async_block_till_done()
     assert dev.connected is False and dev._unsub_silence is None
+
+
+async def test_a_pause_reports_its_highest_level_once(hass: HomeAssistant, setup) -> None:
+    """History 2026-11-18/19: inside the pause the token sent two interleaved series,
+    one climbing 21 -> 27 and one 82 -> 94. Each value went to the sensor (84, 27, 83)
+    and the last one became the level at rest: had it been a 27, the saver and the
+    low-battery issue (both at 30 %) would have fired on a cell at ~90 %."""
+    from custom_components.triki.protocol import stop_command
+
+    from .conftest import BATTERY
+    from .test_device_errors import battery_callback
+
+    dev = setup.runtime_data
+    client, _ = await connect(hass, setup)
+    seen: list[str] = []
+    hass.bus.async_listen(
+        "state_changed",
+        lambda ev: (
+            seen.append(ev.data["new_state"].state) if ev.data["entity_id"] == BATTERY else None
+        ),
+    )
+
+    async def write(uuid, data, response=False):
+        if data == stop_command():
+            cb = battery_callback(client)
+            for level in (84, 23, 89, 25, 27):  # the low one comes last
+                hass.loop.call_soon(cb, None, bytearray([level]))
+
+    client.write_gatt_char = AsyncMock(side_effect=write)
+    dev._battery_refreshed = float("-inf")
+    dev._last_activity -= 60
+    dev._battery_check(None)
+    await settle(hass, dev)
+
+    assert dev.battery == 89 and dev.battery_rest == 89
+    assert not dev.battery_saver
+    assert (
+        ir.async_get(hass).async_get_issue(DOMAIN, f"{ISSUE_BATTERY_LOW}_{setup.entry_id}") is None
+    )
+    assert seen == ["89"]  # one update per pause, no 23/25/27 flashes

@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from custom_components.triki.gestures import GestureDetector
+from custom_components.triki.gestures import KNOB_HOLD_S, GestureDetector
 from custom_components.triki.protocol import Sample
 
 from .helpers import frame
@@ -30,6 +30,9 @@ def det():
 
 def secs(x):
     return round(x * RATE)
+
+
+HOLD = secs(KNOB_HOLD_S + 0.05)  # knob steps are reported after the hold
 
 
 def test_static_is_quiet():
@@ -100,10 +103,10 @@ def test_long_press():
 
 def test_knob_ccw_and_cw():
     d = det()
-    ev = feed(d, secs(1.0), gz=185.0)  # ~185 deg about the up axis
+    ev = feed(d, secs(1.0), gz=185.0) + feed(d, HOLD)  # ~185 deg about the up axis
     assert set(types(ev)) == {"rotate_ccw"}
     assert sum(e.data["steps"] for e in ev) == 6
-    ev = feed(d, secs(0.5), gz=-125.0)
+    ev = feed(d, secs(0.5), gz=-125.0) + feed(d, HOLD)
     assert set(types(ev)) == {"rotate_cw"}
     assert sum(e.data["steps"] for e in ev) == 2
 
@@ -395,14 +398,15 @@ def test_brisk_turn_back_and_forth_is_not_a_shake():
 def test_knob_counts_a_fast_spin_despite_its_centripetal_acceleration():
     """The IMU sits off the axis: a brisk spin reads 1.3-1.6 g while perfectly flat."""
     d = det()
-    assert types(feed(d, secs(0.5), gz=720.0, az=1.5)) == ["rotate_ccw"] * 12
+    assert types(feed(d, secs(0.5), gz=720.0, az=1.5) + feed(d, HOLD)) == ["rotate_ccw"] * 12
 
 
 def test_knob_skips_swung_frames_but_keeps_the_partial_turn():
     d = det()
     assert types(feed(d, secs(0.1), gz=200.0)) == []  # 20° of a 30° step
     assert types(feed(d, 5, gz=200.0, az=2.3)) == []  # swung: these frames say nothing
-    assert types(feed(d, secs(0.06), gz=200.0)) == ["rotate_ccw"]  # 20° + 12°: one step
+    ev = feed(d, secs(0.06), gz=200.0) + feed(d, HOLD)
+    assert [t for t in types(ev) if t.startswith("rotate")] == ["rotate_ccw"]  # 20° + 12°
 
 
 def test_single_garbage_frame_is_not_a_turn():
@@ -420,7 +424,7 @@ def test_knob_is_muted_by_free_fall_and_a_hard_jolt():
     ev = feed(d, secs(0.1), gz=200.0, az=0.1)  # free fall: the partial turn is dropped
     ev += feed(d, secs(0.3), gz=200.0)  # and the knob stays muted for 0.5 s
     assert "rotate_ccw" not in types(ev)
-    assert "rotate_ccw" in types(feed(d, secs(0.5), gz=200.0))
+    assert "rotate_ccw" in types(feed(d, secs(0.5), gz=200.0) + feed(d, HOLD))
     feed(d, secs(1.0))
     feed(d, 1, az=4.0)  # a jolt
     assert "rotate_ccw" not in types(feed(d, secs(0.3), gz=200.0))
@@ -553,7 +557,7 @@ def test_face_kept_between_the_bands():
 @pytest.mark.parametrize("rate", [20.0, 90.0, 400.0])
 def test_rotate_reports_its_speed(rate):
     d = det()
-    ev = [e for e in feed(d, secs(720 / rate), gz=rate) if e.type == "rotate_ccw"]
+    ev = [e for e in feed(d, secs(720 / rate), gz=rate) + feed(d, HOLD) if e.type == "rotate_ccw"]
     assert sum(e.data["steps"] for e in ev) >= 22
     for e in ev:
         assert e.data["speed"] == pytest.approx(rate, rel=0.05)
@@ -562,6 +566,106 @@ def test_rotate_reports_its_speed(rate):
 def test_rotate_speed_leaves_pauses_out():
     d = det()
     ev = feed(d, secs(0.25), gz=60.0) + feed(d, secs(0.5)) + feed(d, secs(0.3), gz=60.0)
+    ev += feed(d, HOLD)
     rot = [e for e in ev if e.type == "rotate_ccw"]
     assert [e.data["steps"] for e in rot] == [1]
     assert rot[0].data["speed"] == pytest.approx(60, rel=0.05)
+
+
+def test_a_shake_that_starts_as_a_twist_fires_no_knob_steps():
+    """2026-11-19: two knob steps fired 0.15-0.24 s before the shake was seen."""
+    d = GestureDetector(RATE, knob_step_deg=30, startup_discard=0, shake=True)
+    feed(d, RATE // 2)
+    ev = feed(d, secs(0.1), gz=900.0)  # the first swing, still without a shock: a turn
+    for i in range(8):  # then the shake proper, with its shock
+        ev += feed(d, secs(0.08), gz=1500.0 if i % 2 else -1500.0, az=4.0)
+    ev += feed(d, secs(1.0))
+    assert "shake" in types(ev)
+    assert not any(t.startswith("rotate") for t in types(ev))
+
+
+def test_knob_steps_arrive_after_the_hold():
+    d = det()
+    ev = feed(d, secs(0.65), gz=-120.0)  # 78 degrees clockwise
+    late = feed(d, secs(0.4))
+    assert types(ev).count("rotate_cw") + types(late).count("rotate_cw") == 2
+    assert "rotate_cw" in types(late)  # the last step waits out the hold
+
+
+def test_a_delayed_burst_keeps_the_partial_turn():
+    """A congested link holds the stream for 2 s, then delivers it at once. The jump
+    of the arrival clock is time the detector did not see, not 2 s of idling: a slow
+    first frame in the burst must not drop the partial turn (it lost 1-2 steps)."""
+    rate = 52
+    d = GestureDetector(rate, knob_step_deg=30, startup_discard=0)
+    dt = 1.0 / rate
+    t = 100.0
+    for _ in range(rate):  # settle flat
+        t += dt
+        d.update(Sample.from_frame(frame()), t)
+    ev = []
+
+    def on_pace(n, gz):
+        nonlocal t
+        for _ in range(n):
+            t += dt
+            ev.extend(d.update(Sample.from_frame(frame(gz=gz)), t))
+
+    on_pace(10, 120.0)  # 23° of the first step
+    held = [0.0] * 5 + [120.0] * 99  # the hand paused for 0.1 s, then turned on
+    t += len(held) * dt  # nothing arrives for 2 s
+    for i, gz in enumerate(held):  # then the backlog, 2 ms apart
+        ev.extend(d.update(Sample.from_frame(frame(gz=gz)), t + i * 0.002))
+    t += len(held) * 0.002
+    on_pace(rate, 0.0)  # at rest: the held steps are reported
+    steps = sum(e.data["steps"] for e in ev if e.type == "rotate_ccw")
+    assert steps == 8  # 23° + 228° = 251°: 8 whole steps, as without the delay
+
+
+def test_a_long_silence_still_drops_the_partial_turn():
+    rate = 52
+    d = GestureDetector(rate, knob_step_deg=30, startup_discard=0)
+    dt = 1.0 / rate
+    t = 100.0
+    for _ in range(rate):
+        t += dt
+        d.update(Sample.from_frame(frame()), t)
+    ev = []
+    for _ in range(10):  # 23° of a step
+        t += dt
+        ev += d.update(Sample.from_frame(frame(gz=120.0)), t)
+    t += 8.0  # the link was silent for 8 s: nobody knows what the hand did
+    ev += d.update(Sample.from_frame(frame()), t)
+    for _ in range(5):  # 12° more: no whole step without the dropped 23°
+        t += dt
+        ev += d.update(Sample.from_frame(frame(gz=120.0)), t)
+    for _ in range(rate):
+        t += dt
+        ev += d.update(Sample.from_frame(frame()), t)
+    assert not any(e.type.startswith("rotate") for e in ev)
+
+
+def test_a_bias_learned_in_the_hand_is_relearned_on_the_table():
+    """2026-11-23: the first estimate came from 1 s in a steady hand and was 3.1 °/s
+    off. Only frames within 3 °/s of the estimate were learned from, so the token on
+    the table never corrected it and the card's model turned 141°/min."""
+    d = GestureDetector(52, startup_discard=0)
+    t = 0.0
+    for _ in range(52):  # held steadily: a constant reading that is not the offset
+        t += 1 / 52
+        d.update(Sample.from_frame(frame(gx=0.98, gy=-0.38, gz=-2.31)), t)
+    for _ in range(52 * 3):  # then on the table
+        t += 1 / 52
+        d.update(Sample.from_frame(frame(gx=0.6, gy=-2.4, gz=0.1)), t)
+    assert d.gyro_bias == pytest.approx((0.6, -2.4, 0.1), abs=0.1)
+
+
+def test_gyro_bias_not_learned_from_a_trembling_hand():
+    """A hand is never as still as a table: its readings spread by degrees per second."""
+    d = GestureDetector(52, startup_discard=0)
+    t = 0.0
+    for i in range(52 * 3):
+        t += 1 / 52
+        wobble = 1.5 if i % 4 < 2 else -1.5
+        d.update(Sample.from_frame(frame(gx=0.6 + wobble, gy=-2.4 - wobble, gz=0.1)), t)
+    assert d.gyro_bias is None

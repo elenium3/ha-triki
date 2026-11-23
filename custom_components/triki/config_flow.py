@@ -37,6 +37,7 @@ from .const import (
     CONF_RATE,
     CONF_SHAKE,
     CONF_SLEEP_TIMEOUT,
+    CONF_TILT,
     CONF_WAKE_AS_PRESS,
     DEFAULT_IDLE_TIMEOUT,
     DEFAULT_INVERT_ROTATION,
@@ -47,6 +48,7 @@ from .const import (
     DEFAULT_MULTI_PRESS_WINDOW,
     DEFAULT_SHAKE,
     DEFAULT_SLEEP_TIMEOUT,
+    DEFAULT_TILT,
     DEFAULT_WAKE_AS_PRESS,
     DOMAIN,
 )
@@ -196,6 +198,9 @@ class TrikiOptionsFlow(OptionsFlowWithReload):
                 ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_SHAKE, default=o.get(CONF_SHAKE, DEFAULT_SHAKE)
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_TILT, default=o.get(CONF_TILT, DEFAULT_TILT)
                 ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_MOTION_GESTURES,

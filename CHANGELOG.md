@@ -6,34 +6,81 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+- **Live 3D card**, `custom:triki-card`, served and registered by the
+  integration: nothing to install, search for *Triki live 3D* when adding a
+  card. See docs/live-card.md.
+  - A 3D model of the token follows it: roll, pitch and yaw, gyro and
+    accelerometer readings with a 10 s graph, button, battery, signal, stream
+    rate and a label for each gesture.
+    Orientation is computed in the integration (Madgwick filter) and goes
+    over a websocket subscription (`triki/subscribe`), not into entity states.
+  - The default model is our own, built from calipered dimensions, with
+    photo textures; Flopsstuff's textured model (MIT) is `model: glb`.
+  - Calibration: lay the token on the table with the dot above the Z away
+    from you, and the model levels itself and points the same way. The logo
+    angle on the metal side is matched once by eye; both are stored per token.
+  - **Check** (admins only): a guided walk through lying still (stream rate,
+    lost frames, noise and the receiver the link goes through), level, tilt,
+    knob turns each way, the presses, turning over and the gestures that are
+    turned on. Each step has an instruction, a timer and live numbers, and
+    ends with the likely cause when it fails ("19 % of frames lost, move it
+    closer to the receiver"). The report folds out for an issue.
+  - With several tokens, tabs: *Auto* follows the awake one, or pin one.
+  - `show_controls: false` hides the buttons and the help, for a wall tablet.
+  - English, Russian and Polish, picked from the Home Assistant language.
+- `sensor.<name>_face_up`: which side is up (`cap_up`, `pcb_up` or `edge`), set
+  once the token has lain still for 0.3 s and kept while it sleeps.
+- `speed` (°/s) in `rotate_cw` / `rotate_ccw` events, so a fast turn can do
+  more than a slow one.
+- *Tilt in the hand* option, off by default: hold the token level and lean it
+  right or left past 25° for `rotate_cw` / `rotate_ccw` (with `source: tilt`),
+  one step and then one every 0.4 s while it stays leaned. Checked on
+  hardware: right gives `rotate_cw`, left `rotate_ccw`.
+- Russian translation of the integration (setup, options, repairs, entity
+  names).
+- Diagnostics: `measured_rate`, `gyro_bias`, `link_via` (the receiver the
+  link actually went through; the advert's source was reported before) and
+  `shakes`, the 1.5 s of stream before each of the last three shakes.
+
 ### Changed
-- Slow knob turns are counted: the knob now follows rotation from 10 °/s
-  (was 15 °/s) and keeps a partial turn through 1 s pauses (was 0.6 s). A slow
-  hand turn of one revolution used to report 8-10 of its 12 steps, now 11.
+- One motion, one gesture: knob steps are held 0.3 s and dropped if the motion
+  turns out to be a shake, a jolt or a fall. A shake used to fire two knob
+  steps before it was recognised.
+- The knob ignores turns with the token tilted more than 40° from level (was
+  60°): knocking it edge-on against the table no longer turns it.
+- Slow knob turns are counted: the knob follows rotation from 10 °/s (was
+  15 °/s) and keeps a partial turn through 1 s pauses (was 0.6 s). A slow hand
+  turn of one revolution used to report 8-10 of its 12 steps, now 11.
 - Knob turns are integrated over the frames' arrival times instead of one
-  sample period per frame. On a link that loses frames the knob used to
-  report too few steps: with half the frames lost, half the steps.
-- The gyro's zero offset is learned while the token lies still and
-  subtracted from knob turns; it is kept across reconnects.
+  sample period per frame: with half the frames lost the knob used to report
+  half the steps.
+- The gyro's zero offset is learned while the token lies still and subtracted
+  from knob turns and the card's 3D model; it is kept across reconnects.
+  "Still" means the readings spread by under 0.5 °/s over half a second, so a
+  steady hand does not count, and an offset learned wrongly is replaced the
+  next time the token lies on the table.
+- For 30 s after Home Assistant starts, a token heard only through a local
+  adapter waits for the Bluetooth proxies instead of connecting at once: the
+  link used to go through the Pi's adapter at −85 dBm before the proxies had
+  reported the token.
 - Firmware that streams faster than requested no longer speeds up gesture
   timing (multi-press window, long press).
 
-### Added
-- `sensor.<name>_face_up`: which side of the token is up (`cap_up`, `pcb_up`
-  or `edge`), set once it has lain still for 0.3 s and kept while it sleeps.
-- `speed` (°/s) in `rotate_cw` / `rotate_ccw` events, so a fast turn can do
-  more than a slow one.
-- Diagnostics: `measured_rate` (frames per second actually received) and
-  `gyro_bias`.
-
 ### Fixed
-- Docs: the IMU axes in `docs/protocol.md`. +z points out of the green PCB (Ż)
-  side, not the metal side, so a token lying metal side up reads −1 g on z.
+- Battery: a stream pause now reports its highest level, once. The token can
+  send a low series (21-27 %) alongside the real one (82-94 %) during the
+  pause; each value went to the sensor and the last one counted as the level
+  at rest, so a pause ending on a low value could have turned on the battery
+  saver and raised the low-battery notice on a healthy cell.
+- Knob: a link that holds the stream back for a second or two and then
+  delivers it at once no longer drops a partial turn.
 - A token in its firmware-update bootloader (advertising as `TrikiDfu…`) is
   no longer offered as a new device.
 - The LED switch keeps its last known state across Home Assistant restarts. It
-  read unknown until the token next woke, which could take hours; Watchman
-  listed it as a broken reference.
+  read unknown until the token next woke, which could take hours.
+- Docs: the IMU axes in `docs/protocol.md`. +z points out of the green PCB (Ż)
+  side, not the metal side. The status byte section says what is known.
 
 ## [0.2.5] - 2026-11-14
 

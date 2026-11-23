@@ -84,6 +84,10 @@ STATIC_GYRO_DPS = 30.0
 MOTION_CONFIRM_S = 0.1
 KNOB_DEADBAND_DPS = 10.0  # below this the turn accumulator is not fed
 KNOB_RESET_S = 1.0  # idle time after which a partial turn is dropped
+# A held-up link delivers its backlog late and at once: a gap up to this long is
+# time the detector did not see, not idling. A longer silence drops the partial
+# turn as before (the same bound as the pose clock's CLOCK_RESYNC_S).
+KNOB_GAP_KEEP_S = 5.0
 # Pressing the button twists the token in the hand: on hardware every press came
 # with 3-5 spurious rotate events within ~0.7 s. The knob is muted while the button
 # is down and for this long after it is released.
@@ -97,15 +101,21 @@ KNOB_LIFT_G = 1.0
 # A single frame above the deadband is not a turn (a garbage frame decodes as a
 # huge rate): its angle counts once the next frame confirms the motion.
 KNOB_CONFIRM_FRAMES = 2
-# A knob is turned flat. Frames with the cap tilted more than 60° from level
+# A knob is turned flat. Frames with the cap tilted more than 40° from level
 # (|gravity.z| below this) are skipped: on hardware knocking the token edge-on
-# against the table swung it about the vertical and made 9 steps, while a turn
-# between the fingers keeps the cap within 60° of level for 85 % of the angle.
-KNOB_LEVEL_COS = 0.5
+# against the table swung it about the vertical and made 9 steps. At 60° the
+# 2026-10-29 replay still gave 2 steps for the knocks; at 40° none, while the table
+# spin kept 94 % of its steps and the slow turns of 2026-11-18 all of them. Other
+# Triki projects use 35° (witw2/triki-py).
+KNOB_LEVEL_COS = 0.766
 # A jolt this hard (a shake swing reaches 5-17 g, a hard spin at most 2 g) is not a
 # turn: the partial turn is dropped and the knob is muted for a moment.
 KNOB_SHOCK_G = 1.5
 KNOB_SHOCK_GUARD_S = 0.5
+# A shake starts as a brisk twist: on 2026-11-19 two knob steps fired 0.15-0.24 s
+# before the shake was recognised. Steps are held this long and dropped when a
+# shake, a jolt or free fall comes first (one motion, one gesture).
+KNOB_HOLD_S = 0.3
 # A gap longer than this between two frames counts as this long for the knob
 # angle: the rate in the gap is unknown. Good links show gaps of 115-155 ms,
 # rarely 340 ms; 26 Hz with heavy loss needs more than 150.
@@ -124,17 +134,45 @@ FAST_STREAM_FACTOR = 1.5
 # Gyro zero offset, learned while the token lies still. The development unit
 # reads (0.3, -2.5, -0.6) °/s at rest with 0.03-0.1 °/s of noise, stable over
 # a whole session; uncorrected, -0.6 °/s about z is 36° per minute of yaw.
+# "Still" is judged by how little the readings spread, not by their distance from
+# the current estimate: on 2026-11-23 a first estimate taken in a steady hand was
+# 3.1 °/s off, every later frame on the table was too far from it to count, and
+# the card's model turned 141°/min until a restart. Lying on a table the gyro
+# spreads by 0.07-0.3 °/s over half a second (1-4 LSB), a hand by degrees.
 BIAS_STILL_G = 0.05  # |a| - 1 g
-BIAS_STILL_DPS = 3.0  # |gyro - bias|, or |gyro| before the first estimate
-BIAS_FIRST_DPS = 10.0
-BIAS_SETTLE_S = 0.5  # still this long before frames are learned from
+BIAS_SETTLE_S = 0.5  # the window that must be still before it is learned from
+BIAS_SPREAD_DPS = 0.5  # per axis, max - min over the window
+BIAS_RESEED_DPS = 0.5  # a still window this far from the estimate replaces it
 BIAS_FAST_FRAMES = 50  # plain average for the first frames, then a slow EMA
 BIAS_ALPHA = 0.002  # ~10 s at 52 Hz: a slow turn below the deadband barely moves it
 BIAS_MAX_DPS = 10.0  # per axis; more is not an offset
 
+# Tilt in the hand (the "tilt" option): the token is held level, cap up or PCB up,
+# with the stripe of the card's model towards the owner, and leaned to a side.
+# Heading-free like the knob: the lean is read from gravity alone, so it does not
+# drift (xardag's BeatSurfer "W dloni" mode does the same with a calibrated zero).
+# One step when the lean passes TILT_ON_DEG, then one per TILT_REPEAT_S while it
+# is held; the next lean needs a return within TILT_OFF_DEG of level first.
+TILT_ON_DEG = 25.0
+TILT_OFF_DEG = 10.0
+# Beyond this the token stands on its edge or is turned over, not leaned.
+TILT_MAX_DEG = 60.0
+TILT_PITCH_MAX_DEG = 30.0  # leaned forward or back as much: not a side lean
+# Held still this long at the lean before the first step.
+TILT_CONFIRM_S = 0.2
+TILT_REPEAT_S = 0.4
+# Held, not swung: Baartek's music controller gates on 0.8-1.2 g the same way.
+TILT_ACCEL_TOL_G = 0.2
+TILT_STILL_DPS = 80.0
+TILT_SOURCE = "tilt"
+
 KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
 MOTION_EVENTS = frozenset({"rotate_cw", "rotate_ccw", "shake", "tap", "throw", "flip"})
 EXPERIMENTAL_EVENTS = frozenset({"tap", "throw", "flip"})  # the "motion gestures" option
+
+# The shake recorder keeps this much of the stream before each shake (diagnostics):
+# a false shake on 2026-11-18 19:21 had no capture to tell what caused it.
+SHAKE_RECORD_S = 1.5
 
 REFRACTORY_S = {
     "tap": 0.3,
@@ -174,6 +212,7 @@ class GestureDetector:
         multi_press: bool = True,
         knob: bool = True,
         shake: bool = True,
+        tilt: bool = False,
     ) -> None:
         self.dt = 1.0 / rate_hz
         # survives reset(): a reconnect of the same token keeps its offset
@@ -187,6 +226,7 @@ class GestureDetector:
         self.multi_press = multi_press
         self.knob = knob
         self.shake = shake
+        self.tilt = tilt
         self.reset()
 
     # ------------------------------------------------------------------ state
@@ -202,7 +242,7 @@ class GestureDetector:
     def reset(self) -> None:
         self.t = 0.0
         self._arrivals: deque[float] = deque()
-        self._bias_still_since: float | None = None
+        self._bias_win: deque[tuple[float, float, float, float]] = deque()  # t, gx, gy, gz
         self._t_origin: float | None = None  # wall time of the first timed frame
         self._skip = self._startup_discard
         # button
@@ -223,10 +263,15 @@ class GestureDetector:
         self._turn_acc = 0.0
         self._turn_idle_since = 0.0
         self._knob_mute_until = 0.0
+        self._knob_held: list[tuple[float, Event]] = []
         self._turn_run = 0  # consecutive frames above the deadband
         self._turn_held = 0.0  # their angle, counted once the run is confirmed
         self._speed_deg = 0.0  # angle and time turned since the last step, for speed
         self._speed_t = 0.0
+        # tilt in the hand: armed again only after a return to level
+        self._tilt_armed = False
+        self._tilt_dir = 0
+        self._tilt_next = 0.0
         # tap
         self._prev_accel: tuple[float, float, float] | None = None
         self._rest_since: float | None = None
@@ -239,6 +284,9 @@ class GestureDetector:
         self._shake_latched = False
         self._last_active_t = 0.0
         self._last: dict[str, float] = {}
+        # (detector time, arrival time, |a|, |gyro|, button) of the recent frames
+        self._recent: deque[tuple[float, float | None, float, float, bool]] = deque()
+        self.shake_window: list[list[float | int | None]] | None = None
         self.last_motion_t = 0.0
         self._motion_since: float | None = None
 
@@ -324,7 +372,14 @@ class GestureDetector:
             # notifications must not compress the stream into an instant
             self.t = max(self.t + period, t - self._t_origin)
         self._button(s.button, out)
-        self._motion(s, out, min(self.t - prev_t, KNOB_MAX_DT_S))
+        gap = self.t - prev_t
+        dt = min(gap, KNOB_MAX_DT_S)
+        if gap <= KNOB_GAP_KEEP_S:
+            # the part of a gap past KNOB_MAX_DT_S was not seen, so it is not idle
+            # time either: a slow first frame of a late backlog used to drop the
+            # partial turn as if the hand had stopped for the whole gap
+            self._turn_idle_since += gap - dt
+        self._motion(s, out, dt, t)
         if out:
             # all of it is still tracked (idle logic, tilt), only reporting is gated
             allowed: set[str] = set()
@@ -334,15 +389,76 @@ class GestureDetector:
                 allowed.add("shake")
             if self.motion_gestures:
                 allowed |= EXPERIMENTAL_EVENTS
-            out[:] = [e for e in out if e.type not in MOTION_EVENTS or e.type in allowed]
+            out[:] = [
+                e
+                for e in out
+                if e.type not in MOTION_EVENTS
+                or (self.tilt if e.data.get("source") == TILT_SOURCE else e.type in allowed)
+            ]
         return out
 
     def flush(self) -> list[Event]:
         """Emit pending multi-press on disconnect."""
-        out: list[Event] = []
+        out: list[Event] = [e for _t, e in self._knob_held]
+        self._knob_held.clear()
         if self._clicks:
             self._emit_clicks(out)
         return out
+
+    def _tilt(self, s: Sample, a: float, disturbed: bool) -> None:
+        """Side lean in the hand.
+
+        The knob is not muted meanwhile: a lean turns the token about a level
+        axis, which has next to nothing about gravity, and a mute cost the table
+        spin of the 2026-10-29 replay 4 % of its steps (its wobble reads as a lean).
+
+        Read from the raw accelerometer of calm frames, not the gravity estimate:
+        its low-pass lags a quick lean by a few tenths of a second, and handling
+        the token (picking it up, knocking it) then left a stale 40° lean that
+        made steps on the 2026-10-29 replay.
+        """
+        if disturbed:
+            self._tilt_armed = False  # level again first: the swing may end tilted
+            self._tilt_dir = 0
+            return
+        calm = abs(a - 1.0) <= TILT_ACCEL_TOL_G and s.gyro_mag <= TILT_STILL_DPS
+        if not calm:
+            # moving: no verdict, but a pending step waits for a full calm window
+            self._tilt_next = max(self._tilt_next, self.t + TILT_CONFIRM_S)
+            return
+        ux, uy, uz = s.ax / a, s.ay / a, s.az / a
+        side = 1.0 if uz < 0 else -1.0  # PCB up mirrors left and right
+        roll = math.degrees(math.atan2(side * ux, math.sqrt(uy * uy + uz * uz)))
+        pitch = math.degrees(math.atan2(uy, math.sqrt(ux * ux + uz * uz)))
+        if abs(roll) < TILT_OFF_DEG and abs(pitch) < TILT_PITCH_MAX_DEG:
+            self._tilt_armed = True
+            self._tilt_dir = 0
+            return
+        if not (TILT_ON_DEG <= abs(roll) <= TILT_MAX_DEG and abs(pitch) <= TILT_PITCH_MAX_DEG):
+            self._tilt_dir = 0
+            return
+        d = 1 if roll > 0 else -1
+        if self._tilt_dir != d:
+            if not self._tilt_armed:
+                return  # still the last lean, or picked up leaned
+            self._tilt_dir = d
+            self._tilt_next = self.t + TILT_CONFIRM_S
+        if self.button or self.t - self._release_t < KNOB_BUTTON_GUARD_S:
+            self._tilt_next = max(self._tilt_next, self.t + TILT_CONFIRM_S)
+        elif self.t >= self._tilt_next:
+            self._tilt_armed = False
+            self._tilt_next = self.t + TILT_REPEAT_S
+            cw = (d > 0) != self.invert_rotation
+            # held like the knob's steps: a shake that starts as a lean drops it
+            self._knob_held.append(
+                (
+                    self.t,
+                    Event(
+                        "rotate_cw" if cw else "rotate_ccw",
+                        {"steps": 1, "degrees": self.knob_step, "source": TILT_SOURCE},
+                    ),
+                )
+            )
 
     # ----------------------------------------------------------------- button
     def _emit_clicks(self, out: list[Event]) -> None:
@@ -373,21 +489,28 @@ class GestureDetector:
 
     # ----------------------------------------------------------------- motion
     def _learn_bias(self, s: Sample, a: float) -> None:
-        b = self.gyro_bias
-        if b is None:
-            calm = s.gyro_mag < BIAS_FIRST_DPS
-        else:
-            calm = math.dist((s.gx, s.gy, s.gz), b) < BIAS_STILL_DPS
-        if not calm or abs(a - 1.0) >= BIAS_STILL_G:
-            self._bias_still_since = None
-            return
-        if self._bias_still_since is None:
-            self._bias_still_since = self.t
-        if self.t - self._bias_still_since < BIAS_SETTLE_S:
-            return
+        win = self._bias_win
         g = (s.gx, s.gy, s.gz)
-        if b is None:
-            self.gyro_bias, self._bias_n = g, 1
+        if abs(a - 1.0) >= BIAS_STILL_G or max(abs(v) for v in g) > BIAS_MAX_DPS:
+            win.clear()
+            return
+        win.append((self.t, *g))
+        while self.t - win[0][0] > BIAS_SETTLE_S:
+            win.popleft()
+        if self.t - win[0][0] < BIAS_SETTLE_S * 0.9:
+            return  # not still for long enough yet
+        axes = [[f[i] for f in win] for i in (1, 2, 3)]
+        if max(max(v) - min(v) for v in axes) >= BIAS_SPREAD_DPS:
+            return  # moving, or held in a hand
+        b = self.gyro_bias
+        if b is None or math.dist([sum(v) / len(v) for v in axes], b) > BIAS_RESEED_DPS:
+            # the first estimate, or a wrong one: start over from this still window
+            self.gyro_bias = (
+                sum(axes[0]) / len(win),
+                sum(axes[1]) / len(win),
+                sum(axes[2]) / len(win),
+            )
+            self._bias_n = len(win)
             return
         self._bias_n += 1
         k = 1.0 / self._bias_n if self._bias_n <= BIAS_FAST_FRAMES else BIAS_ALPHA
@@ -397,8 +520,25 @@ class GestureDetector:
 
         self.gyro_bias = (step(b[0], g[0]), step(b[1], g[1]), step(b[2], g[2]))
 
-    def _motion(self, s: Sample, out: list[Event], dt: float) -> None:
+    def _record(self, s: Sample, a: float, arrival: float | None) -> None:
+        rec = self._recent
+        rec.append((self.t, arrival, a, s.gyro_mag, s.button))
+        while rec and self.t - rec[0][0] > SHAKE_RECORD_S:
+            rec.popleft()
+
+    def _snapshot(self) -> list[list[float | int | None]]:
+        """The recorded frames as [s before the shake, ms since the previous arrival, |a|, |gyro|, button]."""
+        out: list[list[float | int | None]] = []
+        prev: float | None = None
+        for t, arr, a, g, b in self._recent:
+            gap = None if arr is None or prev is None else round((arr - prev) * 1000)
+            prev = arr
+            out.append([round(t - self.t, 3), gap, round(a, 2), round(g), int(b)])
+        return out
+
+    def _motion(self, s: Sample, out: list[Event], dt: float, arrival: float | None = None) -> None:
         a = s.accel_mag
+        self._record(s, a, arrival)
         self._learn_bias(s, a)
         static = abs(a - 1.0) < STATIC_ACCEL_TOL and s.gyro_mag < STATIC_GYRO_DPS
         if static:
@@ -507,16 +647,22 @@ class GestureDetector:
         if shaking and not self._shake_latched:
             # one event per episode: a 2 s shake must not fire two or three times
             self._shake_latched = True
+            self.shake_window = self._snapshot()
             self._fire(out, "shake")
             frames.clear()
             self._turn_acc = 0.0
 
+        disturbed = self._shake_latched or abs(a - 1.0) > KNOB_SHOCK_G or a < THROW_G
+        if self.tilt:
+            self._tilt(s, a, disturbed)
+
         # knob: rotation rate about the vertical (gravity) axis. Shaking swings the
         # token around every axis: a hard jolt or a latched shake drops the partial
         # turn and mutes the knob for a moment.
-        if self._shake_latched or abs(a - 1.0) > KNOB_SHOCK_G or a < THROW_G:
+        if disturbed:
             # a shake, a jolt or free fall: whatever turned was not a knob
             self._turn_acc = 0.0
+            self._knob_held.clear()
             self._knob_mute_until = self.t + KNOB_SHOCK_GUARD_S
         elif self.button or self.t - self._release_t < KNOB_BUTTON_GUARD_S:
             self._turn_acc = 0.0  # a press twists the token: not a turn
@@ -561,7 +707,9 @@ class GestureDetector:
                     # mean rate while turning since the last step, pauses left out
                     data["speed"] = round(self._speed_deg / self._speed_t)
                 self._speed_deg = self._speed_t = 0.0
-                out.append(Event(kind, data))
+                self._knob_held.append((self.t, Event(kind, data)))
+        while self._knob_held and self.t - self._knob_held[0][0] >= KNOB_HOLD_S:
+            out.append(self._knob_held.pop(0)[1])
 
         self._update_face(s, static)
 

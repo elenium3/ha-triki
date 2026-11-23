@@ -15,8 +15,11 @@ repos:
       - id: check-json
       - id: check-added-large-files
         args: [--maxkb=600]
+        # vendored three.js bundle for the live card (minified, ~620 KB)
+        exclude: ^custom_components/triki/frontend/triki-three\.js$
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.3
     hooks:
       - id: codespell
         additional_dependencies: [tomli]
+        exclude: ^custom_components/triki/frontend/triki-three\.js$
