@@ -112,10 +112,10 @@
         }
       },
       "pitch": {
-        "name": "Pitch"
+        "name": "Tilt forward-back"
       },
       "roll": {
-        "name": "Roll"
+        "name": "Tilt left-right"
       }
     }
   },

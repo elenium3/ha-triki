@@ -54,7 +54,7 @@ unzip triki.zip -d custom_components/triki
    [Add integration → Żabka Triki](https://my.home-assistant.io/redirect/config_flow_start/?domain=triki),
    press the button again and pick the token from the list.
 
-The device is created immediately. Pitch and roll show as unavailable until the
+The device is created immediately. The tilt sensors show as unavailable until the
 first connection; the other entities have a state right away.
 
 ## First check

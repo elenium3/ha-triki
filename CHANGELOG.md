@@ -44,6 +44,8 @@ All notable changes to this project are documented here. The format follows
   `shakes`, the 1.5 s of stream before each of the last three shakes.
 
 ### Changed
+- The pitch and roll sensors are called *Tilt forward-back* and *Tilt
+  left-right*, the names the card uses. Entity ids stay `_pitch` and `_roll`.
 - One motion, one gesture: knob steps are held 0.3 s and dropped if the motion
   turns out to be a shake, a jolt or a fall. A shake used to fire two knob
   steps before it was recognised.

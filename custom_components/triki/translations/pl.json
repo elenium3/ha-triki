@@ -112,10 +112,10 @@
         }
       },
       "pitch": {
-        "name": "Pochylenie"
+        "name": "Przechył przód-tył"
       },
       "roll": {
-        "name": "Przechył"
+        "name": "Przechył lewo-prawo"
       }
     }
   },
