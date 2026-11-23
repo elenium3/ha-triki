@@ -61,6 +61,17 @@ integration uses this for the idle rate.
        bit0 = button pressed      int16 each
 ```
 
+Only bit 0 of the status byte is known. In the 13 captures taken during
+development (785 kB of notifications, 56 075 frames, firmware 3.2.1-A) the byte
+is always `0x00` or `0x01`, checked on the raw bytes, not through the parser.
+The parser relies on this: `0x22` is common inside the int16 fields, so a header
+counts only when the next byte is `0x00` or `0x01`. A frame with any other
+status value would be dropped and show up as `parser_dropped_bytes` in
+diagnostics. The bytes the parser does drop in those captures are the start
+acknowledgement `21 00 00 00 00` (it also arrives after each rate switch over a
+live link) and the torn remains of frames whose 20-byte chunk was lost on the
+BlueZ path.
+
 | Field | Scale | Full range |
 |---|---|---|
 | gyro | 14.286 LSB per °/s | ±2000 °/s |
