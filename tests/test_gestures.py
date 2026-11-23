@@ -643,3 +643,29 @@ def test_a_long_silence_still_drops_the_partial_turn():
         t += dt
         ev += d.update(Sample.from_frame(frame()), t)
     assert not any(e.type.startswith("rotate") for e in ev)
+
+
+def test_a_bias_learned_in_the_hand_is_relearned_on_the_table():
+    """2026-11-23: the first estimate came from 1 s in a steady hand and was 3.1 °/s
+    off. Only frames within 3 °/s of the estimate were learned from, so the token on
+    the table never corrected it and the card's model turned 141°/min."""
+    d = GestureDetector(52, startup_discard=0)
+    t = 0.0
+    for _ in range(52):  # held steadily: a constant reading that is not the offset
+        t += 1 / 52
+        d.update(Sample.from_frame(frame(gx=0.98, gy=-0.38, gz=-2.31)), t)
+    for _ in range(52 * 3):  # then on the table
+        t += 1 / 52
+        d.update(Sample.from_frame(frame(gx=0.6, gy=-2.4, gz=0.1)), t)
+    assert d.gyro_bias == pytest.approx((0.6, -2.4, 0.1), abs=0.1)
+
+
+def test_gyro_bias_not_learned_from_a_trembling_hand():
+    """A hand is never as still as a table: its readings spread by degrees per second."""
+    d = GestureDetector(52, startup_discard=0)
+    t = 0.0
+    for i in range(52 * 3):
+        t += 1 / 52
+        wobble = 1.5 if i % 4 < 2 else -1.5
+        d.update(Sample.from_frame(frame(gx=0.6 + wobble, gy=-2.4 - wobble, gz=0.1)), t)
+    assert d.gyro_bias is None

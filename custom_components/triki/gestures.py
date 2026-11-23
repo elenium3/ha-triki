@@ -134,10 +134,15 @@ FAST_STREAM_FACTOR = 1.5
 # Gyro zero offset, learned while the token lies still. The development unit
 # reads (0.3, -2.5, -0.6) °/s at rest with 0.03-0.1 °/s of noise, stable over
 # a whole session; uncorrected, -0.6 °/s about z is 36° per minute of yaw.
+# "Still" is judged by how little the readings spread, not by their distance from
+# the current estimate: on 2026-11-23 a first estimate taken in a steady hand was
+# 3.1 °/s off, every later frame on the table was too far from it to count, and
+# the card's model turned 141°/min until a restart. Lying on a table the gyro
+# spreads by 0.07-0.3 °/s over half a second (1-4 LSB), a hand by degrees.
 BIAS_STILL_G = 0.05  # |a| - 1 g
-BIAS_STILL_DPS = 3.0  # |gyro - bias|, or |gyro| before the first estimate
-BIAS_FIRST_DPS = 10.0
-BIAS_SETTLE_S = 0.5  # still this long before frames are learned from
+BIAS_SETTLE_S = 0.5  # the window that must be still before it is learned from
+BIAS_SPREAD_DPS = 0.5  # per axis, max - min over the window
+BIAS_RESEED_DPS = 0.5  # a still window this far from the estimate replaces it
 BIAS_FAST_FRAMES = 50  # plain average for the first frames, then a slow EMA
 BIAS_ALPHA = 0.002  # ~10 s at 52 Hz: a slow turn below the deadband barely moves it
 BIAS_MAX_DPS = 10.0  # per axis; more is not an offset
@@ -237,7 +242,7 @@ class GestureDetector:
     def reset(self) -> None:
         self.t = 0.0
         self._arrivals: deque[float] = deque()
-        self._bias_still_since: float | None = None
+        self._bias_win: deque[tuple[float, float, float, float]] = deque()  # t, gx, gy, gz
         self._t_origin: float | None = None  # wall time of the first timed frame
         self._skip = self._startup_discard
         # button
@@ -484,21 +489,28 @@ class GestureDetector:
 
     # ----------------------------------------------------------------- motion
     def _learn_bias(self, s: Sample, a: float) -> None:
-        b = self.gyro_bias
-        if b is None:
-            calm = s.gyro_mag < BIAS_FIRST_DPS
-        else:
-            calm = math.dist((s.gx, s.gy, s.gz), b) < BIAS_STILL_DPS
-        if not calm or abs(a - 1.0) >= BIAS_STILL_G:
-            self._bias_still_since = None
-            return
-        if self._bias_still_since is None:
-            self._bias_still_since = self.t
-        if self.t - self._bias_still_since < BIAS_SETTLE_S:
-            return
+        win = self._bias_win
         g = (s.gx, s.gy, s.gz)
-        if b is None:
-            self.gyro_bias, self._bias_n = g, 1
+        if abs(a - 1.0) >= BIAS_STILL_G or max(abs(v) for v in g) > BIAS_MAX_DPS:
+            win.clear()
+            return
+        win.append((self.t, *g))
+        while self.t - win[0][0] > BIAS_SETTLE_S:
+            win.popleft()
+        if self.t - win[0][0] < BIAS_SETTLE_S * 0.9:
+            return  # not still for long enough yet
+        axes = [[f[i] for f in win] for i in (1, 2, 3)]
+        if max(max(v) - min(v) for v in axes) >= BIAS_SPREAD_DPS:
+            return  # moving, or held in a hand
+        b = self.gyro_bias
+        if b is None or math.dist([sum(v) / len(v) for v in axes], b) > BIAS_RESEED_DPS:
+            # the first estimate, or a wrong one: start over from this still window
+            self.gyro_bias = (
+                sum(axes[0]) / len(win),
+                sum(axes[1]) / len(win),
+                sum(axes[2]) / len(win),
+            )
+            self._bias_n = len(win)
             return
         self._bias_n += 1
         k = 1.0 / self._bias_n if self._bias_n <= BIAS_FAST_FRAMES else BIAS_ALPHA
