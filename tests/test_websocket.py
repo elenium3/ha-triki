@@ -242,3 +242,16 @@ async def test_apply_needs_an_admin(
     msg = await ws.receive_json()
     assert not msg["success"]
     assert msg["error"]["code"] == "unauthorized"
+
+
+async def test_subscription_hears_the_reload(hass: HomeAssistant, setup, hass_ws_client) -> None:
+    """Options saved: the old device object goes, the card is told to subscribe again."""
+    ws = await hass_ws_client(hass)
+    await ws.send_json({"id": 1, "type": "triki/subscribe"})
+    assert (await ws.receive_json())["success"]
+    assert (await ws.receive_json())["event"]["type"] == "status"
+    await hass.config_entries.async_reload(setup.entry_id)
+    await hass.async_block_till_done()
+    while (msg := await ws.receive_json())["event"]["type"] != "reload":
+        pass
+    assert msg["id"] == 1
