@@ -121,6 +121,9 @@ All notable changes to this project are documented here. The format follows
   captures false leans fell from 16 to 10, with every wanted lean kept.
 - Tilt in the hand counts leans up to 80° (was 60°): asked for more than 25°,
   people lean to 70-85°, and half the leans of a check went unseen.
+- The check: opened while the cap dozes after its own sleep step, it shows the
+  doze countdown instead of asking for a press that cannot wake it yet; while
+  any other check is open, *Readiness* says a press wakes the cap, as it does.
 - The check: closing the tab ends the check at once (the sleep step held it
   for 7 minutes); the multi-press window suggestion also comes when the double
   press made it on a retry.

@@ -566,9 +566,15 @@ class TrikiDevice:
             return "connected"
         if self.unresponsive:
             return "not_responding"
-        if self._await_sleep and not self._slept_now():
+        if self._await_sleep and not self._slept_now() and not self._check_wakes_it:
             return "dozing"
         return "asleep"
+
+    @property
+    def _check_wakes_it(self) -> bool:
+        """An open check reconnects on a press while dozing (the owner presses it
+        to wake it), except in its own sleep step, which waits for sleep."""
+        return self.checking and not self._check_sleeping
 
     def _slept_now(self) -> bool:
         """Dropped on idle: the adverts stopped, and late enough to be sleep."""
@@ -815,7 +821,7 @@ class TrikiDevice:
         now = time.monotonic()
         age = bluetooth.MONOTONIC_TIME() - service_info.time
         reason = None
-        if self._await_sleep and self.checking and not self._check_sleeping:
+        if self._await_sleep and self._check_wakes_it:
             # a card is checking this token: the owner is pressing it to wake it
             _LOGGER.debug("%s: a check is open, reconnecting", self.name)
             self._await_sleep = False

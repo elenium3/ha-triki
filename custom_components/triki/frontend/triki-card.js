@@ -1203,7 +1203,11 @@ class TrikiCard extends HTMLElement {
       res = `<div class="res warn"><b>${t.paused}</b></div>`;
       btns = btn("skip", t.skip) + btn("close", t.close);
     } else if (v.phase === "ready" && !v.online) {
-      res = `<div class="res warn"><b>${t.text.wake}</b></div>`;
+      // a check opened while its own sleep step's doze runs: a press cannot wake it yet
+      const doze = this._status?.readiness === "dozing";
+      const left = this._dozeUntil == null ? 0 : Math.round((this._dozeUntil - Date.now()) / 1000);
+      const wake = doze ? (left > 0 ? this._fmt(this._t.dozeHint, { n: left }) : this._fmt(this._t.dozeLate)) : t.text.wake;
+      res = `<div class="res warn"><b>${wake}</b></div>`;
       btns = btn("skip", t.skip) + btn("close", t.close);
     } else if (v.phase === "ready" && v.external) {
       // the flat calibration measures nothing over time: lay the cap down and confirm

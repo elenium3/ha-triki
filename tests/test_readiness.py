@@ -71,6 +71,22 @@ async def test_missed_adverts_early_in_the_doze_are_not_sleep(hass: HomeAssistan
     assert dev.readiness == "dozing"
 
 
+async def test_an_open_check_wakes_a_dozing_token_unless_it_is_its_sleep_step(
+    hass: HomeAssistant, setup
+) -> None:
+    """While a check is open a press reconnects a dozing token, so readiness says
+    a press wakes it; in the check's own sleep step it waits for sleep."""
+    dev = setup.runtime_data
+    await connect(hass, setup)
+    await idle_drop(hass, setup)
+    assert dev.readiness == "dozing"
+    assert dev.start_check("card")
+    assert dev.readiness == "asleep"
+    dev._check_sleeping = True  # the sleep step dropped the link
+    assert dev.readiness == "dozing"
+    dev.stop_check("card")
+
+
 async def test_an_overdue_doze_counts_down_to_zero(hass: HomeAssistant, setup) -> None:
     """A press while dozing starts the 3 minutes over: unseen, so 0, not negative."""
     dev = setup.runtime_data
