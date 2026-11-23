@@ -364,10 +364,10 @@ test("lean: right then left passes; repeats while held are fine", () => {
   const { run } = rig({ ...OPTS, tilt: true });
   goTo(run, "lean");
   run.start();
-  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
-  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" }); // held: a repeat
+  run.feedEvent("tilt_right", { repeat: false });
+  run.feedEvent("tilt_right", { repeat: false }); // held: a repeat
   assert.equal(run.view().live.count, 1);
-  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" });
+  run.feedEvent("tilt_left", { repeat: false });
   assert.equal(run.results.lean.status, "pass");
   assert.equal(run.results.lean.values.repeats, 1);
 });
@@ -376,11 +376,11 @@ test("lean: the other side first warns; a knob step during it is a false alarm",
   const { run, clock } = rig({ ...OPTS, tilt: true });
   goTo(run, "lean");
   run.start();
-  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" }); // held the wrong way round
+  run.feedEvent("tilt_left", { repeat: false }); // held the wrong way round
   assert.equal(run.view().live.hint, "lean_wrong");
   run.feedEvent("rotate_cw", { steps: 1 }); // the knob, not the lean
-  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
-  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" });
+  run.feedEvent("tilt_right", { repeat: false });
+  run.feedEvent("tilt_left", { repeat: false });
   const r = run.results.lean;
   assert.equal(r.status, "warn");
   assert.match(r.values.extra, /rotate_cw×1/);
@@ -388,19 +388,30 @@ test("lean: the other side first warns; a knob step during it is a false alarm",
   const again = rig({ ...OPTS, tilt: true });
   goTo(again.run, "lean");
   again.run.start();
-  again.run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
+  again.run.feedEvent("tilt_right", { repeat: false });
   again.clock.advance(41_000);
   assert.equal(again.run.results.lean.reason, "lean_left");
   void clock;
 });
 
-test("lean follows invert_rotation", () => {
+test("lean does not follow invert_rotation: right is tilt_right", () => {
   const { run } = rig({ ...OPTS, tilt: true, invert_rotation: true });
   goTo(run, "lean");
   run.start();
-  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" });
-  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
+  run.feedEvent("tilt_right", { repeat: false });
+  run.feedEvent("tilt_left", { repeat: false });
   assert.equal(run.results.lean.status, "pass");
+});
+
+test("a lean is never counted as a knob step", () => {
+  const { run, clock } = rig({ ...OPTS, tilt: true });
+  goTo(run, "turn_cw");
+  run.start();
+  run.feedEvent("tilt_right", { repeat: false });
+  turn(run, clock, -180, 6);
+  run.done();
+  assert.equal(run.results.turn_cw.values.steps, 6);
+  assert.equal(run.results.turn_cw.values.wrong, 0);
 });
 
 test("the flat step is confirmed straight away, without a Start", () => {
@@ -503,13 +514,13 @@ test("a shake or a lean that fires by itself twice suggests turning it off", () 
   goTo(run, "turn_cw");
   run.start();
   run.feedEvent("shake");
-  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
+  run.feedEvent("tilt_right", { repeat: false });
   turn(run, clock, -180, 6);
   run.done();
   run.next();
   run.start();
   run.feedEvent("shake");
-  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" });
+  run.feedEvent("tilt_left", { repeat: false });
   turn(run, clock, 180, 6, "rotate_ccw");
   run.done();
   assert.deepEqual(keys(run), ["shake=false", "tilt=false"]);

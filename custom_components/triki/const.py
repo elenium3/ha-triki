@@ -50,6 +50,8 @@ EVENT_TYPES = [
     "long_press",
     "rotate_cw",
     "rotate_ccw",
+    "tilt_left",
+    "tilt_right",
     "shake",
     "tap",
     "throw",

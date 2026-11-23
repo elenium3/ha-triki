@@ -40,9 +40,11 @@ All notable changes to this project are documented here. The format follows
 - `speed` (°/s) in `rotate_cw` / `rotate_ccw` events, so a fast turn can do
   more than a slow one.
 - *Tilt in the hand* option, off by default: hold the token level and lean it
-  right or left past 25° for `rotate_cw` / `rotate_ccw` (with `source: tilt`),
-  one step and then one every 0.4 s while it stays leaned. Checked on
-  hardware: right gives `rotate_cw`, left `rotate_ccw`.
+  right or left past 25° for `tilt_right` / `tilt_left`, one event and then
+  one every 0.4 s while it stays leaned (`repeat: true`). Checked on hardware.
+  Its own events, not the knob's (0.3.0b1 sent `rotate_cw` / `rotate_ccw`
+  with `source: tilt`): picking the token up leans it, and a dimmer on the
+  knob moved.
 - Russian translation of the integration (setup, options, repairs, entity
   names).
 - Diagnostics: `measured_rate`, `gyro_bias`, `link_via` (the receiver the

@@ -91,7 +91,7 @@ const STRINGS = {
     gestures: {
       press: "Press", single_press: "Press", double_press: "Double press", triple_press: "Triple press",
       long_press: "Long press", tap: "Tap", double_tap: "Double tap", shake: "Shake",
-      flip: "Flip", rotate_cw: "Knob ↻", rotate_ccw: "Knob ↺", wake: "Woke up", motion: "Motion",
+      flip: "Flip", rotate_cw: "Knob ↻", rotate_ccw: "Knob ↺", tilt_left: "Tilt ←", tilt_right: "Tilt →", wake: "Woke up", motion: "Motion",
     },
   },
   ru: {
@@ -167,7 +167,7 @@ const STRINGS = {
     gestures: {
       press: "Нажатие", single_press: "Нажатие", double_press: "Двойное нажатие", triple_press: "Тройное нажатие",
       long_press: "Долгое нажатие", tap: "Тап", double_tap: "Двойной тап", shake: "Встряхивание",
-      flip: "Переворот", rotate_cw: "Поворот ↻", rotate_ccw: "Поворот ↺", wake: "Проснулся",
+      flip: "Переворот", rotate_cw: "Поворот ↻", rotate_ccw: "Поворот ↺", tilt_left: "Наклон ←", tilt_right: "Наклон →", wake: "Проснулся",
       motion: "Движение",
     },
   },
@@ -245,7 +245,7 @@ const STRINGS = {
       press: "Naciśnięcie", single_press: "Naciśnięcie", double_press: "Podwójne naciśnięcie",
       triple_press: "Potrójne naciśnięcie", long_press: "Długie naciśnięcie", tap: "Stuknięcie",
       double_tap: "Podwójne stuknięcie", shake: "Potrząśnięcie", flip: "Obrót",
-      rotate_cw: "Pokrętło ↻", rotate_ccw: "Pokrętło ↺", wake: "Obudzony", motion: "Ruch",
+      rotate_cw: "Pokrętło ↻", rotate_ccw: "Pokrętło ↺", tilt_left: "Przechył ←", tilt_right: "Przechył →", wake: "Obudzony", motion: "Ruch",
     },
   },
 };

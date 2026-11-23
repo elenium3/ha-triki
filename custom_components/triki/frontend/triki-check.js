@@ -27,6 +27,7 @@ const DOUBLE_GAP_MAX_S = 1.2;
 const WINDOW_MAX_S = 0.8;
 const LOSS_SUGGEST_PCT = 30;
 const FALSE_ALARMS = 2;
+const TILT = ["tilt_left", "tilt_right"];
 const GESTURES = ["shake", "tap", "throw", "flip", "rotate_cw", "rotate_ccw"];
 const EXPECTED = {
   turn_cw: ["rotate_cw", "rotate_ccw"], turn_ccw: ["rotate_cw", "rotate_ccw"],
@@ -325,11 +326,11 @@ export class CheckRun {
 
   _onEvent(kind, data) {
     const s = this.step, st = this._st;
-    if (s.id === "lean" && data.source === "tilt") {
+    if (s.id === "lean" && TILT.includes(kind)) {
       this._leanEvent(kind);
       return;
     }
-    if (data.source === "tilt") {
+    if (TILT.includes(kind)) {
       // a lean step outside the lean step: tilt in the hand fired by itself
       st.extra ??= {};
       st.extra.tilt = (st.extra.tilt || 0) + 1;
@@ -382,10 +383,7 @@ export class CheckRun {
   // Right, then left. A lean held on one side repeats its step: those are counted,
   // not held against it. A step for the side not asked for means the cap is held
   // the other way round, or the sides are wired backwards.
-  _leanTargets() {
-    const cw = this.options.invert_rotation ? "rotate_ccw" : "rotate_cw";
-    return [cw, cw === "rotate_cw" ? "rotate_ccw" : "rotate_cw"];
-  }
+  _leanTargets() { return ["tilt_right", "tilt_left"]; }
 
   _leanEvent(kind) {
     const st = this._st, targets = this._leanTargets(), got = st.got || 0;

@@ -77,7 +77,7 @@ def test_hardware_session():
     # nothing in this session is a lean in the hand: knocks and the handling
     # around them made 4 tilt steps while the lean was read from the lagging
     # gravity estimate
-    leans = [(t, k) for t, k, d in events if d.get("source") == gestures.TILT_SOURCE]
+    leans = [(t, k) for t, k, d in events if k in gestures.TILT_EVENTS]
     assert leans == []
     problems = []
     for label, lo, hi, expected in SEGMENTS:

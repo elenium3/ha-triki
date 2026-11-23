@@ -160,8 +160,10 @@ BIAS_MAX_DPS = 10.0  # per axis; more is not an offset
 # with the stripe of the card's model towards the owner, and leaned to a side.
 # Heading-free like the knob: the lean is read from gravity alone, so it does not
 # drift (xardag's BeatSurfer "W dloni" mode does the same with a calibrated zero).
-# One step when the lean passes TILT_ON_DEG, then one per TILT_REPEAT_S while it
-# is held; the next lean needs a return within TILT_OFF_DEG of level first.
+# One tilt_right / tilt_left when the lean passes TILT_ON_DEG, then one per
+# TILT_REPEAT_S while it is held (``repeat: true``); the next lean needs a return
+# within TILT_OFF_DEG of level first. Own event names, not the knob's: an
+# automation on the knob must not react to a lean (picking the token up leans it).
 TILT_ON_DEG = 25.0
 TILT_OFF_DEG = 10.0
 # Beyond this the token stands on its edge or is turned over, not leaned.
@@ -173,10 +175,12 @@ TILT_REPEAT_S = 0.4
 # Held, not swung: Baartek's music controller gates on 0.8-1.2 g the same way.
 TILT_ACCEL_TOL_G = 0.2
 TILT_STILL_DPS = 80.0
-TILT_SOURCE = "tilt"
+TILT_EVENTS = frozenset({"tilt_left", "tilt_right"})
 
 KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
-MOTION_EVENTS = frozenset({"rotate_cw", "rotate_ccw", "shake", "tap", "throw", "flip"})
+MOTION_EVENTS = (
+    frozenset({"rotate_cw", "rotate_ccw", "shake", "tap", "throw", "flip"}) | TILT_EVENTS
+)
 EXPERIMENTAL_EVENTS = frozenset({"tap", "throw", "flip"})  # the "motion gestures" option
 
 # The shake recorder keeps this much of the stream before each shake (diagnostics):
@@ -404,7 +408,7 @@ class GestureDetector:
                 e
                 for e in out
                 if e.type not in MOTION_EVENTS
-                or (self.tilt if e.data.get("source") == TILT_SOURCE else e.type in allowed)
+                or (self.tilt if e.type in TILT_EVENTS else e.type in allowed)
             ]
         return out
 
@@ -457,19 +461,12 @@ class GestureDetector:
         if self.button or self.t - self._release_t < KNOB_BUTTON_GUARD_S:
             self._tilt_next = max(self._tilt_next, self.t + TILT_CONFIRM_S)
         elif self.t >= self._tilt_next:
+            repeat = not self._tilt_armed
             self._tilt_armed = False
             self._tilt_next = self.t + TILT_REPEAT_S
-            cw = (d > 0) != self.invert_rotation
             # held like the knob's steps: a shake that starts as a lean drops it
-            self._knob_held.append(
-                (
-                    self.t,
-                    Event(
-                        "rotate_cw" if cw else "rotate_ccw",
-                        {"steps": 1, "degrees": self.knob_step, "source": TILT_SOURCE},
-                    ),
-                )
-            )
+            kind = "tilt_right" if d > 0 else "tilt_left"
+            self._knob_held.append((self.t, Event(kind, {"repeat": repeat})))
 
     def _turn_purity(self, s: Sample) -> float:
         """Share of the gyro energy about gravity over KNOB_PURITY_WINDOW_S.
@@ -703,7 +700,7 @@ class GestureDetector:
             pass  # held edge-on: handled, not turned
         elif purity < KNOB_PURITY:
             # handled, not turned: steps still held go, the partial turn waits
-            self._knob_held = [(t, e) for t, e in self._knob_held if e.data.get("source")]
+            self._knob_held = [(t, e) for t, e in self._knob_held if e.type in TILT_EVENTS]
         elif self.gravity is not None:
             bx, by, bz = self.gyro_bias or (0.0, 0.0, 0.0)
             rate = _dot((s.gx - bx, s.gy - by, s.gz - bz), self.gravity)
