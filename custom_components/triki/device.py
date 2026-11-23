@@ -786,9 +786,9 @@ class TrikiDevice:
             # habluetooth picks the path itself at connect time, among every scanner
             # that heard the token: the advert's source is a guess until now.
             # `_connected_scanner` is habluetooth's own record of that path.
-            path = getattr(client, "_connected_scanner", None)
-            if isinstance(getattr(path, "source", None), str):
-                self.stats.last_source = path.source
+            source = getattr(getattr(client, "_connected_scanner", None), "source", None)
+            if isinstance(source, str):
+                self.stats.last_source = source
             self.connected = True
             self._last_activity = self._session_t0 = time.monotonic()
             self.stats.connects += 1
