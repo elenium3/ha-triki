@@ -20,6 +20,13 @@ const TURN_MIN_DEG = 140;
 const TURN_MAX_DEG = 250;
 
 // Gestures a step does not ask for are false alarms worth reporting.
+// Suggestions: a double press whose two presses came further apart than this was
+// two presses; the window is not stretched past WINDOW_MAX_S (a single press
+// waits that long); a gesture that fired by itself this often is better off.
+const DOUBLE_GAP_MAX_S = 1.2;
+const WINDOW_MAX_S = 0.8;
+const LOSS_SUGGEST_PCT = 30;
+const FALSE_ALARMS = 2;
 const GESTURES = ["shake", "tap", "throw", "flip", "rotate_cw", "rotate_ccw"];
 const EXPECTED = {
   turn_cw: ["rotate_cw", "rotate_ccw"], turn_ccw: ["rotate_cw", "rotate_ccw"],
@@ -198,6 +205,36 @@ export class CheckRun {
     return counts;
   }
 
+  // Settings the results point to, each with what it was. Only clear cases: the
+  // owner applies them with one button, so a guess here would be a wrong setting.
+  suggestions() {
+    const o = this.options, r = this.results, out = [];
+    const cw = r.turn_cw?.values, ccw = r.turn_ccw?.values;
+    // turned the right way (by the model) both times, the events said the opposite
+    const backwards = (v, dir) => v && Math.sign(v.angle) === dir && v.wrong >= 2 && v.wrong > (v.steps || 0);
+    if (o.knob && backwards(cw, -1) && backwards(ccw, 1)) {
+      out.push({ key: "invert_rotation", value: !o.invert_rotation, from: !!o.invert_rotation });
+    }
+    const rest = r.rest?.values;
+    if (rest && rest.loss_pct > LOSS_SUGGEST_PCT && rest.asked > 26) {
+      out.push({ key: "sample_rate", value: 26, from: rest.asked, loss: rest.loss_pct });
+    }
+    const gap = r.press?.values?.double_gap;
+    const win = +(o.multi_press_window ?? 0.5);
+    if (o.multi_press && gap != null) {
+      // the gap between the two press events is the pause plus the second press
+      const want = Math.min(WINDOW_MAX_S, Math.ceil((gap + 0.05) * 20) / 20);
+      if (want > win) out.push({ key: "multi_press_window", value: want, from: win });
+    }
+    const extra = {};
+    for (const res of Object.values(r)) {
+      for (const [k, n] of Object.entries(res.extraCounts || {})) extra[k] = (extra[k] || 0) + n;
+    }
+    if (o.shake && (extra.shake || 0) >= FALSE_ALARMS) out.push({ key: "shake", value: false, from: true, count: extra.shake });
+    if (o.tilt && (extra.tilt || 0) >= FALSE_ALARMS) out.push({ key: "tilt", value: false, from: true, count: extra.tilt });
+    return out;
+  }
+
   // A plain-text report for a bug report: numbers only, no address or name.
   report(meta = {}) {
     const lines = ["Triki guided check"];
@@ -211,6 +248,7 @@ export class CheckRun {
       const vals = Object.entries(r.values || {}).map(([k, v]) => `${k}=${v}`).join(" ");
       lines.push(`${s.id}: ${r.status}${r.reason ? ` (${r.reason})` : ""}${vals ? ` ${vals}` : ""}`);
     }
+    for (const g of this.suggestions()) lines.push(`suggest ${g.key}: ${g.from} -> ${g.value}`);
     return lines.join("\n");
   }
 
@@ -231,7 +269,8 @@ export class CheckRun {
   }
 
   _finish(result) {
-    this.results[this.step.id] = result;
+    // what fired unasked during this step, kept for suggestions (a redo replaces it)
+    this.results[this.step.id] = { ...result, extraCounts: { ...(this._st?.extra || {}) } };
     this.phase = "done";
   }
 
@@ -290,6 +329,12 @@ export class CheckRun {
       this._leanEvent(kind);
       return;
     }
+    if (data.source === "tilt") {
+      // a lean step outside the lean step: tilt in the hand fired by itself
+      st.extra ??= {};
+      st.extra.tilt = (st.extra.tilt || 0) + 1;
+      return;
+    }
     if (GESTURES.includes(kind) && !(EXPECTED[s.id] || []).includes(kind)) {
       st.extra ??= {};
       st.extra[kind] = (st.extra[kind] || 0) + 1;
@@ -314,6 +359,14 @@ export class CheckRun {
       if (!["press", "double_press", "triple_press", "long_press"].includes(kind)) return;
       if (data.source === "wake") return; // the press that woke it, not the one asked for
       const want = targets[st.got || 0];
+      if (want === "double_press" && kind === "press") {
+        // a double press that came as two: how far apart, to fit the window
+        const t = this.now() / 1000;
+        if (st.lastPress != null && t - st.lastPress <= DOUBLE_GAP_MAX_S) {
+          st.doubleGap = Math.min(st.doubleGap ?? Infinity, t - st.lastPress);
+        }
+        st.lastPress = t;
+      }
       if (kind === want) {
         st.got = (st.got || 0) + 1;
         st.hint = null;
@@ -400,9 +453,11 @@ export class CheckRun {
       case "press": {
         const targets = this._pressTargets();
         const got = st.got || 0;
+        const values = { missing: targets.slice(got).join(",") };
+        if (st.doubleGap != null) values.double_gap = +st.doubleGap.toFixed(2);
         return got >= targets.length
           ? { status: "pass" }
-          : { status: "fail", reason: "missing", values: { missing: targets.slice(got).join(",") } };
+          : { status: "fail", reason: "missing", values };
       }
       case "flip": {
         if ((st.stage || 0) < 3) return { status: "fail", reason: st.start == null ? "not_flat" : "not_flipped" };

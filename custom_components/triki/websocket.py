@@ -15,8 +15,16 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
-from .const import DOMAIN
+from .const import (
+    CONF_INVERT_ROTATION,
+    CONF_MULTI_PRESS_WINDOW,
+    CONF_RATE,
+    CONF_SHAKE,
+    CONF_TILT,
+    DOMAIN,
+)
 from .orientation import CalibrationError
+from .protocol import SUPPORTED_RATES
 
 # mypy sees voluptuous markers as a different type than the decorator's hint in
 # this environment; the schemas are the ones Home Assistant core uses.
@@ -32,6 +40,7 @@ def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_reset_heading)
     websocket_api.async_register_command(hass, ws_calibrate)
     websocket_api.async_register_command(hass, ws_check)
+    websocket_api.async_register_command(hass, ws_apply)
 
 
 def _devices(hass: HomeAssistant) -> list[TrikiDevice]:
@@ -77,6 +86,7 @@ def status(dev: TrikiDevice) -> dict[str, Any]:
             "multi_press": dev.options.multi_press,
             "shake": dev.options.shake,
             "tilt": dev.options.tilt,
+            "multi_press_window": dev.options.multi_press_window,
         },
     }
 
@@ -121,10 +131,17 @@ def ws_subscribe(
     def on_event(kind: str, data: dict[str, Any]) -> None:
         send({"type": "event", "event": kind, "data": data})
 
+    @callback
+    def on_gone() -> None:
+        # the entry reloads (options changed): this device object is done; the
+        # card subscribes again and gets the new one
+        send({"type": "reload"})
+
     unsubs = [
         dev.async_add_listener(on_state),
         dev.async_add_motion_listener(on_motion),
         dev.async_add_event_listener(on_event, during_check=True),
+        dev.async_add_gone_listener(on_gone),
     ]
 
     @callback
@@ -210,3 +227,44 @@ def ws_check(
         connection.send_error(msg["id"], "busy", "Another check of this token is running")
         return
     connection.send_result(msg["id"])
+
+
+# What the guided check may change, with the options form's own limits. Anything
+# else stays in the options form, where the owner sees every setting at once.
+_APPLY_OPTIONS = vol.Schema(
+    {
+        vol.Optional(CONF_INVERT_ROTATION): bool,
+        vol.Optional(CONF_RATE): vol.All(vol.Coerce(int), vol.In(SUPPORTED_RATES)),
+        vol.Optional(CONF_MULTI_PRESS_WINDOW): vol.All(
+            vol.Coerce(float), vol.Range(min=0.2, max=1.5)
+        ),
+        vol.Optional(CONF_SHAKE): bool,
+        vol.Optional(CONF_TILT): bool,
+    }
+)
+_APPLY_SCHEMA: dict[Any, Any] = {
+    vol.Required("type"): f"{DOMAIN}/apply",
+    vol.Optional("device_id"): str,
+    vol.Required("options"): vol.All(_APPLY_OPTIONS, vol.Length(min=1)),
+}
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(_APPLY_SCHEMA)
+@callback
+def ws_apply(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict[str, Any]
+) -> None:
+    """Settings the guided check suggests, applied when the owner presses Apply.
+
+    The entry reloads with them, as after the options form: the link drops and
+    the token reconnects on its next wake-up.
+    """
+    dev = _find(hass, msg.get("device_id"))
+    if dev is None:
+        connection.send_error(msg["id"], "not_found", "No such Triki token")
+        return
+    entry = dev.entry
+    hass.config_entries.async_update_entry(entry, options={**entry.options, **msg["options"]})
+    hass.config_entries.async_schedule_reload(entry.entry_id)
+    connection.send_result(msg["id"], {"applied": msg["options"]})

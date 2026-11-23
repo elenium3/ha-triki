@@ -416,3 +416,124 @@ test("the flat step is confirmed straight away, without a Start", () => {
   assert.notEqual(run.step.id, "flat");
   assert.equal(run.view().external, false); // the next step has its Start again
 });
+
+// ------------------------------------------------------------------ suggestions
+const keys = (run) => run.suggestions().map((g) => `${g.key}=${g.value}`);
+
+test("turns that came out the other way round both times suggest swapping the direction", () => {
+  const { run, clock } = rig();
+  goTo(run, "turn_cw");
+  run.start();
+  turn(run, clock, -180, 6, "rotate_ccw"); // the hand turned clockwise, the events said ccw
+  run.done();
+  run.next();
+  run.start();
+  turn(run, clock, 180, 6, "rotate_cw");
+  run.done();
+  assert.deepEqual(keys(run), ["invert_rotation=true"]);
+  assert.match(run.report(), /suggest invert_rotation: false -> true/);
+});
+
+test("one turn the wrong way, or a hand that turned the wrong way, suggests nothing", () => {
+  let { run, clock } = rig();
+  goTo(run, "turn_cw");
+  run.start();
+  turn(run, clock, -180, 6, "rotate_ccw");
+  run.done();
+  run.next();
+  run.start();
+  turn(run, clock, 180, 6, "rotate_ccw"); // this one was right
+  run.done();
+  assert.deepEqual(keys(run), []);
+
+  ({ run, clock } = rig());
+  goTo(run, "turn_cw");
+  run.start();
+  turn(run, clock, 180, 6, "rotate_ccw"); // turned the wrong way: redo, not a setting
+  run.done();
+  assert.deepEqual(keys(run), []);
+});
+
+test("a lossy link suggests 26 Hz, unless it already runs at 26", () => {
+  let { run, clock } = rig();
+  run.start();
+  stream(run, clock, 10.1, 26);
+  assert.deepEqual(keys(run), ["sample_rate=26"]);
+
+  ({ run, clock } = rig());
+  run.start();
+  stream(run, clock, 10.1, 13, () => ({ rate: 26 }));
+  assert.equal(run.results.rest.reason, "loss");
+  assert.deepEqual(keys(run), []);
+});
+
+test("a double press that came as two presses suggests a wider window", () => {
+  const { run, clock } = rig({ ...OPTS, multi_press_window: 0.3 });
+  goTo(run, "press");
+  run.start();
+  run.feedEvent("press", { count: 1 }); // the single press asked for first
+  clock.advance(3000);
+  run.feedEvent("press", { count: 1 }); // the double press, 0.45 s apart
+  clock.advance(450);
+  run.feedEvent("press", { count: 1 });
+  clock.advance(61000); // the step times out without a double_press
+  assert.equal(run.results.press.status, "fail");
+  assert.equal(run.results.press.values.double_gap, 0.45);
+  const [g] = run.suggestions();
+  assert.equal(g.key, "multi_press_window");
+  assert.equal(g.value, 0.5);
+  assert.equal(g.from, 0.3);
+});
+
+test("a window that already fits, or presses far apart, suggest nothing", () => {
+  const { run, clock } = rig({ ...OPTS, multi_press_window: 0.6 });
+  goTo(run, "press");
+  run.start();
+  run.feedEvent("press", { count: 1 });
+  clock.advance(400);
+  run.feedEvent("press", { count: 1 });
+  clock.advance(2000);
+  run.feedEvent("press", { count: 1 });
+  clock.advance(61000);
+  assert.deepEqual(keys(run), []);
+});
+
+test("a shake or a lean that fires by itself twice suggests turning it off", () => {
+  let { run, clock } = rig({ ...OPTS, tilt: true });
+  goTo(run, "turn_cw");
+  run.start();
+  run.feedEvent("shake");
+  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
+  turn(run, clock, -180, 6);
+  run.done();
+  run.next();
+  run.start();
+  run.feedEvent("shake");
+  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" });
+  turn(run, clock, 180, 6, "rotate_ccw");
+  run.done();
+  assert.deepEqual(keys(run), ["shake=false", "tilt=false"]);
+
+  ({ run, clock } = rig());
+  goTo(run, "turn_cw");
+  run.start();
+  run.feedEvent("shake"); // once is a remark, not a setting
+  turn(run, clock, -180, 6);
+  run.done();
+  assert.deepEqual(keys(run), []);
+});
+
+test("a redone step forgets what fired during the first try", () => {
+  const { run, clock } = rig();
+  goTo(run, "turn_cw");
+  run.start();
+  run.feedEvent("shake");
+  run.feedEvent("shake");
+  turn(run, clock, -180, 6);
+  run.done();
+  run.redo();
+  run.start();
+  turn(run, clock, -180, 6);
+  run.done();
+  assert.deepEqual(keys(run), []);
+});

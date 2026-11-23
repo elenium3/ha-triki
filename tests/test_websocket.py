@@ -181,3 +181,64 @@ async def test_a_delayed_burst_keeps_the_turn(hass: HomeAssistant, setup, monkey
     turned = dev.motion_snapshot()["euler"][2] - yaw0
     turned -= 360 * round(turned / 360)
     assert abs(turned) == pytest.approx(150, abs=8)  # on arrival times it was about 55
+
+
+async def test_apply_changes_only_what_the_check_may(
+    hass: HomeAssistant, setup, hass_ws_client
+) -> None:
+    """The check's Apply: the given settings land in the options and the entry reloads."""
+    ws = await hass_ws_client(hass)
+    dev_id = setup.runtime_data.device_id
+    await ws.send_json_auto_id(
+        {
+            "type": "triki/apply",
+            "device_id": dev_id,
+            "options": {"invert_rotation": True, "sample_rate": 26, "multi_press_window": 0.55},
+        }
+    )
+    msg = await ws.receive_json()
+    assert msg["success"], msg
+    await hass.async_block_till_done()
+    assert setup.options["invert_rotation"] is True
+    assert setup.options["sample_rate"] == 26
+    assert setup.options["multi_press_window"] == 0.55
+    assert setup.runtime_data.options.invert_rotation is True  # reloaded with them
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        {},
+        {"sleep_timeout": 0},  # not the check's to change
+        {"sample_rate": 30},
+        {"multi_press_window": 5},
+    ],
+)
+async def test_apply_refuses_other_settings(
+    hass: HomeAssistant, setup, hass_ws_client, options
+) -> None:
+    ws = await hass_ws_client(hass)
+    before = dict(setup.options)
+    await ws.send_json_auto_id(
+        {"type": "triki/apply", "device_id": setup.runtime_data.device_id, "options": options}
+    )
+    msg = await ws.receive_json()
+    assert not msg["success"]
+    assert dict(setup.options) == before
+
+
+async def test_apply_needs_an_admin(
+    hass: HomeAssistant, setup, hass_ws_client, hass_admin_user
+) -> None:
+    hass_admin_user.groups = []
+    ws = await hass_ws_client(hass)
+    await ws.send_json_auto_id(
+        {
+            "type": "triki/apply",
+            "device_id": setup.runtime_data.device_id,
+            "options": {"shake": False},
+        }
+    )
+    msg = await ws.receive_json()
+    assert not msg["success"]
+    assert msg["error"]["code"] == "unauthorized"

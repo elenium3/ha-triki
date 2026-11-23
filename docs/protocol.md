@@ -12,9 +12,10 @@ executable version of this page.
 - Manufacturer data with company id `0xFF00` and a short, constant payload.
   The payload does not change on button presses, so an advertisement carries
   no state; only its presence and timing matter.
-- The token advertises after a button press or motion, for a few seconds when
-  woken from sleep and for about three minutes after a link is dropped. Then it
-  sleeps and stops advertising completely.
+- The token advertises when its button wakes it from sleep (picking it up,
+  shaking it or knocking the table does not wake it, firmware 3.2.1-A,
+  2026-11-23), for a few seconds, and for about three minutes after a link is
+  dropped. Then it sleeps and stops advertising completely.
 
 ## GATT
 

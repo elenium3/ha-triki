@@ -264,6 +264,9 @@ class TrikiDevice:
         self._streaming = False
 
         self._state_listeners: list[Callable[[], None]] = []
+        # told when this device object goes away (entry reload or unload), so a
+        # live card subscribes again to the new one instead of freezing
+        self._gone_listeners: list[Callable[[], None]] = []
         # (callback, also while a guided check runs)
         self._event_listeners: list[tuple[Callable[[str, dict[str, Any]], None], bool]] = []
         # a guided check from the card: gestures reach only that card, the stream
@@ -578,8 +581,22 @@ class TrikiDevice:
         scanner = bluetooth.async_scanner_by_source(self.hass, source)
         return scanner is not None and not isinstance(scanner, BaseHaRemoteScanner)
 
+    @callback
+    def async_add_gone_listener(self, cb: Callable[[], None]) -> CALLBACK_TYPE:
+        """Called once when this device object stops (the entry reloads or unloads)."""
+        self._gone_listeners.append(cb)
+
+        def remove() -> None:
+            if cb in self._gone_listeners:
+                self._gone_listeners.remove(cb)
+
+        return remove
+
     async def async_stop(self) -> None:
         self._stopping = True
+        for cb in list(self._gone_listeners):
+            cb()
+        self._gone_listeners.clear()
         if self._unsub_started is not None:
             self._unsub_started()
             self._unsub_started = None

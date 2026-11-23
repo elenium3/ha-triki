@@ -53,6 +53,13 @@ const STRINGS = {
       stepOf: "Step {n} of {total}", count: "Steps", times: "Times", sec: "s", pick: "Which cap?", angle: "Turn", wrong: "wrong way",
       status: { pass: "Good", warn: "Remarks", fail: "Failed", skip: "Skipped" },
       summary: "Result", flipStage: ["Lay it flat first", "Turn it over", "Now turn it back", "Done"],
+      sug: { title: "Suggested changes", apply: "Apply", err: "Not saved: {e}",
+        applied: "Saved. The cap reconnects with the new settings on its next press.",
+        invert_rotation: "The turns came out the other way round: swap the direction.",
+        sample_rate: "{loss}% of the frames are lost: lower the sensor rate from {from} to {value} Hz.",
+        multi_press_window: "Your double press came as two presses: allow {value} s between them (now {from} s).",
+        shake: "Shake fired by itself ×{count}: turn it off.",
+        tilt: "Tilt in the hand fired by itself ×{count}: turn it off." },
       values: { rest: "{rate} Hz of {asked}, {loss_pct}% lost, noise {noise_dps}°/s, via {via}", turn: "{steps} steps for {angle}°", drift: "{drift_deg_min}°/min" },
       reason: {
         loss: "{loss_pct}% of the frames are lost. Move the cap closer to the receiver ({via}).",
@@ -121,6 +128,13 @@ const STRINGS = {
       stepOf: "Шаг {n} из {total}", count: "Шаги", times: "Раз", sec: "с", pick: "Какую крышку проверяем?", angle: "Поворот", wrong: "не в ту сторону",
       status: { pass: "Хорошо", warn: "Есть замечания", fail: "Не прошло", skip: "Пропущено" },
       summary: "Итог", flipStage: ["Сначала положи плашмя", "Переверни", "Теперь верни обратно", "Готово"],
+      sug: { title: "Предлагаю изменить", apply: "Применить", err: "Не сохранилось: {e}",
+        applied: "Сохранено. Крышка подключится с новыми настройками при следующем нажатии.",
+        invert_rotation: "Повороты пришли в обратную сторону: поменять направление.",
+        sample_rate: "Теряется {loss}% кадров: снизить частоту датчиков с {from} до {value} Гц.",
+        multi_press_window: "Твоё двойное нажатие пришло как два одиночных: разрешить {value} с между нажатиями (сейчас {from} с).",
+        shake: "Встряхивание срабатывало само ×{count}: выключить.",
+        tilt: "Наклон в руке срабатывал сам ×{count}: выключить." },
       values: { rest: "{rate} Гц из {asked}, потери {loss_pct}%, шум {noise_dps}°/с, через {via}", turn: "{steps} шагов за {angle}°", drift: "{drift_deg_min}°/мин" },
       reason: {
         loss: "Теряется {loss_pct}% кадров. Поставь крышку ближе к приёмнику ({via}).",
@@ -191,6 +205,13 @@ const STRINGS = {
       stepOf: "Krok {n} z {total}", count: "Kroki", times: "Razy", sec: "s", pick: "Który kapsel?", angle: "Obrót", wrong: "w złą stronę",
       status: { pass: "Dobrze", warn: "Uwagi", fail: "Nie przeszło", skip: "Pominięto" },
       summary: "Wynik", flipStage: ["Najpierw połóż płasko", "Odwróć", "Teraz odwróć z powrotem", "Gotowe"],
+      sug: { title: "Proponowane zmiany", apply: "Zastosuj", err: "Nie zapisano: {e}",
+        applied: "Zapisano. Kapsel połączy się z nowymi ustawieniami przy następnym naciśnięciu.",
+        invert_rotation: "Obroty przyszły w odwrotną stronę: zamień kierunek.",
+        sample_rate: "Ginie {loss}% ramek: obniż częstotliwość czujników z {from} do {value} Hz.",
+        multi_press_window: "Twoje podwójne naciśnięcie przyszło jako dwa pojedyncze: pozwól na {value} s między nimi (teraz {from} s).",
+        shake: "Potrząśnięcie działało samo ×{count}: wyłącz je.",
+        tilt: "Przechył w dłoni działał sam ×{count}: wyłącz go." },
       values: { rest: "{rate} Hz z {asked}, utrata {loss_pct}%, szum {noise_dps}°/s, przez {via}", turn: "{steps} kroków na {angle}°", drift: "{drift_deg_min}°/min" },
       reason: {
         loss: "Ginie {loss_pct}% ramek. Przysuń kapsel bliżej odbiornika ({via}).",
@@ -408,6 +429,11 @@ const CSS = `
   .checkpanel .btns button.pulse { animation: glow 1.4s ease-in-out infinite; }
   @keyframes glow { 50% { box-shadow: 0 0 0 6px rgba(var(--rgb-primary-color, 3,169,244), .25); } }
   .sum { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: .92em; }
+  .sug { margin-top: 12px; padding: 8px 12px; border-radius: 8px; background: var(--secondary-background-color); }
+  .sug h4 { margin: 0 0 4px; }
+  .sug ul { margin: 0; padding-left: 18px; }
+  .sug p { margin: 0; }
+  .sug .err { margin-top: 6px; color: var(--error-color, #db4437); }
   .sum span.v { grid-column: 1 / -1; color: var(--secondary-text-color); font-size: .88em; margin-top: -2px; }
   .empty { padding: 24px 16px; color: var(--secondary-text-color); }
 `;
@@ -584,6 +610,19 @@ class TrikiCard extends HTMLElement {
     if (this._unsub) { this._unsub().catch?.(() => {}); this._unsub = null; }
   }
 
+  // The integration reloaded (its options changed): subscribe to the new device
+  // objects once they are up, trying for a while.
+  _resubscribeSoon(tries = 10) {
+    if (this._reloadTimer) return;
+    this._unsubscribe();
+    this._reloadTimer = setTimeout(async () => {
+      this._reloadTimer = null;
+      if (!this.isConnected || this._unsub || this._subscribing) return;
+      await this._subscribe();
+      if (!this._unsub && tries > 1) this._resubscribeSoon(tries - 1);
+    }, 2000);
+  }
+
   _isLive(s) { return !!(s && s.connected && s.streaming); }
 
   // Follow the awake token: switch when the shown one is not live and another is.
@@ -635,6 +674,7 @@ class TrikiCard extends HTMLElement {
   }
 
   _onMessage(id, msg) {
+    if (msg.type === "reload") { this._resubscribeSoon(); return; }
     if (msg.type === "status") {
       const was = this._isLive(this._statuses[id]);
       this._statuses[id] = msg;
@@ -926,6 +966,20 @@ class TrikiCard extends HTMLElement {
     if (action.startsWith("pick:")) { this._checkChoose(action.slice(5)); return; }
     if (!run) return;
     const t = this._t.check;
+    if (action === "apply") {
+      // only what the check suggested, each with the options form's limits (server side)
+      const options = Object.fromEntries(run.suggestions().map((g) => [g.key, g.value]));
+      try {
+        await this._send({ type: "triki/apply", device_id: chk.id, options });
+        chk.applied = true;
+        chk.err = "";
+      } catch (err) {
+        const e = err?.error || err;
+        chk.err = this._fmt(t.sug.err, { e: e?.message || e?.code || "?" });
+      }
+      this._renderCheck(true);
+      return;
+    }
     if (action === "start") {
       if (run.start()) {
         chk.ref = this._target ? [...this._target] : null; // the hint moves from here
@@ -1032,9 +1086,17 @@ class TrikiCard extends HTMLElement {
         const detail = this._resultText(s.id, r);
         return `<span>${t.steps[s.id]}</span><b class="${r.status}">${t.status[r.status]}</b>${detail ? `<span class="v">${detail}</span>` : ""}`;
       }).join("");
-      return `<small class="of">${t.title}</small><h3>${t.summary}</h3><div class="sum">${rows}</div>
+      const sugs = chk.applied ? [] : chk.run.suggestions();
+      let sug = "";
+      if (chk.applied) sug = `<div class="sug"><p>${t.sug.applied}</p></div>`;
+      else if (sugs.length) {
+        const items = sugs.map((g) => `<li>${this._fmt(t.sug[g.key], g)}</li>`).join("");
+        sug = `<div class="sug"><h4>${t.sug.title}</h4><ul>${items}</ul>${chk.err ? `<p class="err">${chk.err}</p>` : ""}</div>`;
+      }
+      const btns = sugs.length ? btn("apply", t.sug.apply, "primary") + btn("close", t.close) : btn("close", t.close, "primary");
+      return `<small class="of">${t.title}</small><h3>${t.summary}</h3><div class="sum">${rows}</div>${sug}
         <details class="report"><summary>${t.report}</summary><textarea readonly rows="9">${this._fmt("{r}", { r: chk.run.report({ version: VERSION }) })}</textarea></details>
-        <div class="btns">${btn("close", t.close, "primary")}</div>`;
+        <div class="btns">${btns}</div>`;
     }
     const of = this._fmt(t.stepOf, { n: v.index + 1, total: v.total });
     let body = `<p>${t.text[v.id]}</p>`;

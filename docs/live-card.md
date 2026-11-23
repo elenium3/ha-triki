@@ -42,7 +42,23 @@ so on two tokens the logo and the Z differ (photos 2026-11-18: about 30° and
 edge, the owner turns a picture of the logo with a slider until it matches;
 `triki/calibrate` with `step: logo, angle: <degrees>` stores it. Both are kept
 per token in its config entry;
-`triki/calibrate` with `step: clear` forgets it.
+`triki/calibrate` with `step: clear` forgets it. Calibration only aligns the
+model: gestures and sensors measure against gravity and do not use it.
+
+**Check** (admins only) walks through the link, the knob, the presses and the
+gestures that are turned on, and judges each step. When the results point to a
+setting, the summary suggests it and **Apply** saves it; nothing changes
+without that press. It suggests only clear cases:
+
+| Seen in the check | Suggestion |
+|---|---|
+| Both turns gave steps the other way round while the hand turned the asked way | swap *Swap rotation direction* |
+| More than 30 % of the frames lost at more than 26 Hz | sensor rate 26 Hz |
+| The double press came as two presses | a multi-press window that fits the measured gap (up to 0.8 s) |
+| Shake or *Tilt in the hand* fired by itself twice or more | turn that gesture off |
+
+Applying reloads the integration's entry, as saving the options form does: the
+link drops and the token reconnects on its next press.
 
 **Models.** `model: cap` (the default) is a procedural model built from calipered
 dimensions, in the sensor frame; its resin glows while the LED is on and sinks
@@ -77,6 +93,10 @@ while the button is held. `model: glb` uses Flopsstuff's textured model.
 | `triki/devices` | | `[{device_id, name}]` |
 | `triki/subscribe` | `device_id` (optional with one token) | events: `status`, `motion`, `event` |
 | `triki/reset_heading` | `device_id` (optional with one token) | |
+| `triki/apply` (admin) | `device_id`, `options`: any of `invert_rotation`, `sample_rate`, `multi_press_window`, `shake`, `tilt` | `{applied}`; the entry reloads |
+
+When the entry reloads (options saved), each subscription gets a `reload` event
+and ends; subscribe again to follow the new device object.
 
 `motion` carries `quaternion` (w, x, y, z, sensor frame, +z out of the logo
 side), `euler` (roll, pitch, yaw in degrees), `gyro` (°/s, offset removed),

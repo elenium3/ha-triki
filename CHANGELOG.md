@@ -20,6 +20,9 @@ All notable changes to this project are documented here. The format follows
   - Calibration: lay the token on the table with the dot above the Z away
     from you, and the model levels itself and points the same way. The logo
     angle on the metal side is matched once by eye; both are stored per token.
+  - **Check** suggests settings when its results point to one (both turns the
+    other way round, heavy frame loss, a double press that came as two, a
+    gesture that fires by itself) and saves them with **Apply**.
   - **Check** (admins only): a guided walk through lying still (stream rate,
     lost frames, noise and the receiver the link goes through), level, tilt,
     knob turns each way, the presses, turning over and the gestures that are
