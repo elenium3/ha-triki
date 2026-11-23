@@ -81,3 +81,26 @@ def test_a_pick_up_over_the_edge_is_not_a_lean() -> None:
                         leans["handle" if rec["t"] < 55 else "lean"].append(ev.type[5])
     assert leans["handle"] == [], leans
     assert leans["lean"] == ["r", "l", "r", "l", "r", "l"], leans
+
+
+PICKUP = pathlib.Path(__file__).parent / "fixtures" / "pickup-edge-2026-11-24.jsonl.gz"
+
+
+def test_a_pick_up_on_the_edge_leaves_no_knob_steps() -> None:
+    """The check of 2026-11-24 00:27 (52 Hz, firmware 3.2.1-A): at t 124.7 s the
+    cap was picked up off the table with a jerk that stood it on its edge (82°,
+    600 °/s), then wobbled level in the hand until it was put down at 128 s. The
+    wobble made 3 knob steps before the lift rule."""
+    det = gestures.GestureDetector(52, knob=True, shake=True, tilt=True)
+    parser = FrameParser()
+    steps = 0
+    with gzip.open(PICKUP, "rt") as fh:
+        for line in fh:
+            rec = json.loads(line)
+            if "hex" not in rec:
+                continue
+            for frame in parser.push(bytes.fromhex(rec["hex"])):
+                for ev in det.update(Sample.from_frame(frame), rec["t"]):
+                    if ev.type in gestures.KNOB_EVENTS and 100 <= rec["t"] <= 135:
+                        steps += ev.data["steps"]
+    assert steps == 0

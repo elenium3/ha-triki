@@ -115,6 +115,9 @@ All notable changes to this project are documented here. The format follows
   not while it is held; the knob steps with the knob off say so up front and
   pass on the model alone; *Apply* is *Save to options* and says that the link
   drops. Russian texts use «Вы» and treat the cap as «она» throughout.
+- The knob: a pick-up that stands the cap on its edge leaves the knob silent
+  until the cap lies still again; the wobble in the hand made steps (3 in one
+  pick-up of a check). Turns on the table, slow and fast, keep every step.
 - Tilt in the hand: a cap that went over its edge since it was last level (a
   pick-up often turns it nearly over and back) leans only after it is level
   again. Both false leans of a check's pick-up step were so; in 233 everyday
