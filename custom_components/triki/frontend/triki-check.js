@@ -578,11 +578,12 @@ export class CheckRun {
       case "press": {
         const targets = this._pressTargets();
         const got = st.got || 0;
-        const values = { missing: targets.slice(got).join(",") };
-        if (st.doubleGap != null) values.double_gap = +st.doubleGap.toFixed(2);
+        // a double press that came as two presses at first still tunes the
+        // window when a retry made it: the gap is kept on a pass too
+        const gap = st.doubleGap != null ? { double_gap: +st.doubleGap.toFixed(2) } : {};
         return got >= targets.length
-          ? { status: "pass" }
-          : { status: "fail", reason: "missing", values };
+          ? { status: "pass", values: gap }
+          : { status: "fail", reason: "missing", values: { missing: targets.slice(got).join(","), ...gap } };
       }
       case "flip": {
         if ((st.stage || 0) < 3) return { status: "fail", reason: st.start == null ? "not_flat" : "not_flipped" };

@@ -508,6 +508,25 @@ test("a double press that came as two presses suggests a wider window", () => {
   assert.equal(g.from, 0.3);
 });
 
+test("a double press that made it on a retry still suggests the window", () => {
+  const { run, clock } = rig({ ...OPTS, multi_press_window: 0.3 });
+  goTo(run, "press");
+  run.start();
+  run.feedEvent("press", { count: 1 });
+  clock.advance(3000);
+  run.feedEvent("press", { count: 1 }); // the first try came as two presses
+  clock.advance(450);
+  run.feedEvent("press", { count: 1 });
+  clock.advance(2000);
+  run.feedEvent("double_press", { count: 2 }); // the retry made it
+  clock.advance(2000);
+  run.feedEvent("long_press", {});
+  clock.advance(100);
+  assert.equal(run.results.press.status, "pass");
+  assert.equal(run.results.press.values.double_gap, 0.45);
+  assert.deepEqual(keys(run), ["multi_press_window=0.5"]);
+});
+
 test("a window that already fits, or presses far apart, suggest nothing", () => {
   const { run, clock } = rig({ ...OPTS, multi_press_window: 0.6 });
   goTo(run, "press");

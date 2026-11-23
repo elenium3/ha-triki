@@ -102,8 +102,19 @@ def test_short_lean_is_nothing():
 
 def test_edge_on_is_not_a_lean():
     d = det()
-    ev = feed(d, secs(2), **lean(80)) + feed(d, SETTLE, **LEVEL)
+    ev = feed(d, secs(2), **lean(87)) + feed(d, SETTLE, **LEVEL)
     assert tilts(ev) == []
+
+
+def test_a_deep_lean_counts_and_going_deeper_keeps_it():
+    """Asked for "more than 25", people lean to 70-85 (the 2026-11-23 check)."""
+    d = det()
+    ev = feed(d, secs(1), **LEVEL) + feed(d, secs(1), **lean(75)) + feed(d, SETTLE, **lean(75))
+    assert [e.type for e in ev if e.type in TILT_EVENTS and not e.data["repeat"]] == ["tilt_right"]
+    d = det()
+    ev = feed(d, secs(1), **LEVEL) + feed(d, secs(0.5), **lean(50))
+    ev += feed(d, secs(1), **lean(87)) + feed(d, SETTLE, **lean(50))
+    assert [e.type for e in ev if e.type in TILT_EVENTS and not e.data["repeat"]] == ["tilt_right"]
 
 
 def test_picked_up_leaned_needs_level_first():

@@ -26,7 +26,7 @@ FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "handling-2026-11-23.json
 def _knob_steps() -> dict[str, int]:
     det = gestures.GestureDetector(52, knob=True, shake=True, tilt=True)
     parser = FrameParser()
-    steps = {"handling": 0, "turning": 0}
+    steps = {"handling": 0, "turning": 0, "handling_tilts": 0}
     with gzip.open(FIXTURE, "rt") as fh:
         for line in fh:
             rec = json.loads(line)
@@ -34,7 +34,11 @@ def _knob_steps() -> dict[str, int]:
                 continue
             for frame in parser.push(bytes.fromhex(rec["hex"])):
                 for ev in det.update(Sample.from_frame(frame), rec["t"]):
-                    if not ev.type.startswith("rotate") or ev.data.get("source"):
+                    if ev.type in gestures.TILT_EVENTS and not ev.data["repeat"]:
+                        if 5 <= rec["t"] <= 124:
+                            steps["handling_tilts"] += 1
+                        continue
+                    if not ev.type.startswith("rotate"):
                         continue
                     if 5 <= rec["t"] <= 124:
                         steps["handling"] += ev.data["steps"]
@@ -47,3 +51,5 @@ def test_picking_up_is_not_turning() -> None:
     steps = _knob_steps()
     assert steps["handling"] <= 3, steps
     assert steps["turning"] >= 34, steps
+    # tilt in the hand on: about ten pick-ups lean the cap now and then
+    assert steps["handling_tilts"] <= 2, steps

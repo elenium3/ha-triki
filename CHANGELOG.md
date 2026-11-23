@@ -100,6 +100,15 @@ All notable changes to this project are documented here. The format follows
   timing (multi-press window, long press).
 
 ### Fixed
+- A wake is a press only after real sleep. A silence sooner than ~3 minutes
+  after a dropped link is adverts Home Assistant missed (a weak link, or the
+  cap carried out of range and back): it no longer makes a press nobody
+  pressed, and an idle-dropped cap is no longer reconnected while it dozes.
+- Tilt in the hand counts leans up to 80° (was 60°): asked for more than 25°,
+  people lean to 70-85°, and half the leans of a check went unseen.
+- The check: closing the tab ends the check at once (the sleep step held it
+  for 7 minutes); the multi-press window suggestion also comes when the double
+  press made it on a retry.
 - The card said *Dozing off* until the next wake-up, long after the token had
   fallen asleep.
 - Saving the options right after an idle disconnect no longer links up to the

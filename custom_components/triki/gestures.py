@@ -166,8 +166,12 @@ BIAS_MAX_DPS = 10.0  # per axis; more is not an offset
 # automation on the knob must not react to a lean (picking the token up leans it).
 TILT_ON_DEG = 25.0
 TILT_OFF_DEG = 10.0
-# Beyond this the token stands on its edge or is turned over, not leaned.
-TILT_MAX_DEG = 60.0
+# Beyond this the token stands on its edge or is turned over, not leaned; a lean
+# that goes deeper on the same side stays a lean (no new step, no reset). 60
+# missed half the leans of the 2026-11-23 check: asked for "more than 25", the
+# owner leaned to 70-85. At 80 the check caught 28 of 32 leans (60: 15), for
+# 16 lone leans in 233 everyday captures instead of 12.
+TILT_MAX_DEG = 80.0
 TILT_PITCH_MAX_DEG = 30.0  # leaned forward or back as much: not a side lean
 # Held still this long at the lean before the first step.
 TILT_CONFIRM_S = 0.2
@@ -449,10 +453,12 @@ class GestureDetector:
             self._tilt_armed = True
             self._tilt_dir = 0
             return
+        d = 1 if roll > 0 else -1
+        if abs(roll) > TILT_MAX_DEG and self._tilt_dir == d:
+            return  # leaned on past the range: still the same lean
         if not (TILT_ON_DEG <= abs(roll) <= TILT_MAX_DEG and abs(pitch) <= TILT_PITCH_MAX_DEG):
             self._tilt_dir = 0
             return
-        d = 1 if roll > 0 else -1
         if self._tilt_dir != d:
             if not self._tilt_armed:
                 return  # still the last lean, or picked up leaned
