@@ -82,3 +82,4 @@ BATTERY_LOW_CLEAR_MARGIN = 10
 ISSUE_SLEEP_NEVER = "sleep_timeout_never"
 ISSUE_BATTERY_LOW = "battery_low"
 ISSUE_NOT_RESPONDING = "not_responding"
+ISSUE_LINK_LOSSY = "link_lossy"

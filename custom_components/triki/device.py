@@ -57,10 +57,12 @@ from .const import (
     DOMAIN,
     IDLE_RATE,
     ISSUE_BATTERY_LOW,
+    ISSUE_LINK_LOSSY,
     ISSUE_NOT_RESPONDING,
     TILT_PUBLISH_INTERVAL,
 )
 from .gestures import GestureDetector
+from .linkquality import LinkQuality
 from .models import TrikiOptions
 from .orientation import CalibrationError, Orientation
 from .protocol import (
@@ -279,6 +281,7 @@ class TrikiDevice:
         self._orientation = Orientation()
         self._clk_t: float | None = None  # sample-clock time of the last frame
         self._odr_scale = 1.0
+        self.link_quality = LinkQuality()
         self._odr_anchor: tuple[float, int, int] | None = None  # (arrival, frames, rate)
         self._logo_angle: float | None = None
         self._load_calibration()
@@ -969,6 +972,7 @@ class TrikiDevice:
         self._odr_anchor = None
         self._streaming = False
         self.stream_rate = self.options.rate
+        self.link_quality.start(self.stream_rate * self._odr_scale)
         await client.start_notify(
             NUS_TX_UUID, lambda char, data: self._on_notify_from(client, char, data)
         )
@@ -1051,6 +1055,7 @@ class TrikiDevice:
             _LOGGER.debug("%s: link dropped (token asleep?)", self.name)
         if self.connected:
             self.stats.last_session_s = round(time.monotonic() - self._session_t0, 1)
+        self._settle_link_quality()
         if self._stale_notifs or self._dup_notifs:
             _LOGGER.debug(
                 "%s: dropped %d notifications from other clients, %d repeats",
@@ -1129,6 +1134,34 @@ class TrikiDevice:
             },
         )
 
+    @callback
+    def _settle_link_quality(self) -> None:
+        """The session ended: keep its frame share; tell the owner when several
+        in a row lost much of the stream, and take it back after a clean one."""
+        pct = self.link_quality.end_session()
+        if pct is None:
+            return
+        _LOGGER.debug("%s: %.1f %% of the frames arrived this session", self.name, pct)
+        issue_id = f"{ISSUE_LINK_LOSSY}_{self.entry.entry_id}"
+        if not self.link_quality.lossy:
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+            return
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=ISSUE_LINK_LOSSY,
+            translation_placeholders={
+                "name": self.name,
+                "pct": f"{pct:.0f}",
+                "sessions": str(self.link_quality.lossy_in_a_row),
+                "via": self.link_source_name or "?",
+                "rate": str(self.options.rate),
+            },
+        )
+
     # ------------------------------------------------------------ streaming
     @callback
     def _on_notify_from(self, client: BleakClient, char: Any, data: bytearray) -> None:
@@ -1180,6 +1213,7 @@ class TrikiDevice:
         dt = self._detector.frame_period
         for i, frame in enumerate(frames):
             self.stats.frames += 1
+            self.link_quality.frame(now)
             if not self._streaming:
                 self._streaming = True
                 self._cancel_timer("_unsub_watchdog")
@@ -1361,6 +1395,7 @@ class TrikiDevice:
         self._battery_event.clear()
         self._pause_level = None
         self._battery_pause = True
+        self.link_quality.stop()
         try:
             async with asyncio.timeout(_STOP_TIMEOUT_S):
                 await client.write_gatt_char(NUS_RX_UUID, stop_command(), response=True)
@@ -1438,6 +1473,7 @@ class TrikiDevice:
                 if self._client is not client:
                     return  # the link went away meanwhile
                 self.stream_rate = rate
+                self.link_quality.start(rate * self._odr_scale)
                 self.stats.rate_switches += 1
                 self._detector.set_rate(rate)
                 if self._capture:

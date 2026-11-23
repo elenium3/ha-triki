@@ -48,6 +48,11 @@ async def async_get_config_entry_diagnostics(
         },
         "link": asdict(dev.stats),
         "link_via": dev.link_source_name,
+        "link_quality": {
+            "session_pct": dev.link_quality.pct,
+            "last_session_pct": dev.link_quality.last_pct,
+            "lossy_in_a_row": dev.link_quality.lossy_in_a_row,
+        },
         "shakes": list(dev.shake_log),
         "advertisements": dev.advertisement_cadence,
         "last_advertisement": None

@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Link quality** sensor: the share of motion frames that arrived in the last
+  session. Three lossy sessions in a row (under 70 %) raise a repair issue
+  with what to do; a clean one clears it.
 - **Live 3D card**, `custom:triki-card`, served and registered by the
   integration: nothing to install, search for *Triki live 3D* when adding a
   card. See docs/live-card.md.

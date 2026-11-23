@@ -103,6 +103,9 @@
       }
     },
     "sensor": {
+      "link_quality": {
+        "name": "Jakość połączenia"
+      },
       "face": {
         "name": "Strona do góry",
         "state": {
@@ -138,6 +141,10 @@
     "not_responding": {
       "title": "{name} przestał odpowiadać",
       "description": "Połączenie z {name} zerwało się samo i od tego czasu token się nie odzywa. Sprawny token po zerwaniu połączenia rozgłasza się jeszcze przez około trzy minuty.\n\nNaciśnij go raz obok odbiornika Bluetooth. Jeśli nic się nie dzieje, token się zawiesił: wyjmij baterię CR2032 na kilka sekund i włóż ją z powrotem. Zdarza się to przy słabej baterii (ostatni pomiar: {level}), dlatego lepiej ją wymienić niż używać dalej.\n\nTo powiadomienie zniknie, gdy token znów się odezwie."
+    },
+    "link_lossy": {
+      "title": "{name} gubi dużą część strumienia",
+      "description": "W ostatnich {sessions} sesjach z rzędu do {name} dotarło mniej niż 70 % ramek ruchu (w ostatniej {pct} %, przez {via}). Na takim połączeniu gesty, pokrętło i przechył gubią kroki; naciśnięcia mniej.\n\nPrzysuń token lub odbiornik bliżej, dodaj proxy Bluetooth ESPHome tam, gdzie używasz tokena, albo obniż *Częstotliwość próbkowania IMU* w opcjach (teraz {rate} Hz) do 26. **Test** w karcie zmierzy połączenie i zaproponuje częstotliwość.\n\nTo zniknie po sesji, w której dotrze 90 % lub więcej."
     }
   }
 }

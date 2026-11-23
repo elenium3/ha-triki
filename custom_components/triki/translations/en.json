@@ -103,6 +103,9 @@
       }
     },
     "sensor": {
+      "link_quality": {
+        "name": "Link quality"
+      },
       "face": {
         "name": "Face up",
         "state": {
@@ -138,6 +141,10 @@
     "not_responding": {
       "title": "{name} stopped responding",
       "description": "The link to {name} dropped on its own and the token has not been heard since. A healthy token keeps advertising for about three minutes after a drop.\n\nPress it once next to the Bluetooth receiver. If nothing happens, it has locked up: take the CR2032 out for a few seconds and put it back. This happens with a weak cell (last measured: {level}), so replace it rather than reuse it.\n\nThis notice clears as soon as the token is heard again."
+    },
+    "link_lossy": {
+      "title": "{name} loses much of its stream",
+      "description": "In the last {sessions} sessions in a row, {name} got less than 70 % of its motion frames through (the last one: {pct} %, via {via}). Gestures, the knob and tilt miss steps on such a link; presses are less affected.\n\nMove the token or the receiver closer, add an ESPHome Bluetooth proxy near where the token is used, or lower *IMU sample rate* in the options (now {rate} Hz) to 26. The card's **Check** measures the link and suggests the rate.\n\nThis goes away after a session in which 90 % or more arrives."
     }
   }
 }
