@@ -590,3 +590,56 @@ def test_knob_steps_arrive_after_the_hold():
     late = feed(d, secs(0.4))
     assert types(ev).count("rotate_cw") + types(late).count("rotate_cw") == 2
     assert "rotate_cw" in types(late)  # the last step waits out the hold
+
+
+def test_a_delayed_burst_keeps_the_partial_turn():
+    """A congested link holds the stream for 2 s, then delivers it at once. The jump
+    of the arrival clock is time the detector did not see, not 2 s of idling: a slow
+    first frame in the burst must not drop the partial turn (it lost 1-2 steps)."""
+    rate = 52
+    d = GestureDetector(rate, knob_step_deg=30, startup_discard=0)
+    dt = 1.0 / rate
+    t = 100.0
+    for _ in range(rate):  # settle flat
+        t += dt
+        d.update(Sample.from_frame(frame()), t)
+    ev = []
+
+    def on_pace(n, gz):
+        nonlocal t
+        for _ in range(n):
+            t += dt
+            ev.extend(d.update(Sample.from_frame(frame(gz=gz)), t))
+
+    on_pace(10, 120.0)  # 23° of the first step
+    held = [0.0] * 5 + [120.0] * 99  # the hand paused for 0.1 s, then turned on
+    t += len(held) * dt  # nothing arrives for 2 s
+    for i, gz in enumerate(held):  # then the backlog, 2 ms apart
+        ev.extend(d.update(Sample.from_frame(frame(gz=gz)), t + i * 0.002))
+    t += len(held) * 0.002
+    on_pace(rate, 0.0)  # at rest: the held steps are reported
+    steps = sum(e.data["steps"] for e in ev if e.type == "rotate_ccw")
+    assert steps == 8  # 23° + 228° = 251°: 8 whole steps, as without the delay
+
+
+def test_a_long_silence_still_drops_the_partial_turn():
+    rate = 52
+    d = GestureDetector(rate, knob_step_deg=30, startup_discard=0)
+    dt = 1.0 / rate
+    t = 100.0
+    for _ in range(rate):
+        t += dt
+        d.update(Sample.from_frame(frame()), t)
+    ev = []
+    for _ in range(10):  # 23° of a step
+        t += dt
+        ev += d.update(Sample.from_frame(frame(gz=120.0)), t)
+    t += 8.0  # the link was silent for 8 s: nobody knows what the hand did
+    ev += d.update(Sample.from_frame(frame()), t)
+    for _ in range(5):  # 12° more: no whole step without the dropped 23°
+        t += dt
+        ev += d.update(Sample.from_frame(frame(gz=120.0)), t)
+    for _ in range(rate):
+        t += dt
+        ev += d.update(Sample.from_frame(frame()), t)
+    assert not any(e.type.startswith("rotate") for e in ev)

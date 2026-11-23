@@ -84,6 +84,10 @@ STATIC_GYRO_DPS = 30.0
 MOTION_CONFIRM_S = 0.1
 KNOB_DEADBAND_DPS = 10.0  # below this the turn accumulator is not fed
 KNOB_RESET_S = 1.0  # idle time after which a partial turn is dropped
+# A held-up link delivers its backlog late and at once: a gap up to this long is
+# time the detector did not see, not idling. A longer silence drops the partial
+# turn as before (the same bound as the pose clock's CLOCK_RESYNC_S).
+KNOB_GAP_KEEP_S = 5.0
 # Pressing the button twists the token in the hand: on hardware every press came
 # with 3-5 spurious rotate events within ~0.7 s. The knob is muted while the button
 # is down and for this long after it is released.
@@ -363,7 +367,14 @@ class GestureDetector:
             # notifications must not compress the stream into an instant
             self.t = max(self.t + period, t - self._t_origin)
         self._button(s.button, out)
-        self._motion(s, out, min(self.t - prev_t, KNOB_MAX_DT_S), t)
+        gap = self.t - prev_t
+        dt = min(gap, KNOB_MAX_DT_S)
+        if gap <= KNOB_GAP_KEEP_S:
+            # the part of a gap past KNOB_MAX_DT_S was not seen, so it is not idle
+            # time either: a slow first frame of a late backlog used to drop the
+            # partial turn as if the hand had stopped for the whole gap
+            self._turn_idle_since += gap - dt
+        self._motion(s, out, dt, t)
         if out:
             # all of it is still tracked (idle logic, tilt), only reporting is gated
             allowed: set[str] = set()
