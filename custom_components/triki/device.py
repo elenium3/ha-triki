@@ -239,6 +239,7 @@ class TrikiDevice:
         self._battery_refreshed = float("-inf")
         self._battery_event = asyncio.Event()  # set by a battery notification
         self._battery_pause = False  # the stream is stopped for a measurement right now
+        self._pause_level: int | None = None  # the highest level reported in this pause
         self._unsub_adv: CALLBACK_TYPE | None = None
         self._unsub_started: CALLBACK_TYPE | None = None
         self._proxy_grace_until = 0.0
@@ -895,10 +896,12 @@ class TrikiDevice:
             # that value is taken under load (27 % against 82 % at rest on the
             # same cell) and would make the sensor flap
             return
+        # inside a pause the token has sent a low series (21-27 %) interleaved with
+        # the real one (82-94 %) and the cell recovers upward: the pause keeps the
+        # highest value and publishes it once at its end
+        if self._pause_level is None or level > self._pause_level:
+            self._pause_level = level
         self._battery_event.set()
-        if level != self.battery:
-            self.battery = level
-            self._notify()
 
     async def _async_session_setup(self, client: BleakClient) -> tuple[float, float]:
         if self._capture:
@@ -1303,6 +1306,7 @@ class TrikiDevice:
         runs while the token has been idle for a while and rarely.
         """
         self._battery_event.clear()
+        self._pause_level = None
         self._battery_pause = True
         try:
             async with asyncio.timeout(_STOP_TIMEOUT_S):
@@ -1323,7 +1327,10 @@ class TrikiDevice:
                     break
                 self._battery_event.clear()
                 values += 1
-            if values and self.battery is not None:
+            if values and self._pause_level is not None:
+                if self._pause_level != self.battery:
+                    self.battery = self._pause_level
+                    self._notify()
                 self._on_rest_level(self.battery)
                 _LOGGER.debug(
                     "%s: battery %s%% after a %.1fs stream pause (%d value%s)",

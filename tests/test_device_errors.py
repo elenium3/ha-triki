@@ -320,12 +320,19 @@ async def test_battery_notification_counts_only_at_rest(hass: HomeAssistant, set
     battery_cb(None, bytearray([27]))  # unsolicited, stream running: ignored
     await hass.async_block_till_done()
     assert hass.states.get(BATTERY).state == "87"
-    dev._battery_pause = True
-    battery_cb(None, bytearray([83]))
-    await hass.async_block_till_done()
+    await _pause_with_battery(hass, dev, client, 83)
     assert hass.states.get(BATTERY).state == "83"
     battery_cb(None, bytearray())  # empty payload: ignored
     assert dev.battery == 83
+
+
+async def _pause_with_battery(hass: HomeAssistant, dev, client, level: int) -> None:
+    """One idle stream pause in which the token reports ``level``."""
+    answer_stop_with_battery(hass, client, level)
+    dev._battery_refreshed = float("-inf")
+    dev._last_activity -= 60
+    dev._battery_check(None)
+    await settle(hass, dev)
 
 
 async def test_advertisement_updates_rssi(hass: HomeAssistant, setup) -> None:
@@ -445,10 +452,7 @@ async def test_connect_read_only_while_battery_unknown(hass: HomeAssistant, setu
     client = make_client()
     await advertise(hass, setup, client)
     dev = setup.runtime_data
-    dev._battery_pause = True  # as during a stream pause
-    battery_callback(client)(None, bytearray([82]))
-    dev._battery_pause = False
-    await hass.async_block_till_done()
+    await _pause_with_battery(hass, dev, client, 82)
     assert hass.states.get(BATTERY).state == "82"
     dev._handle_disconnected()
     await hass.async_block_till_done()
