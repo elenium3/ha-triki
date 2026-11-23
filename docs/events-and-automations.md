@@ -13,7 +13,8 @@ device-independent automations.
 | `press` | `count: 1`; `source: wake` for synthetic presses | Button released (immediately, or after the multi-press window if that option is on). |
 | `double_press`, `triple_press` | `count` | Multi-press option on. |
 | `long_press` | | Button held for 0.8 s. Reported while still held; the release does not produce a `press`. |
-| `rotate_cw`, `rotate_ccw` | `steps`, `degrees`, `speed` | Turned around the vertical axis by at least one knob step, flat on a surface or held within 60° of level. Several steps can arrive in one event after a fast turn. Muted while the button is down and for 0.8 s after release, and for 0.5 s after a jolt, a shake or free fall. |
+| `rotate_cw`, `rotate_ccw` | `steps`, `degrees`, `speed` | Turned around the vertical axis by at least one knob step, flat on a surface or held within 40° of level. Several steps can arrive in one event after a fast turn. Muted while the button is down and for 0.8 s after release, and for 0.5 s after a jolt, a shake or free fall. |
+| `rotate_cw`, `rotate_ccw` | `steps: 1`, `degrees`, `source: tilt` | *Tilt in the hand* option: the token held level and leaned right (`cw`) or left (`ccw`) by more than 25°; one step, then one every 0.4 s while it stays leaned. |
 | `shake` | | Several quick back-and-forth swings. One event per episode. |
 | `tap` | | A jolt on a token that is at rest: a finger tap on the table, a light knock. Reported once the token is still again (up to 0.4 s). Motion gestures option. |
 | `throw` | | Free fall of at least 60 ms: a toss or a drop. Motion gestures option. |
@@ -32,6 +33,7 @@ and a Raspberry Pi 5 adapter):
 | tap | Confirmed on the table: 4 of 5 finger taps. Not detected when the token is knocked against something while being moved in the hand (by design: it must be at rest before the jolt). |
 | throw | Confirmed: 3 tosses and a drop gave 5 events, a catch can count twice. |
 | flip | Confirmed on a real turn-over. Also fires when the token is held upside down in the hand for 0.3 s. |
+| tilt in the hand | Experimental: no false steps from knocks or tosses on the recorded sessions, but a real lean and which side counts as right have not been checked on hardware yet. |
 
 ## Bus event
 

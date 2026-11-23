@@ -15,6 +15,7 @@ Changing any option reloads the entry, which drops and re-establishes the link.
 | Treat wake-up as a press | off | The press that wakes a sleeping token ends before the link is up, so it is reported as `wake`. With this on, a `press` with `source: wake` is emitted after every `wake`, including wakes caused by movement. |
 | Knob rotation | off | Enable `rotate_cw` / `rotate_ccw`. |
 | Shake | off | Enable `shake`. Confirmed through a proxy; see [Events](events-and-automations.md#gesture-status). |
+| Tilt in the hand | off | Hold the token level, with the yellow stripe of the card's model towards you, and lean it right or left by more than 25°: one `rotate_cw` (right) or `rotate_ccw` (left) with `source: tilt`, then one every 0.4 s while it stays leaned. Bring it back within 10° of level before the next lean. Experimental: which way counts as right has not been confirmed on hardware yet. |
 | Motion gestures | off | Enable `tap`, `throw`, `flip`. Tuned on one hardware session; see [Events](events-and-automations.md#gesture-status). |
 | Double and triple press | off | Off: `press` is reported the moment the button is released. On: single presses are delayed by the window below so that `double_press` and `triple_press` can be told apart. |
 | Double/triple press window | 0.5 s | Longest pause between releasing and pressing again that still counts as a multi-press. 0.3 s is a good compromise between a quick single press and a comfortable double press. |
@@ -80,7 +81,7 @@ token locked up: treat a low figure on a held link as a real warning.
 
 | Entity | Category | Notes |
 |---|---|---|
-| `event.<name>_action` | | Every gesture. Attributes: `event_type`, plus `steps`, `degrees` and `speed` for rotation, `count` for presses, `source: wake` for synthetic presses. |
+| `event.<name>_action` | | Every gesture. Attributes: `event_type`, plus `steps`, `degrees` and `speed` for rotation, `count` for presses, `source: wake` for synthetic presses, `source: tilt` for the steps of *Tilt in the hand*. |
 | `binary_sensor.<name>_button` | | Live button state. Off while the token sleeps. |
 | `binary_sensor.<name>_connected` | diagnostic | Link state. |
 | `switch.<name>_led` | Configuration | The green LED. Last known state while asleep; can only be changed while linked. |
