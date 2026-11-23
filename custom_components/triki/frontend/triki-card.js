@@ -1084,13 +1084,23 @@ class TrikiCard extends HTMLElement {
     this._renderCheck(true);
   }
 
+  // The summary measures nothing: let the token go back to automations and idle
+  // timers now, not when the card is closed (a background tab keeps it open).
+  _checkRelease(chk) {
+    chk.released = true;
+    clearInterval(chk.renew);
+    for (const id of chk.owned) {
+      this._send({ type: "triki/check", action: "stop", device_id: id, session: chk.session }).catch(() => {});
+    }
+  }
+
   _checkClose() {
     const chk = this._chk;
     if (!chk) return;
     this._chk = null;
     clearInterval(chk.renew);
     clearInterval(chk.timer);
-    for (const id of chk.owned) {
+    if (!chk.released) for (const id of chk.owned) {
       this._send({ type: "triki/check", action: "stop", device_id: id, session: chk.session }).catch(() => {});
     }
     this._el?.card.classList.remove("checking");
@@ -1105,6 +1115,7 @@ class TrikiCard extends HTMLElement {
     const t = this._t.check;
     const run = chk.run;
     const v = run ? run.view() : null;
+    if (v?.finished && !chk.released) this._checkRelease(chk);
     const key = !run ? `pick|${chk.msg}|${[...chk.owned].map((id) => this._isLive(this._statuses?.[id])).join()}`
       : v.finished ? "summary" : `${v.id}|${v.phase}|${v.online}|${v.result?.status}|${chk.err}`;
     if (force || key !== chk.key) {

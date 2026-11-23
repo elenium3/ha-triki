@@ -124,6 +124,9 @@ All notable changes to this project are documented here. The format follows
 - The check: opened while the cap dozes after its own sleep step, it shows the
   doze countdown instead of asking for a press that cannot wake it yet; while
   any other check is open, *Readiness* says a press wakes the cap, as it does.
+- The check lets the cap go once the summary shows: a card left open on it (in
+  a background tab, renewing late) kept starting and lapsing the check, and
+  presses did not reach automations meanwhile.
 - The check: closing the tab ends the check at once (the sleep step held it
   for 7 minutes); the multi-press window suggestion also comes when the double
   press made it on a retry.
