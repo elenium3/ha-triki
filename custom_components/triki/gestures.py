@@ -179,6 +179,12 @@ TILT_REPEAT_S = 0.4
 # Held, not swung: Baartek's music controller gates on 0.8-1.2 g the same way.
 TILT_ACCEL_TOL_G = 0.2
 TILT_STILL_DPS = 80.0
+# Gravity this far on the other face's side: it went over the edge since it was
+# level. Picking the token up often turns it nearly over and back, and it comes
+# to rest in the hand leaned (2 false leans in the 2026-11-23 pick-up step, both
+# so); a lean in the hand never passes the edge. Replay: false leans in 233
+# everyday captures 16 -> 10, wanted leans of the check unchanged (28 of 32).
+TILT_FLIP_Z = 0.1
 TILT_EVENTS = frozenset({"tilt_left", "tilt_right"})
 
 KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
@@ -290,6 +296,7 @@ class GestureDetector:
         # tilt in the hand: armed again only after a return to level
         self._tilt_armed = False
         self._tilt_dir = 0
+        self._tilt_side = 0  # which face was up when it was last level
         self._tilt_next = 0.0
         # tap
         self._prev_accel: tuple[float, float, float] | None = None
@@ -436,6 +443,9 @@ class GestureDetector:
         the token (picking it up, knocking it) then left a stale 40° lean that
         made steps on the 2026-10-29 replay.
         """
+        uz = s.az / a if a else 0.0
+        if self._tilt_armed and uz * self._tilt_side < -TILT_FLIP_Z:
+            self._tilt_armed = False  # over the edge since it was level: level again first
         if disturbed:
             self._tilt_armed = False  # level again first: the swing may end tilted
             self._tilt_dir = 0
@@ -452,6 +462,7 @@ class GestureDetector:
         if abs(roll) < TILT_OFF_DEG and abs(pitch) < TILT_PITCH_MAX_DEG:
             self._tilt_armed = True
             self._tilt_dir = 0
+            self._tilt_side = 1 if uz > 0 else -1
             return
         d = 1 if roll > 0 else -1
         if abs(roll) > TILT_MAX_DEG and self._tilt_dir == d:

@@ -52,4 +52,32 @@ def test_picking_up_is_not_turning() -> None:
     assert steps["handling"] <= 3, steps
     assert steps["turning"] >= 34, steps
     # tilt in the hand on: about ten pick-ups lean the cap now and then
-    assert steps["handling_tilts"] <= 2, steps
+    assert steps["handling_tilts"] <= 1, steps
+
+
+CHECK = pathlib.Path(__file__).parent / "fixtures" / "check-handle-lean-2026-11-23.jsonl.gz"
+
+
+def test_a_pick_up_over_the_edge_is_not_a_lean() -> None:
+    """The guided check of 2026-11-23 23:52 (52 Hz, firmware 3.2.1-A):
+
+    - t 5-55 s: the pick-up step, five pick-ups; twice the cap was turned nearly
+      over and back on the way up and came to rest leaned 28-38° in the hand,
+      which made a lean each time before the over-the-edge rule;
+    - t 55-90 s: the lean step, three leans each way, which made 3 right and 3
+      left.
+    """
+    det = gestures.GestureDetector(52, knob=True, shake=True, tilt=True)
+    parser = FrameParser()
+    leans: dict[str, list[str]] = {"handle": [], "lean": []}
+    with gzip.open(CHECK, "rt") as fh:
+        for line in fh:
+            rec = json.loads(line)
+            if "hex" not in rec:
+                continue
+            for frame in parser.push(bytes.fromhex(rec["hex"])):
+                for ev in det.update(Sample.from_frame(frame), rec["t"]):
+                    if ev.type in gestures.TILT_EVENTS and not ev.data["repeat"]:
+                        leans["handle" if rec["t"] < 55 else "lean"].append(ev.type[5])
+    assert leans["handle"] == [], leans
+    assert leans["lean"] == ["r", "l", "r", "l", "r", "l"], leans

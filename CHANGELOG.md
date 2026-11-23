@@ -115,6 +115,10 @@ All notable changes to this project are documented here. The format follows
   not while it is held; the knob steps with the knob off say so up front and
   pass on the model alone; *Apply* is *Save to options* and says that the link
   drops. Russian texts use «Вы» and treat the cap as «она» throughout.
+- Tilt in the hand: a cap that went over its edge since it was last level (a
+  pick-up often turns it nearly over and back) leans only after it is level
+  again. Both false leans of a check's pick-up step were so; in 233 everyday
+  captures false leans fell from 16 to 10, with every wanted lean kept.
 - Tilt in the hand counts leans up to 80° (was 60°): asked for more than 25°,
   people lean to 70-85°, and half the leans of a check went unseen.
 - The check: closing the tab ends the check at once (the sleep step held it
