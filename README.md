@@ -139,6 +139,10 @@ The integration also ships a dashboard card, `custom:triki-card`: a 3D model of
 the token that moves with it, with live gyro and accelerometer readings. Add
 **Triki live 3D** from the card picker; see [Live 3D card](docs/live-card.md).
 
+<p align="center">
+  <img src="docs/images/card.png" width="420" alt="The live card: a 3D model of the cap tilted in the hand, its angles, gyro and accelerometer bars, a 10 s gyro graph and the buttons Calibrate, Align direction, LED and Check">
+</p>
+
 ## Documentation
 
 | Page | |

@@ -5,6 +5,8 @@ of the token that moves with the real one, the roll, pitch and yaw, the
 gyroscope and accelerometer readings, a 10 s gyro graph, the button, battery,
 signal and stream rate, and a short label for each gesture.
 
+<p align="center"><img src="images/card.png" width="420" alt="The live card while the cap is turned in the hand"></p>
+
 Nothing needs installing: the integration serves the card and loads it into the
 frontend itself. After an update, reload the browser page once.
 
