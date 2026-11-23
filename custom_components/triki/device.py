@@ -119,6 +119,12 @@ _WAKE_GAP_S = 5.0
 # for the next wake-up. Must outlast the few seconds it keeps advertising after we
 # drop the link, or we would reconnect to the same still-awake token.
 _SLEEP_GAP_S = 15.0
+# The token advertises this long after a dropped link before it sleeps, and a
+# press meanwhile starts it over (firmware 3.2.1-A, 2026-11-23: neither the rate
+# nor the payload of its adverts changes, so the press itself is not seen).
+_DOZE_S = 180.0
+# Readiness states, see TrikiDevice.readiness.
+READINESS = ("connected", "dozing", "asleep", "not_responding")
 # Only the button wakes the token (firmware 3.2.1-A: picking it up, shaking it or
 # knocking the table did not, 2026-11-23), so a wake from real sleep is a press.
 # "Real sleep" means we heard nothing from it for _SLEEP_GAP_S before the advert:
@@ -183,6 +189,13 @@ class LinkStats:
     last_session_s: float | None = None  # how long the last link lasted
 
 
+def _doze_memory(hass: HomeAssistant) -> dict[str, tuple[float, float]]:
+    """Dozing tokens by address, kept across an entry reload (not a restart)."""
+    data: dict[str, Any] = hass.data.setdefault(DOMAIN, {})
+    memory: dict[str, tuple[float, float]] = data.setdefault("doze", {})
+    return memory
+
+
 class TrikiDevice:
     """State + BLE session for a single token."""
 
@@ -234,6 +247,7 @@ class TrikiDevice:
         self._no_connect_until = 0.0
         self._await_sleep = False
         self._awake_seen = 0.0
+        self._doze_started = 0.0  # the idle disconnect that started the doze
         # the last time the token was heard (advert) or known silent (link drop),
         # host monotonic seconds; a long gap before an advert means it had slept
         self._last_heard = 0.0
@@ -263,6 +277,7 @@ class TrikiDevice:
         self._unsub_battery: CALLBACK_TYPE | None = None
         self._unsub_watchdog: CALLBACK_TYPE | None = None
         self._unsub_silence: CALLBACK_TYPE | None = None
+        self._unsub_doze: CALLBACK_TYPE | None = None
         self._streaming = False
 
         self._state_listeners: list[Callable[[], None]] = []
@@ -503,6 +518,42 @@ class TrikiDevice:
         return self._await_sleep and not self.connected
 
     @property
+    def readiness(self) -> str:
+        """Whether a press reaches Home Assistant now.
+
+        connected: on the link, a press is an event. dozing: dropped on idle and
+        still advertising; a press is not seen, it only starts the doze over.
+        asleep: a press wakes it. not_responding: the link dropped by itself and
+        the token has not been heard since.
+        """
+        if self.connected:
+            return "connected"
+        if self.unresponsive:
+            return "not_responding"
+        if self._await_sleep and time.monotonic() - self._awake_seen < _SLEEP_GAP_S:
+            return "dozing"
+        return "asleep"
+
+    @property
+    def doze_left_s(self) -> int | None:
+        """While dozing, seconds until it sleeps if nobody presses it (0 once
+        overdue: a press made it doze on)."""
+        if self.readiness != "dozing":
+            return None
+        return max(0, round(_DOZE_S - (time.monotonic() - self._doze_started)))
+
+    @callback
+    def _arm_doze_check(self) -> None:
+        """Dozing turns into asleep with no event of its own: the adverts stop."""
+        self._cancel_timer("_unsub_doze")
+        self._unsub_doze = async_call_later(self.hass, _SLEEP_GAP_S + 0.5, self._doze_check)
+
+    @callback
+    def _doze_check(self, _now: Any) -> None:
+        self._cancel_timer("_unsub_doze")
+        self._notify()
+
+    @property
     def streaming(self) -> bool:
         """Frames are arriving on the current link."""
         return self._streaming
@@ -560,6 +611,10 @@ class TrikiDevice:
         # older versions only changed ones (the token's payload never changes),
         # which is why they also need the 1 s poll of the last advertisement.
         self._last_heard = bluetooth.MONOTONIC_TIME()  # a start is not a silence
+        if (doze := _doze_memory(self.hass).pop(self.address, None)) is not None:
+            self._await_sleep = True
+            self._awake_seen, self._doze_started = doze
+            self._arm_doze_check()
         register_every = getattr(bluetooth, "async_register_advertisement_callback", None)
         if register_every is not None:
             self.every_advertisement = True
@@ -605,6 +660,11 @@ class TrikiDevice:
             self._unsub_started = None
         self._cancel_timer("_unsub_check")
         self._cancel_timer("_unsub_silence")
+        self._cancel_timer("_unsub_doze")
+        if self._await_sleep and not self.connected:
+            # an entry reload (new options, Apply in the card) must not connect
+            # the new instance to a token that is still dozing off
+            _doze_memory(self.hass)[self.address] = (self._awake_seen, self._doze_started)
         for attr in ("_unsub_adv", "_unsub_poll"):
             unsub = getattr(self, attr)
             if unsub:
@@ -724,6 +784,8 @@ class TrikiDevice:
             slept = now - self._awake_seen >= _SLEEP_GAP_S
             if age < max_age:
                 self._awake_seen = now
+                if not slept:
+                    self._arm_doze_check()
             if slept:
                 self._await_sleep = False
                 self._notify()
@@ -1107,6 +1169,7 @@ class TrikiDevice:
         if unresponsive == self.unresponsive:
             return
         self.unresponsive = unresponsive
+        self._notify()  # readiness and the card's chip
         issue_id = f"{ISSUE_NOT_RESPONDING}_{self.entry.entry_id}"
         if not unresponsive:
             _LOGGER.info("%s: heard again", self.name)
@@ -1324,7 +1387,8 @@ class TrikiDevice:
         if 0 < sleep_timeout <= idle:
             _LOGGER.debug("%s: idle for %ss, disconnecting", self.name, sleep_timeout)
             self._await_sleep = True
-            self._awake_seen = time.monotonic()
+            self._awake_seen = self._doze_started = time.monotonic()
+            self._arm_doze_check()
             self._no_connect_until = time.monotonic() + _IDLE_COOLDOWN_S
             self._create_task(self.async_disconnect(), "idle")
             return

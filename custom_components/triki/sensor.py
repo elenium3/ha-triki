@@ -21,7 +21,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import TrikiConfigEntry
-from .device import TrikiDevice
+from .device import READINESS, TrikiDevice
 from .entity import TrikiEntity
 from .gestures import FACES
 
@@ -66,6 +66,14 @@ DESCRIPTIONS = (
         value_fn=lambda d: d.link_quality.last_pct,
         requires_connection=False,
         restore=True,
+    ),
+    TrikiSensorDescription(
+        key="readiness",
+        translation_key="readiness",
+        device_class=SensorDeviceClass.ENUM,
+        options=list(READINESS),
+        value_fn=lambda d: d.readiness,
+        requires_connection=False,
     ),
     TrikiSensorDescription(
         key="face",

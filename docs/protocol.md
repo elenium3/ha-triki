@@ -16,6 +16,10 @@ executable version of this page.
   shaking it or knocking the table does not wake it, firmware 3.2.1-A,
   2026-11-23), for a few seconds, and for about three minutes after a link is
   dropped. Then it sleeps and stops advertising completely.
+- While it advertises after a dropped link, a button press is not seen and
+  starts the three minutes over: the advertising interval (~1.13 s) and the
+  payload stay the same (2026-11-23: a press at +61 s ended the advertising at
+  +241 s instead of +180 s).
 
 ## GATT
 
@@ -129,7 +133,7 @@ the token).
 | Connect through an ESPHome proxy at −68 dBm | 0.1–0.3 s |
 | Connect on a Raspberry Pi 5 adapter at −75 dBm | 1.5–10 s, often fails |
 | Frames at 52 Hz, good link | ~52 per second, 14 bytes each |
-| Advertising after a dropped link | ~3 min |
+| Advertising after a dropped link | ~3 min, from the last press |
 | Sleep after the last activity with no link | a few seconds |
 
 ## Sources

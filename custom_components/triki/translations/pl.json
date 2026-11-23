@@ -43,7 +43,7 @@
         "data_description": {
           "sample_rate": "Wyższa częstotliwość = szybsza reakcja gestów i szybsze zużycie baterii. Powyżej 104 Hz BLE często nie nadąża.",
           "idle_timeout": "Po tym czasie bez ruchu i przycisku strumień spada do 26 Hz, ale połączenie zostaje, więc przycisk dalej działa. Każda aktywność przywraca ustawioną częstotliwość.",
-          "sleep_timeout": "Po tym czasie bez aktywności połączenie jest zrywane. Token rozgłasza się potem około 3 minut, zanim zaśnie, a przycisk nie jest widoczny, dopóki nie zaśnie. 0 nie pozwala tokenowi zasnąć, co rozładowuje baterię CR2032 w około tydzień; przy baterii 30 % lub niżej 0 działa jak 300.",
+          "sleep_timeout": "Po tym czasie bez aktywności połączenie jest zrywane. Token rozgłasza się potem około 3 minut, zanim zaśnie, a przycisk nie jest widoczny, dopóki nie zaśnie; naciśnięcie w tym czasie zaczyna 3 minuty od nowa (widać to na czujniku Gotowość). 0 nie pozwala tokenowi zasnąć, co rozładowuje baterię CR2032 w około tydzień; przy baterii 30 % lub niżej 0 działa jak 300.",
           "knob_step": "O ile token musi się obrócić na stole, aby powstało jedno zdarzenie. 30° daje 12 zdarzeń na pełny obrót; mniejsze kroki zasypują wolne lampy zdarzeniami.",
           "invert_rotation": "Zamień rotate_cw i rotate_ccw, gdy token leży do góry nogami albo ściemniacz działa odwrotnie.",
           "wake_as_press": "Domyślnie włączone. Token budzi tylko przycisk, więc naciśnięcie, które go obudziło, przychodzi jako press (z source: wake) zaraz po wake. Jest pomijane, gdy token tak naprawdę nie spał, na przykład po restarcie Home Assistanta albo po zerwanym połączeniu, więc nic nie przełącza się samo. Wyłącz, jeśli Twoje automatyzacje już łapią pierwsze naciśnięcie przez wake.",
@@ -105,6 +105,15 @@
       }
     },
     "sensor": {
+      "readiness": {
+        "name": "Gotowość",
+        "state": {
+          "connected": "Połączony",
+          "dozing": "Zasypia: naciśnięcia niewidoczne",
+          "asleep": "Śpi: naciśnięcie go obudzi",
+          "not_responding": "Nie odpowiada"
+        }
+      },
       "link_quality": {
         "name": "Jakość połączenia"
       },

@@ -22,7 +22,8 @@ const asset = (name) => `${BASE}${name}${VERSION ? `?v=${VERSION}` : ""}`;
 const STRINGS = {
   en: {
     auto: "Auto", asleep: "Asleep", dozing: "Dozing off",
-    dozeHint: "Disconnected after idling. Put the cap down: once it has slept (up to ~3 min) a press wakes it again", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
+    dozeHint: "Disconnected after idling. Presses are not seen for ~{n} s more, and each one starts the 3 minutes over: put the cap down and wait",
+    dozeLate: "Disconnected after idling. Presses are not seen until it falls asleep, and each one starts the 3 minutes over: put the cap down and wait", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
     wake: "Press or shake the cap to wake it", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
     roll: "Left-right", pitch: "Forward-back", yaw: "Turn about the axis", reset: "Align direction", led: "LED", calibrate: "Calibrate",
     help: { mark: "The yellow stripe on the model marks the edge with the dot above the letter Z (circled in the photo). It shows which way the model is turned.", cal: "<b>Calibrate</b> once per cap. The cap lies on the table, dot away from you: the model learns what level looks like for this cap, then you match the logo. It is saved for good.", align: "<b>Align direction</b> is needed from time to time. The cap senses tilt by itself, from gravity, but not which way it is turned: it has no compass. The gyroscope counts the turn and slowly drifts, and a Home Assistant restart loses it. When the stripe on the model is at a different edge than the dot on the cap, lay the cap dot away from you and press this button. The calibration stays." },
@@ -96,7 +97,8 @@ const STRINGS = {
   },
   ru: {
     auto: "Авто", asleep: "Спит", dozing: "Засыпает",
-    dozeHint: "Отключился по простою. Положи крышку: когда уснёт (до ~3 мин), нажатие снова её разбудит", connected: "Подключён", streaming: "Онлайн", unresponsive: "Не отвечает",
+    dozeHint: "Отключился по простою. Нажатия не видны ещё ~{n} с, и каждое начинает 3 минуты заново: положи крышку и подожди",
+    dozeLate: "Отключился по простою. Нажатия не видны, пока крышка не уснёт, и каждое начинает 3 минуты заново: положи её и подожди", connected: "Подключён", streaming: "Онлайн", unresponsive: "Не отвечает",
     wake: "Нажми или встряхни крышку, чтобы разбудить", gyro: "Гироскоп, °/с",
     accel: "Акселерометр, g", roll: "Влево-вправо", pitch: "Вперёд-назад", yaw: "Поворот вокруг оси", calibrate: "Калибровка",
     help: { mark: "Жёлтая полоска на модели отмечает край с точкой над буквой Z (на фото обведена). По ней видно, куда повёрнута модель.", cal: "<b>Калибровка</b> — один раз для каждой крышки. Крышка лежит на столе точкой от тебя: модель запоминает, как для этой крышки выглядит «ровно», потом подгоняешь логотип. Сохраняется навсегда.", align: "<b>Выровнять направление</b> — нужно время от времени. Наклон крышка чувствует сама, по силе тяжести, а в какую сторону повёрнута — нет: компаса в ней нет. Поворот считает гироскоп, он понемногу ошибается, а после перезапуска Home Assistant поворот теряется. Если полоска на модели не на том краю, где точка на крышке, положи крышку точкой от себя и нажми эту кнопку. Калибровку это не трогает." },
@@ -173,7 +175,8 @@ const STRINGS = {
   },
   pl: {
     auto: "Auto", asleep: "Śpi", dozing: "Zasypia",
-    dozeHint: "Rozłączony po bezczynności. Odłóż kapsel: gdy zaśnie (do ~3 min), naciśnięcie znów go obudzi", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
+    dozeHint: "Rozłączony po bezczynności. Naciśnięcia nie są widoczne jeszcze ~{n} s, a każde zaczyna 3 minuty od nowa: odłóż kapsel i poczekaj",
+    dozeLate: "Rozłączony po bezczynności. Naciśnięcia nie są widoczne, dopóki nie zaśnie, a każde zaczyna 3 minuty od nowa: odłóż kapsel i poczekaj", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
     wake: "Naciśnij lub potrząśnij kapslem, żeby go obudzić", gyro: "Żyroskop, °/s",
     accel: "Akcelerometr, g", roll: "Lewo-prawo", pitch: "Przód-tył", yaw: "Obrót wokół osi",
     help: { mark: "Żółty pasek na modelu oznacza krawędź z kropką nad literą Z (zakreśloną na zdjęciu). Po niej widać, w którą stronę model jest obrócony.", cal: "<b>Kalibracja</b> raz na kapsel. Kapsel leży na stole kropką od ciebie: model zapamiętuje, jak dla tego kapsla wygląda „płasko”, potem dopasowujesz logo. Zapisuje się na stałe.", align: "<b>Wyrównaj kierunek</b> trzeba od czasu do czasu. Przechył kapsel czuje sam, z grawitacji, ale nie wie, w którą stronę jest obrócony: nie ma kompasu. Obrót liczy żyroskop, który powoli się myli, a restart Home Assistant go gubi. Gdy pasek na modelu jest na innej krawędzi niż kropka na kapslu, połóż kapsel kropką od siebie i naciśnij ten przycisk. Kalibracja zostaje." },
@@ -467,6 +470,8 @@ class TrikiCard extends HTMLElement {
   disconnectedCallback() {
     this._checkClose();
     this._unsubscribe();
+    clearInterval(this._dozeTimer);
+    this._dozeTimer = null;
     if (this._io) this._io.disconnect();
     this._visible = false;
   }
@@ -689,6 +694,13 @@ class TrikiCard extends HTMLElement {
     else if (msg.type === "event") this._showEvent(msg.event, msg.data);
   }
 
+  _showDoze() {
+    const t = this._t, el = this._el;
+    if (!el) return;
+    const left = this._dozeUntil == null ? 0 : Math.round((this._dozeUntil - Date.now()) / 1000);
+    el.sleepText.textContent = left > 0 ? t.dozeHint.replace("{n}", left) : t.dozeLate;
+  }
+
   _showStatus(s) {
     this._status = s;
     const t = this._t, el = this._el;
@@ -696,10 +708,15 @@ class TrikiCard extends HTMLElement {
     if (!this._config?.title && s.name) el.name.textContent = s.name;
     const live = s.connected && s.streaming;
     el.state.className = `chip ${live ? "live" : s.unresponsive ? "warn" : ""}`;
-    const dozing = !s.connected && s.waiting_for_sleep;
+    // readiness: since 0.3.0; waiting_for_sleep alone stayed true until the next wake
+    const dozing = s.readiness ? s.readiness === "dozing" : !s.connected && s.waiting_for_sleep;
     el.stateText.textContent = live ? t.streaming : s.connected ? t.connected
       : s.unresponsive ? t.unresponsive : dozing ? t.dozing : t.asleep;
-    el.sleepText.textContent = dozing ? t.dozeHint : t.wake;
+    this._dozeUntil = dozing && s.doze_left_s != null ? Date.now() + s.doze_left_s * 1000 : null;
+    clearInterval(this._dozeTimer);
+    this._dozeTimer = dozing ? setInterval(() => this._showDoze(), 1000) : null;
+    if (dozing) this._showDoze();
+    else el.sleepText.textContent = t.wake;
     el.stage.classList.toggle("asleep", !live);
     el.rateChip.hidden = !live;
     if (live) el.rate.textContent = `${Math.round(s.measured_rate ?? s.rate ?? 0)} ${t.rate}`;

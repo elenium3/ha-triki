@@ -43,7 +43,7 @@
         "data_description": {
           "sample_rate": "Higher = snappier gestures, faster battery drain. Above 104 Hz BLE often cannot keep up.",
           "idle_timeout": "After this long without motion or button activity the stream drops to 26 Hz but the link stays up, so the button keeps working. Any activity restores the configured rate.",
-          "sleep_timeout": "After this long without activity the link is dropped. The token then advertises for about 3 minutes before it sleeps, and the button is not seen until it has slept. 0 keeps the token awake around the clock, which empties a CR2032 in about a week; while the battery is at 30 % or less, 0 acts as 300.",
+          "sleep_timeout": "After this long without activity the link is dropped. The token then advertises for about 3 minutes before it sleeps, and the button is not seen until it has slept; a press meanwhile starts the 3 minutes over (the Readiness sensor shows it). 0 keeps the token awake around the clock, which empties a CR2032 in about a week; while the battery is at 30 % or less, 0 acts as 300.",
           "knob_step": "How far the token has to turn on the table for one rotate event. 30° gives 12 events per full turn; smaller steps flood slow lights.",
           "invert_rotation": "Swap rotate_cw and rotate_ccw, for a token used upside down or a dimmer that feels backwards.",
           "wake_as_press": "On by default. Only the button wakes the token, so the press that woke it arrives as press (with source: wake) right after wake. It is left out when the token had not really slept, for example after a Home Assistant restart or a dropped link, so nothing toggles by itself. Turn it off if your automations already use wake to catch the first press.",
@@ -105,6 +105,15 @@
       }
     },
     "sensor": {
+      "readiness": {
+        "name": "Readiness",
+        "state": {
+          "connected": "Connected",
+          "dozing": "Dozing off: presses not seen",
+          "asleep": "Asleep: a press wakes it",
+          "not_responding": "Not responding"
+        }
+      },
       "link_quality": {
         "name": "Link quality"
       },

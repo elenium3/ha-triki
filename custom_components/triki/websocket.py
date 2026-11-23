@@ -66,6 +66,8 @@ def status(dev: TrikiDevice) -> dict[str, Any]:
         "streaming": dev.connected and dev.streaming,
         "unresponsive": dev.unresponsive,
         "waiting_for_sleep": dev.waiting_for_sleep,
+        "readiness": dev.readiness,
+        "doze_left_s": dev.doze_left_s,
         "calibrated": dev.calibrated,
         "logo_angle": dev.logo_angle,
         "battery": dev.battery,

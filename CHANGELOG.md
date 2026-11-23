@@ -7,6 +7,12 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- **Readiness** sensor: whether a press reaches Home Assistant now.
+  *Connected*; *Dozing off: presses not seen* for about 3 minutes after an
+  idle disconnect; *Asleep: a press wakes it*; *Not responding*. The card
+  counts the dozing minutes down. A press while dozing starts them over, and
+  the token's adverts do not change with it (checked on hardware), so the
+  press itself cannot be caught.
 - **Link quality** sensor: the share of motion frames that arrived in the last
   session. Three lossy sessions in a row (under 70 %) raise a repair issue
   with what to do; a clean one clears it.
@@ -89,6 +95,10 @@ All notable changes to this project are documented here. The format follows
   timing (multi-press window, long press).
 
 ### Fixed
+- The card said *Dozing off* until the next wake-up, long after the token had
+  fallen asleep.
+- Saving the options right after an idle disconnect no longer links up to the
+  dozing token for another session.
 - Battery: a stream pause now reports its highest level, once. The token can
   send a low series (21-27 %) alongside the real one (82-94 %) during the
   pause; each value went to the sensor and the last one counted as the level
