@@ -140,7 +140,8 @@ the token that moves with it, with live gyro and accelerometer readings. Add
 **Triki live 3D** from the card picker; see [Live 3D card](docs/live-card.md).
 
 <p align="center">
-  <img src="docs/images/card.png" width="420" alt="The live card: a 3D model of the cap tilted in the hand, its angles, gyro and accelerometer bars, a 10 s gyro graph and the buttons Calibrate, Align direction, LED and Check">
+  <img src="docs/images/card-anim.gif" width="420" alt="The live card in motion: the cap held in the hand is turned like a knob and back (Knob events pop up), tilted to the side, pressed (Button lights up) and flipped onto its green side (a Flip event), while the angles, the gyro and accelerometer bars and the 10 s gyro graph follow">
+  <br><sub>Knob turn, tilt in the hand, press and flip. Rendered from synthetic motion data.</sub>
 </p>
 
 ## Documentation

@@ -9,7 +9,8 @@ message.
 | `icon.png` | README | The integration icon (copy of `custom_components/triki/brand/icon.png`). | this project |
 | `triki-front.jpg` | README, hardware.md | The token from above: silver cap, black T. | [Flopsstuff/triki](https://github.com/Flopsstuff/triki) `assets/1.jpg`, © 2026 Flopsstuff, MIT |
 | `triki-back.jpg` | README, hardware.md | The underside: green board with the Ż logo. | Flopsstuff/triki `assets/2.jpg`, MIT |
-| `card.png` | README, live-card.md | The live card while the cap is turned in the hand. | this project: the card rendered in headless Chromium from synthetic motion data, English UI |
+| `card.png` | live-card.md | The live card while the cap is turned in the hand. | this project: the card rendered in headless Chromium from synthetic motion data, English UI |
+| `card-anim.gif` | README | The live card in motion, a 10 s loop: knob turn and back, tilt in the hand, press, flip. | this project: the card rendered frame by frame in headless Chromium on a simulated clock from synthetic motion data, English UI |
 | `triki-axes.jpg` | hardware.md | The token with the sensor's X, Y, Z axes drawn in. | Flopsstuff/triki `assets/axes.jpg`, MIT |
 
 The Flopsstuff photos are stored in Git LFS upstream, which is why they are
