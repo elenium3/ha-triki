@@ -402,3 +402,17 @@ test("lean follows invert_rotation", () => {
   run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
   assert.equal(run.results.lean.status, "pass");
 });
+
+test("the flat step is confirmed straight away, without a Start", () => {
+  // 2026-11-23: the step said to press Done while only Start was on screen
+  const { run } = rig();
+  goTo(run, "flat");
+  const v = run.view();
+  assert.equal(v.phase, "ready");
+  assert.equal(v.external, true); // the card shows Done in the ready phase for it
+  run.complete({ status: "pass" }); // what the card does once the calibration succeeds
+  assert.equal(run.results.flat.status, "pass");
+  run.next();
+  assert.notEqual(run.step.id, "flat");
+  assert.equal(run.view().external, false); // the next step has its Start again
+});

@@ -30,12 +30,12 @@ const STRINGS = {
       err: { moving: "It is moving: hold still for a second", not_flat: "It is not lying flat", asleep: "The cap is asleep: wake it first", no_data: "No data yet: wake the cap" } },
     button: "Button", rate: "Hz", history: "Last 10 s", nodevice: "No Triki token found",
     check: { title: "Check", open: "Check",
-      steps: { rest: "Lying still", flat: "Level and front", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", lean: "Lean in the hand", press: "Button", flip: "Turn over", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift" },
+      steps: { rest: "Lying still", flat: "Starting position", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", lean: "Lean in the hand", press: "Button", flip: "Turn over", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift" },
       text: {
-        identify: "Pick the cap below, or press the button on it. It blinks its LED.",
+        identify: "Pick the cap below, or press the button on it.",
         wake: "Press the button on the cap to wake it.",
         rest: "Put the cap on the table and do not touch it for 10 seconds. This measures the link and the sensor noise.",
-        flat: "Lay the cap on the table, dot away from you, let go and press Done. The model learns what level and front are.",
+        flat: "Lay the cap on the table, dot away from you, let go and press Done. The model measures tilts and turns from this position.",
         tilt: "Lift the edge with the dot by 2–3 cm and hold it. The model should tilt like the faint hint.",
         turn_cw: "Turn the cap on the table a quarter turn clockwise: the stripe goes from the far edge to the right. Let go, regrip and turn another quarter. Then press Done.",
         turn_ccw: "The same counter-clockwise: two quarter turns, letting go in between. Then press Done.",
@@ -98,12 +98,12 @@ const STRINGS = {
     reset: "Выровнять направление",
     led: "Диод", button: "Кнопка", rate: "Гц", history: "Последние 10 с",
     check: { title: "Проверка", open: "Проверка",
-      steps: { rest: "Покой", flat: "Ровно и точка", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", lean: "Наклон в руке", press: "Кнопка", flip: "Переворот", tap: "Касание", shake: "Встряхивание", throw: "Бросок", drift: "Уход направления" },
+      steps: { rest: "Покой", flat: "Исходное положение", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", lean: "Наклон в руке", press: "Кнопка", flip: "Переворот", tap: "Касание", shake: "Встряхивание", throw: "Бросок", drift: "Уход направления" },
       text: {
-        identify: "Выбери крышку ниже или нажми на ней кнопку. Она мигнёт диодом.",
+        identify: "Выбери крышку ниже или нажми на ней кнопку.",
         wake: "Нажми кнопку на крышке, чтобы разбудить её.",
         rest: "Положи крышку на стол и не трогай 10 секунд. Так проверяется связь и шум датчика.",
-        flat: "Положи крышку на стол точкой от себя, отпусти и нажми «Готово». Модель запомнит, где «ровно» и куда смотрит точка.",
+        flat: "Положи крышку на стол точкой от себя, отпусти и нажми «Готово». От этого положения модель отсчитывает наклоны и повороты.",
         tilt: "Приподними край с точкой на 2–3 см и подержи. Модель должна наклониться так же, как полупрозрачная подсказка.",
         turn_cw: "Поверни крышку на столе на четверть оборота по часовой: полоска уйдёт с дальнего края вправо. Отпусти, перехвати и поверни ещё на четверть. Потом нажми «Готово».",
         turn_ccw: "То же против часовой: две четверти оборота, между ними можно отпустить. Потом нажми «Готово».",
@@ -168,12 +168,12 @@ const STRINGS = {
       err: { moving: "Kapsel się rusza: przytrzymaj chwilę nieruchomo", not_flat: "Kapsel nie leży płasko", asleep: "Kapsel śpi: najpierw go obudź", no_data: "Brak danych: obudź kapsel" } },
     reset: "Wyrównaj kierunek", led: "Dioda", button: "Przycisk", rate: "Hz", history: "Ostatnie 10 s",
     check: { title: "Test", open: "Test",
-      steps: { rest: "Spoczynek", flat: "Poziom i przód", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", lean: "Przechył w dłoni", press: "Przycisk", flip: "Odwrócenie", tap: "Stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", drift: "Dryf kierunku" },
+      steps: { rest: "Spoczynek", flat: "Pozycja wyjściowa", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", lean: "Przechył w dłoni", press: "Przycisk", flip: "Odwrócenie", tap: "Stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", drift: "Dryf kierunku" },
       text: {
-        identify: "Wybierz kapsel poniżej albo naciśnij na nim przycisk. Mignie diodą.",
+        identify: "Wybierz kapsel poniżej albo naciśnij na nim przycisk.",
         wake: "Naciśnij przycisk na kapslu, żeby go obudzić.",
         rest: "Połóż kapsel na stole i nie dotykaj przez 10 sekund. Mierzy to łącze i szum czujnika.",
-        flat: "Połóż kapsel na stole kropką od siebie, puść i naciśnij Gotowe. Model zapamięta, gdzie jest poziom i przód.",
+        flat: "Połóż kapsel na stole kropką od siebie, puść i naciśnij Gotowe. Od tej pozycji model liczy przechyły i obroty.",
         tilt: "Unieś krawędź z kropką o 2–3 cm i przytrzymaj. Model powinien przechylić się jak półprzezroczysta podpowiedź.",
         turn_cw: "Obróć kapsel na stole o ćwierć obrotu w prawo: pasek przejdzie z dalekiej krawędzi w prawo. Puść, przełóż palce i obróć o kolejną ćwiartkę. Potem naciśnij Gotowe.",
         turn_ccw: "To samo w lewo: dwie ćwiartki obrotu, między nimi możesz puścić. Potem naciśnij Gotowe.",
@@ -893,31 +893,7 @@ class TrikiCard extends HTMLElement {
     const status = this._statuses?.[id] || this._status || {};
     chk.run = new CheckRun({ options: status.options || {} });
     chk.run.feedStatus(status);
-    this._blink(id);
     this._renderCheck(true);
-  }
-
-  // Two quick LED blinks on the picked token, then its previous state.
-  async _blink(id) {
-    const ent = Object.values(this._hass.entities || {}).find(
-      (e) => e.device_id === id && e.entity_id.startsWith("switch.") && e.translation_key === "led");
-    if (!ent) return;
-    // the switch's own state, not the stream's: the blink must end where the switch was
-    const was = this._hass.states?.[ent.entity_id]?.state === "on";
-    const set = (on) => this._hass.callService("switch", on ? "turn_on" : "turn_off", { entity_id: ent.entity_id })
-      .then(() => true, () => false);
-    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
-    for (let i = 0; i < 2; i++) {
-      if (!(await set(!was))) break; // a write failed (fresh link, asleep): stop blinking
-      await wait(350);
-      await set(was);
-      await wait(250);
-    }
-    // a failed write mid-blink left the switch on the wrong side (seen 2026-11-19)
-    for (let i = 0; i < 3 && (this._hass.states?.[ent.entity_id]?.state === "on") !== was; i++) {
-      await set(was);
-      await wait(400);
-    }
   }
 
   _checkMessage(id, msg) {
@@ -1080,6 +1056,9 @@ class TrikiCard extends HTMLElement {
     } else if (v.phase === "ready" && !v.online) {
       res = `<div class="res warn"><b>${t.text.wake}</b></div>`;
       btns = btn("skip", t.skip) + btn("close", t.close);
+    } else if (v.phase === "ready" && v.external) {
+      // the flat calibration measures nothing over time: lay the cap down and confirm
+      btns = btn("done", t.done, "primary pulse") + btn("skip", t.skip) + btn("close", t.close);
     } else if (v.phase === "ready") {
       btns = btn("start", t.start, "primary pulse") + btn("skip", t.skip) + btn("close", t.close);
     } else if (v.phase === "running") {

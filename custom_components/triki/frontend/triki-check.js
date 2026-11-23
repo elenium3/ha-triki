@@ -163,7 +163,7 @@ export class CheckRun {
     const st = this._st || {};
     const v = {
       id: s.id, index: this.index, total: this.steps.length, phase: this.phase,
-      manual: !!s.manual, result: this.results[s.id] || null,
+      manual: !!s.manual, external: !!s.external, result: this.results[s.id] || null,
       elapsed: this.phase === "running" ? this._elapsed() : 0,
       limit: s.auto || s.timeout || null, live: {}, ghost: null,
       online: this._live(this.status),
