@@ -7,18 +7,18 @@ Changing any option reloads the entry, which drops and re-establishes the link.
 
 | Option | Default | Meaning |
 |---|---|---|
-| IMU sample rate | 52 Hz | Rate the token streams motion frames at: 26, 52, 104 or 208 Hz. 52 is what the Żappka app asks for. Higher rates are snappier but lose more frames on a weak link; see [Radio and placement](radio-and-placement.md). |
-| Low-power stream after idle | 30 s | After this long without motion or button activity the stream is re-started at 26 Hz over the live link. The button keeps working; any activity restores the configured rate within a frame or two. 0 = never. |
+| Sensor rate | 52 Hz | Rate the token streams motion frames at: 26, 52, 104 or 208 Hz. 52 is what the Żappka app asks for. Higher rates are snappier but lose more frames on a weak link; see [Radio and placement](radio-and-placement.md). |
+| Slow stream after idle | 30 s | After this long without motion or button activity the stream is re-started at 26 Hz over the live link. The button keeps working; any activity restores the configured rate within a frame or two. 0 = never. |
 | Disconnect after idle | 300 s | After this long without activity the link is dropped so the token can sleep. 0 = keep the link as long as the token holds it; that empties a CR2032 in about a week, and while the battery is at 30 % or less 0 acts as 300 s. See the caveats below. |
 | Knob step | 30° | Degrees of rotation around the vertical axis per `rotate_cw` / `rotate_ccw` event. Smaller steps mean more events per turn. |
-| Invert rotation direction | off | Swap cw and ccw if they read backwards on your unit. |
-| Treat wake-up as a press | on | Only the button wakes the token, so the press that woke it is reported as `press` with `source: wake`, right after `wake`. It is left out when the token had not really slept (no advertisement for 15 s before it), for example after a Home Assistant restart or a dropped link, so nothing toggles by itself. If the button is still held when the stream starts, the stream reports that press itself. Turn it off if your automations already use `wake` to catch the first press. |
-| Knob rotation | off | Enable `rotate_cw` / `rotate_ccw`. |
+| Invert knob direction | off | Swap cw and ccw if they read backwards on your unit. |
+| Count the wake-up as a press | on | Only the button wakes the token, so the press that woke it is reported as `press` with `source: wake`, right after `wake`. It is left out when the token had not really slept (no advertisement for 15 s before it), for example after a Home Assistant restart or a dropped link, so nothing toggles by itself. If the button is still held when the stream starts, the stream reports that press itself. Turn it off if your automations already use `wake` to catch the first press. |
+| Knob | off | Enable `rotate_cw` / `rotate_ccw`. |
 | Shake | off | Enable `shake`. Confirmed through a proxy; see [Events](events-and-automations.md#gesture-status). |
 | Tilt in the hand | off | Hold the token level, with the yellow stripe of the card's model towards you, and lean it right or left by more than 25°: one `tilt_right` or `tilt_left`, then one every 0.4 s while it stays leaned (`repeat: true`). These are not knob events, so picking the token up does not move a dimmer on the knob. Bring it back within 10° of level before the next lean. |
 | Motion gestures | off | Enable `tap`, `throw`, `flip`. Tuned on one hardware session; see [Events](events-and-automations.md#gesture-status). |
 | Double and triple press | off | Off: `press` is reported the moment the button is released. On: single presses are delayed by the window below so that `double_press` and `triple_press` can be told apart. |
-| Double/triple press window | 0.5 s | Longest pause between releasing and pressing again that still counts as a multi-press. 0.3 s is a good compromise between a quick single press and a comfortable double press. |
+| Multi-press window | 0.5 s | Longest pause between releasing and pressing again that still counts as a multi-press. 0.3 s is a good compromise between a quick single press and a comfortable double press. |
 | Record raw sessions | off | Write every session to `<config>/triki_captures/*.jsonl`: raw notifications, detected events, rate switches. For debugging and for tuning gestures with `tools/replay.py`. Turn it off when done. A file stops at 50 MB; a new link starts a new file. |
 
 ## Idle and sleep: how the link behaves

@@ -434,7 +434,7 @@ follow each other.
 - Multi-press delays single presses by the window (0.3–0.5 s). If you do not use
   double or triple press, leave the option off and presses are instant.
 - The press that wakes a sleeping token arrives as `wake` and then `press` with
-  `source: wake` (*Treat wake-up as a press*, on by default). Use `press` for
+  `source: wake` (*Count the wake-up as a press*, on by default). Use `press` for
   "the button was pressed"; `wake` alone also fires after a Home Assistant
   restart or a dropped link, when nobody pressed anything.
 - Holding the link (sleep timeout 0) makes the token react at any time but costs

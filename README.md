@@ -19,7 +19,7 @@
 
 <p align="center">
   <img src="docs/images/card-live.gif" width="480" alt="The live 3D card replaying a recording of a real Triki: the cap turned on the table (Knob events pop up), tilted in the hand to the right and left (Tilt events), pressed once, twice and held (Button lights up), flipped onto its green side and shaken, while the 3D model, the angles, the gyro and accelerometer bars, the 10 s gyro graph and the gesture list (each gesture lights up as it fires) follow">
-  <br><sub>The live 3D card that ships with the integration, replaying a recording of a real Triki.</sub>
+  <br><sub>The 3D card that comes with the integration, replaying a real Triki.</sub>
 </p>
 
 ## What it is
@@ -31,58 +31,46 @@
   <br><sub>Photos: <a href="https://github.com/Flopsstuff/triki">Flopsstuff</a>, MIT.</sub>
 </p>
 
-Triki is a bottle cap with a Bluetooth chip, a motion sensor, one button (the
-whole cap) and a green LED, sold by the Polish chain Żabka for games in its
-Żappka app (about 70 zł, a few złoty with coupons). It runs on a CR2032 and
-streams motion and button state to whoever connects, no account needed. This
-integration turns it into a small remote for Home Assistant:
+Triki is a bottle cap from Żabka's Żappka games: a Bluetooth chip, a motion
+sensor, a green LED and one button, which is the whole cap. It runs on a CR2032
+and talks to anyone who connects, no account needed. Here it becomes a remote:
+press to toggle a lamp, turn it on the table to dim, lean or shake it to start
+a scene. It sleeps when left alone and wakes on a press.
 
-- **Press** toggles a lamp; double, triple and long press pick presets or scenes.
-- **Turn it on the table** like a knob to dim a light or change the volume.
-- **Every gesture is an event**, so it can start anything an automation can.
-
-Out of the box only press and long press are on. The knob, double and triple
-press and shake are switches in the integration's options; turn on the ones you
-use ([Configuration](docs/configuration.md)).
-
-It sleeps when still and wakes on the first press, so it is a remote, not a
-wall switch. More: [The token](docs/hardware.md).
-
-## Battery: read this first
-
-The token runs on one CR2032 and the integration decides how fast it empties.
-
-- **A weak cell locks the token up.** Below about 30 % at rest it can freeze a
-  few seconds after connecting: the link drops, the token stops advertising
-  and the button does nothing until the cell is taken out and put back. Seen
-  at 18–21 % on two different tokens; never on a fresh cell.
-- **Replace the cell at the first warning.** From 30 % at rest Home Assistant
-  shows a repair notice. A token that goes silent after a dropped link gets a
-  second notice with what to do.
-- **Do not hold the link around the clock.** *Disconnect after idle* at 0 keeps
-  the token awake and empties a fresh CR2032 in about a week. The default
-  (300 s) lets it sleep; a press wakes it.
-
-> **Installed 0.2.4 or earlier?** Those versions recommended *Disconnect after
-> idle* = 0 and had none of the warnings above, so your cell may already be
-> low. Update, set *Disconnect after idle* to 300 s (the repair notice offers
-> it), and if the token no longer reacts: take the cell out for a few seconds,
-> then replace it. Details: [Troubleshooting](docs/troubleshooting.md#the-token-stops-responding-and-only-a-battery-pull-brings-it-back).
-
-## Quick install
+## Install
 
 [![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=elenium3&repository=ha-triki&category=integration)
 
-1. In [HACS](https://www.hacs.xyz/docs/use/) search for *Żabka Triki* (typing
-   `zabka` or `triki` finds it), download it and
+1. Find *Żabka Triki* in [HACS](https://www.hacs.xyz/docs/use/), download it and
    [restart Home Assistant](https://www.home-assistant.io/docs/configuration/#reloading-changes).
-2. Press the token. It shows up as *Żabka Triki* under *Discovered* in
-   [Settings → Devices & services](https://my.home-assistant.io/redirect/integrations/);
-   confirm. Press and long press work right away; for the knob, double and
-   triple press or shake open *Configure* on the integration and turn them on.
-3. Automate on the [event entity](https://www.home-assistant.io/integrations/event/)
-   `event.<name>_action` with a
-   [state trigger](https://www.home-assistant.io/docs/automation/trigger/#state-trigger):
+2. Press the cap. It appears under *Discovered* in
+   [Settings → Devices & services](https://my.home-assistant.io/redirect/integrations/): confirm.
+3. Add the **Triki live 3D** card to a dashboard and press **Check** on it (as an admin). It
+   walks you through the button, the knob and the gestures in a few minutes and
+   offers the option changes your cap needs in one tap.
+
+You need a Bluetooth receiver near the cap. An ESP32 running
+[ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy.html)
+next to the desk connects in under a second; a Raspberry Pi across the room
+may not. Nothing else matters as much:
+[Bluetooth proxy for beginners](docs/bluetooth-proxy.md).
+
+Manual install, without HACS: [Installation](docs/installation.md).
+
+## What it can do
+
+| Gesture | How | Event | Out of the box |
+|---|---|---|---|
+| Press | press the cap | `press` | on |
+| Long press | press and hold | `long_press` | on |
+| Double, triple press | two or three quick presses | `double_press`, `triple_press` | off: it delays a single press by half a second |
+| Knob | turn it flat on the table | `rotate_cw`, `rotate_ccw` | off |
+| Tilt | hold it level, lean right or left | `tilt_right`, `tilt_left` | off |
+| Shake | a second of sharp shaking | `shake` | off |
+| Flip, tap, toss | experimental | `flip`, `tap`, `throw` | off |
+
+Turn gestures on in the integration's *Configure*, or let the card's **Check**
+do it. Every gesture arrives on `event.<name>_action`:
 
 ```yaml
 automation:
@@ -98,55 +86,45 @@ automation:
           entity_id: light.desk
 ```
 
-## Full installation
+Knob dimming, presets, scenes: [Events and automations](docs/events-and-automations.md).
 
-- **Receiver.** Home Assistant needs its
-  [Bluetooth integration](https://www.home-assistant.io/integrations/bluetooth/)
-  and a receiver where the token is used. An ESP32 flashed as an
-  [ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy.html)
-  next to the desk connects in under a second; a Raspberry Pi across the room
-  does not. This matters more than any option.
-  [Bluetooth proxy for beginners](docs/bluetooth-proxy.md) ·
-  [Radio and placement](docs/radio-and-placement.md)
-- **Manual install.** Copy `custom_components/triki` into the
-  `custom_components` folder of your
-  [configuration directory](https://www.home-assistant.io/docs/configuration/)
-  and restart. The `triki.zip` of a
-  [release](https://github.com/elenium3/ha-triki/releases) holds the files
-  without the folder: unpack it into `custom_components/triki/`. If it is not
-  discovered, use [Add integration → Żabka Triki](https://my.home-assistant.io/redirect/config_flow_start/?domain=triki),
-  press the button, pick the token. [Installation](docs/installation.md)
-- **Options.** Sample rate, idle and sleep timeouts, knob step, multi-press,
-  which gestures are on, raw capture. [Configuration](docs/configuration.md)
-- **Automations.** Knob dimming, long press, preset cycling, a light-effect
-  toggle, with YAML. [Events and automations](docs/events-and-automations.md)
-- **Problems.** [Troubleshooting](docs/troubleshooting.md) ·
-  [Diagnostics](docs/diagnostics.md)
+## The card
 
-## Entities
+The animation above is the card: the cap in 3D, live sensor readings, a list of
+gestures that light up as they fire, and buttons for **Calibrate**, **Align
+direction**, **LED** and **Check**. Need only a part of it, say just the LED
+button? Switch the rest off in the card's settings. [Live 3D card](docs/live-card.md)
+
+## Battery
+
+- **Leave *Disconnect after idle* at 300 s.** The cap sleeps and a press wakes
+  it. At 0 the link never drops and a fresh CR2032 is empty in about a week.
+- **Swap the cell at the first warning.** Home Assistant raises a repair notice
+  at 30 %. Below that the cap can freeze until the cell is taken out and put
+  back.
+- **Upgrading from 0.2.4 or earlier?** Those versions suggested 0: set 300 s
+  (the repair notice does it for you). Cap not reacting?
+  [Troubleshooting](docs/troubleshooting.md#the-token-stops-responding-and-only-a-battery-pull-brings-it-back).
+
+<details>
+<summary><b>Entities</b></summary>
 
 | Entity | Notes |
 |---|---|
 | `event.<name>_action` | `wake`, `press`, `double_press`, `triple_press` (`count`), `long_press`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`, `speed`), `tilt_left` / `tilt_right` (`repeat`), `shake`, `tap`, `throw`, `flip` |
 | `binary_sensor.<name>_button` | live button state, off while asleep |
 | `binary_sensor.<name>_connected` | diagnostic |
-| `switch.<name>_led` | the green LED (configuration switch); changeable only while connected |
-| `sensor.<name>_battery` | measured by the token during a short stream pause while it is idle, at most every 30 min; a repair notice asks for a new cell at 30 % or less |
-| `sensor.<name>_readiness` | whether a press reaches Home Assistant now: `connected`, `dozing` (about 3 min after an idle disconnect: presses are not seen), `asleep` (a press wakes it), `not_responding` |
-| `sensor.<name>_link_quality` | % of the motion frames that arrived in the last session; a repair notice after three lossy sessions in a row |
-| `sensor.<name>_face_up` | `cap_up` (metal side up), `pcb_up` (green side up) or `edge`, once the token has lain still for 0.3 s; kept while asleep |
+| `switch.<name>_led` | the green LED; changeable only while connected |
+| `sensor.<name>_battery` | measured while idle, at most every 30 min |
+| `sensor.<name>_readiness` | whether a press gets through now: `connected`, `dozing` (about 3 min after an idle disconnect, presses are missed), `asleep` (a press wakes it), `not_responding` |
+| `sensor.<name>_link_quality` | % of motion frames that arrived in the last session; a repair notice after three lossy sessions in a row |
+| `sensor.<name>_face_up` | `cap_up`, `pcb_up` or `edge`, once the cap lies still |
 | `sensor.<name>_signal_strength`, `_pitch`, `_roll` | disabled by default |
 
-Every gesture is also fired on the bus as `triki_event` with `device_id`,
-`address` and `type`.
+Every gesture also fires `triki_event` on the bus, with `device_id`, `address`
+and `type`.
 
-## Live 3D card
-
-The integration also ships a dashboard card, `custom:triki-card`: a 3D model of
-the token that moves with it, with live gyro and accelerometer readings. Add
-**Triki live 3D** from the card picker; see [Live 3D card](docs/live-card.md). Every part of the card (model, status chips, bars, graph, each button, help) can be hidden on its own.
-
-The animation at the top of this page is this card.
+</details>
 
 ## Documentation
 
@@ -168,20 +146,13 @@ The animation at the top of this page is this card.
 
 ## Known limitations
 
-- With a sleep timeout set (the default is 300 s), presses in the minutes after
-  a sleep disconnect are ignored while the token still advertises; once it
-  sleeps, a press wakes it. A sleep timeout of 0 makes it react at any time but
-  holds the link around the clock, which empties a CR2032 in about a week, so
-  the integration raises a repair issue for it. See
-  [Configuration](docs/configuration.md#idle-and-sleep-how-the-link-behaves).
-- Shake needs about a second of hard swinging. Picking the token up and turning
-  it in the same move counts as a turn. Tap needs the token at rest: a knock
-  made while moving it is not one. Tap, throw and flip were tuned on a single
-  hardware session.
-- With the link held permanently (sleep timeout 0) the battery figure is the
-  loaded voltage and reads low; see [Configuration](docs/configuration.md#idle-and-sleep-how-the-link-behaves).
-- The integration icon needs Home Assistant 2026.3 or newer (it ships in
-  `custom_components/triki/brand/`); older versions show a placeholder.
+- For about 3 minutes after an idle disconnect the cap still advertises and
+  presses are missed; once it sleeps, a press wakes it. The card shows this as
+  *dozing*. [Why](docs/configuration.md#idle-and-sleep-how-the-link-behaves)
+- Flip, tap and toss were tuned on a single session: expect misses.
+- With *Disconnect after idle* at 0 the battery reads low (it is measured
+  under load).
+- The integration icon needs Home Assistant 2026.3 or newer.
 
 ## Credits
 

@@ -104,7 +104,7 @@ nothing changes without that press. It suggests only clear cases:
 
 | Seen in the check | Suggestion |
 |---|---|
-| Both turns gave steps the other way round while the hand turned the asked way | switch *Invert rotation direction* |
+| Both turns gave steps the other way round while the hand turned the asked way | switch *Invert knob direction* |
 | More than 30 % of the frames lost at more than 26 Hz | sensor rate 26 Hz |
 | The double press came as two presses | a multi-press window that fits the measured gap (up to 0.8 s) |
 | Shake or *Tilt in the hand* fired by itself twice or more | turn that gesture off |

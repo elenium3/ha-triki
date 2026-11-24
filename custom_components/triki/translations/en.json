@@ -3,12 +3,12 @@
     "flow_title": "{name}",
     "step": {
       "user": {
-        "description": "Press the green button on the token to wake it, then pick it from the list.",
+        "description": "Press the cap to wake it, then pick it from the list.",
         "data": {
-          "address": "Device"
+          "address": "Cap"
         },
         "data_description": {
-          "address": "Tokens that advertised in the last few seconds. The name ends with the number printed in the Żappka app."
+          "address": "Caps heard in the last few seconds. The name ends with the number shown in the Żappka app."
         }
       },
       "bluetooth_confirm": {
@@ -16,54 +16,54 @@
       }
     },
     "abort": {
-      "already_configured": "Device is already configured",
-      "already_in_progress": "Configuration flow is already in progress",
-      "no_devices_found": "No awake Triki found. Press its button and try again.",
-      "not_supported": "Device not supported"
+      "already_configured": "This cap is already set up",
+      "already_in_progress": "This cap is already being set up",
+      "no_devices_found": "No awake Triki found. Press the cap and try again.",
+      "not_supported": "This device isn't supported"
     }
   },
   "options": {
     "step": {
       "init": {
         "data": {
-          "sample_rate": "IMU sample rate (Hz)",
-          "idle_timeout": "Low-power stream after idle (s, 0 = never)",
+          "sample_rate": "Sensor rate (Hz)",
+          "idle_timeout": "Slow stream after idle (s, 0 = never)",
           "sleep_timeout": "Disconnect after idle (s, 0 = never)",
-          "knob_step": "Knob step (degrees per rotate event)",
-          "invert_rotation": "Invert rotation direction",
-          "wake_as_press": "Treat wake-up as a press",
-          "knob": "Knob rotation (rotate_cw / rotate_ccw)",
+          "knob_step": "Knob step (° per event)",
+          "invert_rotation": "Invert knob direction",
+          "wake_as_press": "Count the wake-up as a press",
+          "knob": "Knob (rotate_cw / rotate_ccw)",
           "shake": "Shake",
           "tilt": "Tilt in the hand (tilt_right / tilt_left)",
           "motion_gestures": "Motion gestures (tap, throw, flip)",
           "multi_press": "Double and triple press",
-          "multi_press_window": "Double/triple press window",
+          "multi_press_window": "Multi-press window",
           "capture": "Record raw sessions to /config/triki_captures (debug)"
         },
         "data_description": {
-          "sample_rate": "Higher = snappier gestures, faster battery drain. Above 104 Hz BLE often cannot keep up.",
-          "idle_timeout": "After this long without motion or button activity the stream drops to 26 Hz but the link stays up, so the button keeps working. Any activity restores the configured rate.",
-          "sleep_timeout": "After this long without activity the link is dropped. The token then advertises for about 3 minutes before it sleeps, and the button is not seen until it has slept; a press meanwhile starts the 3 minutes over (the Readiness sensor shows it). 0 keeps the token awake around the clock, which empties a CR2032 in about a week; while the battery is at 30 % or less, 0 acts as 300.",
-          "knob_step": "How far the token has to turn on the table for one rotate event. 30° gives 12 events per full turn; smaller steps flood slow lights.",
-          "invert_rotation": "Swap rotate_cw and rotate_ccw, for a token used upside down or a dimmer that feels backwards.",
-          "wake_as_press": "On by default. Only the button wakes the token, so the press that woke it arrives as press (with source: wake) right after wake. It is left out when the token had not really slept, for example after a Home Assistant restart or a dropped link, so nothing toggles by itself. Turn it off if your automations already use wake to catch the first press.",
-          "shake": "Off by default. Several quick back-and-forth swings of the wrist. The card's check shows whether it also fires when you pick the token up.",
-          "tilt": "Off by default. Hold the token level with the dot above the Z towards you (the yellow stripe on the card's model) and lean it to the right (tilt_right) or left (tilt_left) by 25° to 80°: one event, then one every 0.4 s while it stays leaned (repeat: true). Level it before the next lean. Separate from the knob, so picking the token up does not move a dimmer on the knob.",
-          "knob": "Off by default. Turning the token as it lies on the table reports rotate_cw / rotate_ccw, one event per knob step.",
+          "sample_rate": "Higher means snappier gestures and faster battery drain. Above 104 Hz, BLE often can't keep up.",
+          "idle_timeout": "After this long with no motion or presses, the stream slows to 26 Hz but the link stays up, so presses still work. Any activity brings back the full rate.",
+          "sleep_timeout": "After this long with no activity, the link drops. The cap then advertises for about 3 minutes before it sleeps, and presses don't register until it has slept; a press in between restarts the 3 minutes (the Readiness sensor shows this). 0 keeps the cap awake around the clock, which drains a CR2032 in about a week; at 30 % battery or less, 0 acts as 300.",
+          "knob_step": "How far you turn the cap on the table for one rotate event. 30° gives 12 events per full turn; smaller steps can flood slow lights.",
+          "invert_rotation": "Swaps rotate_cw and rotate_ccw, for a cap used upside down or a dimmer that feels backwards.",
+          "wake_as_press": "On by default. Only a press wakes the cap, so the press that woke it arrives as press (with source: wake) right after wake. It's skipped when the cap hadn't really slept, for example after a Home Assistant restart or a dropped link, so nothing toggles by itself. Turn this off if your automations already use wake to catch the first press.",
+          "shake": "Off by default. A few quick back-and-forth flicks of the wrist. The card's Check shows whether it also fires when you just pick the cap up.",
+          "tilt": "Off by default. Hold the cap level, dot above the Z towards you (the yellow stripe on the card's model), and lean it right (tilt_right) or left (tilt_left) by 25° to 80°: one event, then another every 0.4 s while you hold the lean (repeat: true). Level it before the next lean. It's separate from the knob, so picking up the cap doesn't move a knob dimmer.",
+          "knob": "Off by default. Turning the cap as it lies on the table sends rotate_cw / rotate_ccw, one event per knob step.",
           "motion_gestures": "Off by default. Tap, toss and flip, tuned on a single hardware session.",
-          "multi_press": "Off: press is reported right when the button is released. On: a press is delayed by the window below to tell single, double and triple apart.",
-          "multi_press_window": "Longest pause between releasing the button and pressing it again that still counts as a double or triple press. Single presses are reported this long after release.",
-          "capture": "Every connection writes a .jsonl file with raw BLE notifications and detected events. Turn off when done."
+          "multi_press": "Off: a press is reported as soon as you let go. On: each press waits out the window below to tell single, double and triple apart.",
+          "multi_press_window": "The longest pause between letting go and pressing again that still counts as a double or triple press. Single presses are reported this long after you let go.",
+          "capture": "Each connection writes a .jsonl file with raw BLE notifications and detected events. Turn it off when you're done."
         }
       }
     }
   },
   "exceptions": {
     "asleep": {
-      "message": "{name} is asleep; press its button to wake it up first."
+      "message": "{name} is asleep: press it to wake it up first."
     },
     "led_write_failed": {
-      "message": "Writing the LED state failed: {error}"
+      "message": "Couldn't set the LED: {error}"
     }
   },
   "entity": {
@@ -73,18 +73,18 @@
         "state_attributes": {
           "event_type": {
             "state": {
-              "wake": "Wake",
+              "wake": "Wake-up",
               "press": "Press",
               "double_press": "Double press",
               "triple_press": "Triple press",
               "long_press": "Long press",
-              "rotate_cw": "Rotate clockwise",
-              "rotate_ccw": "Rotate counter-clockwise",
+              "rotate_cw": "Knob clockwise",
+              "rotate_ccw": "Knob counter-clockwise",
               "tilt_left": "Tilt left",
               "tilt_right": "Tilt right",
               "shake": "Shake",
               "tap": "Tap",
-              "throw": "Throw",
+              "throw": "Toss",
               "flip": "Flip"
             }
           }
@@ -109,7 +109,7 @@
         "name": "Readiness",
         "state": {
           "connected": "Connected",
-          "dozing": "Dozing off: presses not seen",
+          "dozing": "Dozing off: presses don't register",
           "asleep": "Asleep: a press wakes it",
           "not_responding": "Not responding"
         }
@@ -135,27 +135,27 @@
   },
   "issues": {
     "sleep_timeout_never": {
-      "title": "{name} is kept awake around the clock",
+      "title": "{name} never sleeps",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Let {name} sleep between uses",
-            "description": "*Disconnect after idle* is 0, so the link is never dropped and the token never sleeps. That draws about 1 mA: a fresh CR2032 lasts about a week, and a weak cell can lock the token up until it is pulled out.\n\nSubmit to disconnect after {seconds} s without activity. The first press after the token has slept then wakes it, and the link is up again within a second or so."
+            "description": "*Disconnect after idle* is 0, so the link never drops and the cap never sleeps. That draws about 1 mA: a fresh CR2032 lasts about a week, and a weak cell can lock the cap up until you take the cell out.\n\nSubmit to disconnect after {seconds} s without activity. Once the cap has slept, the first press wakes it and the link is back within a second or so."
           }
         }
       }
     },
     "battery_low": {
       "title": "{name}: replace the battery",
-      "description": "The CR2032 in {name} measured {level} % at rest. A weak cell sags when the radio transmits and can lock the token up: it stops advertising and the button does nothing until the cell is pulled out. Replace the cell; this notice clears once a fresh one is measured."
+      "description": "The CR2032 in {name} measured {level} % at rest. A weak cell sags when the radio transmits and can lock the cap up: it stops advertising and presses do nothing until the cell is taken out. Replace it; this notice clears once a fresh cell is measured."
     },
     "not_responding": {
       "title": "{name} stopped responding",
-      "description": "The link to {name} dropped on its own and the token has not been heard since. A healthy token keeps advertising for about three minutes after a drop.\n\nPress it once next to the Bluetooth receiver. If nothing happens, it has locked up: take the CR2032 out for a few seconds and put it back. This happens with a weak cell (last measured: {level}), so replace it rather than reuse it.\n\nThis notice clears as soon as the token is heard again."
+      "description": "The link to {name} dropped on its own, and the cap hasn't been heard since. A healthy cap keeps advertising for about three minutes after a drop.\n\nPress it once next to the Bluetooth receiver. If nothing happens, it has locked up: take the CR2032 out for a few seconds and put it back. This happens with a weak cell (last measured: {level}), so fit a new one rather than reuse it.\n\nThis notice clears as soon as the cap is heard again."
     },
     "link_lossy": {
-      "title": "{name} loses much of its stream",
-      "description": "In the last {sessions} sessions in a row, {name} got less than 70 % of its motion frames through (the last one: {pct} %, via {via}). Gestures, the knob and tilt miss steps on such a link; presses are less affected.\n\nMove the token or the receiver closer, add an ESPHome Bluetooth proxy near where the token is used, or lower *IMU sample rate* in the options (now {rate} Hz) to 26. The card's **Check** measures the link and suggests the rate.\n\nThis goes away after a session in which 90 % or more arrives."
+      "title": "{name} loses a lot of its stream",
+      "description": "Over the last {sessions} sessions in a row, {name} got less than 70 % of its motion frames through (last one: {pct} %, via {via}). On a link like this, gestures, the knob and tilt miss steps; presses suffer less.\n\nMove the cap or the receiver closer, add an ESPHome Bluetooth proxy near where you use the cap, or lower *Sensor rate* in the options (now {rate} Hz) to 26. The card's **Check** measures the link and suggests a rate.\n\nThis clears after a session in which 90 % or more gets through."
     }
   }
 }
