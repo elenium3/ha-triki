@@ -68,6 +68,7 @@ automation:
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -83,6 +84,7 @@ automation:
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -109,6 +111,7 @@ automation:
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -131,6 +134,7 @@ automation:
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -169,6 +173,7 @@ Add a condition on `sensor.triki_face_up` to each knob automation:
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -202,6 +207,7 @@ step; otherwise the whole effect waits for the slowest lamp.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -240,6 +246,7 @@ a fast turn must not queue twenty service calls behind a slow receiver.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -255,6 +262,7 @@ a fast turn must not queue twenty service calls behind a slow receiver.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -275,6 +283,7 @@ a fast turn must not queue twenty service calls behind a slow receiver.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -294,6 +303,7 @@ a fast turn must not queue twenty service calls behind a slow receiver.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -318,6 +328,7 @@ a fast turn must not queue twenty service calls behind a slow receiver.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: "{{ trigger.to_state.state not in ['unavailable', 'unknown'] }}"
@@ -359,6 +370,7 @@ who cannot find the button.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -389,6 +401,7 @@ right after the link comes up. Here it shows whether a window is open.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-

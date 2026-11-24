@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Two automation blueprints with one-click import: a light remote (press
+  toggles, the knob dims, long press sets full brightness) and an action for
+  each gesture.
+
 - Adding a cap asks which gestures to turn on (knob, double and triple press,
   tilt, shake, flip/tap/toss) instead of leaving them all off until someone
   finds *Configure*.
@@ -130,6 +134,10 @@ All notable changes to this project are documented here. The format follows
   timing (multi-press window, long press).
 
 ### Fixed
+
+- The automation examples could fire on their own after a restart: the event
+  entity comes back from unavailable with the last event. Their triggers now
+  say `not_from: unavailable`.
 
 - The live card on a phone: the model's view no longer grows past a card
   narrower than 416 px (its right side, with the Button light, was cut off),

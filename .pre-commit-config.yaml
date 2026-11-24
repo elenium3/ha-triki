@@ -12,11 +12,14 @@ repos:
       - id: trailing-whitespace
       - id: end-of-file-fixer
       - id: check-yaml
+        # blueprints use Home Assistant's !input tag
+        args: [--unsafe]
       - id: check-json
       - id: check-added-large-files
         args: [--maxkb=600]
-        # vendored three.js bundle for the live card (minified, ~620 KB)
-        exclude: ^custom_components/triki/frontend/triki-three\.js$
+        # vendored three.js bundle for the live card (minified, ~620 KB) and
+        # the README animation (~4 MB)
+        exclude: ^(custom_components/triki/frontend/triki-three\.js|docs/images/card-live\.gif)$
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.3
     hooks:

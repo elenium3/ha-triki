@@ -1,0 +1,91 @@
+blueprint:
+  name: "Triki: light remote"
+  description: >-
+    Press toggles the light, the knob dims it, a long press sets full
+    brightness. The knob needs *Knob* turned on for the cap (in *Configure*,
+    or when the cap is added).
+  domain: automation
+  source_url: https://github.com/elenium3/ha-triki/blob/main/blueprints/automation/triki/triki_light.yaml
+  input:
+    triki:
+      name: Triki
+      description: The cap's Action entity.
+      selector:
+        entity:
+          filter:
+            - integration: triki
+              domain: event
+    light:
+      name: Light
+      selector:
+        entity:
+          filter:
+            - domain: light
+    step:
+      name: Brightness per knob step
+      default: 8
+      selector:
+        number:
+          min: 1
+          max: 25
+          unit_of_measurement: "%"
+    long_press_brightness:
+      name: Long press brightness
+      default: 100
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+
+# queued: a fast turn sends steps faster than a light answers
+mode: queued
+max: 10
+max_exceeded: silent
+
+triggers:
+  - trigger: state
+    entity_id: !input triki
+
+variables:
+  light: !input light
+  step: !input step
+  long_press_brightness: !input long_press_brightness
+  event: "{{ trigger.to_state.attributes.event_type | default('') }}"
+  steps: "{{ trigger.to_state.attributes.steps | default(1) | int }}"
+
+# a new event has a new timestamp; coming back from unavailable (a restart or a
+# reload of the integration) brings back the last one, which is not a gesture
+conditions:
+  - >-
+    {{ trigger.from_state is not none
+       and trigger.from_state.state != 'unavailable'
+       and trigger.to_state.state not in ['unavailable', 'unknown']
+       and trigger.to_state.state != trigger.from_state.state }}
+
+actions:
+  - choose:
+      - conditions: "{{ event == 'press' }}"
+        sequence:
+          - action: light.toggle
+            target:
+              entity_id: !input light
+      - conditions: "{{ event == 'long_press' }}"
+        sequence:
+          - action: light.turn_on
+            target:
+              entity_id: !input light
+            data:
+              brightness_pct: "{{ long_press_brightness }}"
+      - conditions: "{{ event in ['rotate_cw', 'rotate_ccw'] and is_state(light, 'on') }}"
+        sequence:
+          # kept at 1 % or more: at 0 the light turns off and the knob cannot
+          # bring it back
+          - action: light.turn_on
+            target:
+              entity_id: !input light
+            data:
+              brightness_pct: >-
+                {% set cur = (state_attr(light, 'brightness') | int(0)) * 100 / 255 %}
+                {% set delta = step * steps * (1 if event == 'rotate_cw' else -1) %}
+                {{ [1, [100, (cur + delta) | round(0)] | min] | max | int }}

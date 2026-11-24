@@ -70,8 +70,17 @@ Manual install, without HACS: [Installation](docs/installation.md).
 | Shake | a second of sharp shaking | `shake` | off |
 | Flip, tap, toss | experimental | `flip`, `tap`, `throw` | off |
 
-Turn gestures on in the integration's *Configure*, or let the card's **Check**
-do it. Every gesture arrives on `event.<name>_action`:
+Gestures are picked when the cap is added; change them later in *Configure*,
+or let the card's **Check** do it.
+
+**No YAML needed:** import a blueprint and pick the cap.
+
+| Blueprint | |
+|---|---|
+| Light remote: press toggles, the knob dims, long press sets full brightness | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Felenium3%2Fha-triki%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftriki%2Ftriki_light.yaml) |
+| An action for each gesture: press, double, triple and long press, knob, tilt, shake, flip | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Felenium3%2Fha-triki%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftriki%2Ftriki_actions.yaml) |
+
+Or write your own. Every gesture arrives on `event.<name>_action`:
 
 ```yaml
 automation:
@@ -79,6 +88,7 @@ automation:
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - "{{ trigger.to_state.attributes.event_type == 'press' }}"
     actions:

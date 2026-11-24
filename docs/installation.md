@@ -45,7 +45,7 @@ unzip triki.zip -d custom_components/triki
 
 ## Adding the token
 
-1. Press the green button on the token. It advertises for a few seconds after a
+1. Press the cap (the whole cap is the button). It advertises for a few seconds after a
    press, so do this right before the next step.
 2. Home Assistant discovers it as *Żabka Triki* under *Discovered* in
    [Settings → Devices & services](https://my.home-assistant.io/redirect/integrations/).
