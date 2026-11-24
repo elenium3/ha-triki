@@ -39,7 +39,13 @@ const STRINGS = {
     dozeLate: "Disconnected after idling. Presses are not seen until it falls asleep, and each one starts the 3 minutes over: put the cap down and wait", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
     wake: "Press the button on the cap to wake it", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
     roll: "Left-right", pitch: "Forward-back", yaw: "Turn about the axis", reset: "Align direction", led: "LED", calibrate: "Calibrate",
-    help: { mark: "The yellow stripe on the model marks the edge with the dot above the letter Z (circled in the photo). It shows which way the model is turned.", cal: "<b>Calibrate</b> once per cap. The cap lies on the table, dot away from you: the model learns what level looks like for this cap, then you match the logo. It is saved for good.", align: "<b>Align direction</b> is needed from time to time. The cap senses tilt by itself, from gravity, but not which way it is turned: it has no compass. The gyroscope counts the turn and slowly drifts, and a Home Assistant restart loses it. When the stripe on the model is at a different edge than the dot on the cap, lay the cap dot away from you and press this button. The calibration stays." },
+    editor: { title: "Title", model: "Model look", show_model: "3D model and angles", chips: "Status chips", show_values: "Gyro and accelerometer bars",
+      show_history: "Graph of the last 10 s", show_gestures: "Gesture list", buttons: "Buttons", show_help: "Help under the buttons",
+      show_controls: "Buttons and help (old switch)", admin: "Calibrate and Check are shown to admins only.",
+      opt: { state: "State", rate: "Rate", signal: "Signal, dBm", battery: "Battery", link: "Frames received, %", cap: "Triki (built in)", glb: "Flopsstuff textured" } },
+    help: { mark: "The yellow stripe on the model marks the edge with the dot above the letter Z (circled in the photo). It shows which way the model is turned.", cal: "<b>Calibrate</b> once per cap. The cap lies on the table, dot away from you: the model learns what level looks like for this cap, then you match the logo. It is saved for good.", align: "<b>Align direction</b> is needed from time to time. The cap senses tilt by itself, from gravity, but not which way it is turned: it has no compass. The gyroscope counts the turn and slowly drifts, and a Home Assistant restart loses it. When the stripe on the model is at a different edge than the dot on the cap, lay the cap dot away from you and press this button. The calibration stays.",
+      led: "<b>LED</b> switches the cap's green light on and off. It drains the coin cell, so leave it off unless you need it.",
+      check: "<b>Check</b> walks step by step through the link, the knob, the button and the gestures that are on, and suggests what to change in the options. It takes a few minutes and any step can be skipped. Run it after setup, or when a gesture misfires." },
     cal: { find: "Find the dot above the letter Z on the green side (circled in the photo). On the model that edge has the yellow stripe.", flat: "Lay the cap on the table, either side up, with that edge away from you, let go and press Done.", heading: "Lay the cap on the table with that edge away from you and press Done: the stripe on the model moves to the far edge too.", turned: "Direction aligned", logo: "Now the logo (once per cap: it is crimped on at any angle). Lay the cap green side up with the Z upright, dot at the top, then turn it over across its right edge. Turn the logo below with the slider until it looks like the one on your cap.", resin: "Green side", metal: "After turning over", next: "Done", cancel: "Cancel", skip: "Skip", saved: "Calibrated",
       err: { moving: "It is moving: hold still for a second", not_flat: "It is not lying flat", asleep: "The cap is asleep: wake it first", no_data: "No data yet: wake the cap" } },
     glist: { title: "What the cap can do", hint: "Tap a name to see how. Each lights up when the cap does it.", off: "off in the integration options",
@@ -130,7 +136,13 @@ const STRINGS = {
     dozeLate: "Крышка отключена после простоя. Нажатия не видны, пока она не уснёт, и каждое начинает 3 минуты заново: положите её и подождите", connected: "Подключена", streaming: "Данные идут", unresponsive: "Не отвечает",
     wake: "Нажмите кнопку на крышке, чтобы её разбудить", gyro: "Гироскоп, °/с",
     accel: "Акселерометр, g", roll: "Влево-вправо", pitch: "Вперёд-назад", yaw: "Поворот вокруг оси", calibrate: "Калибровка",
-    help: { mark: "Жёлтая полоска на модели отмечает край с точкой над буквой Z (на фото обведена). По ней видно, куда повёрнута модель.", cal: "<b>Калибровка</b> — один раз для каждой крышки. Крышка лежит на столе точкой от вас: модель запоминает, как для этой крышки выглядит «ровно», потом вы подгоняете логотип. Сохраняется навсегда.", align: "<b>Выровнять направление</b> — время от времени. Наклон крышка чувствует сама, по силе тяжести, а в какую сторону она повёрнута — нет: компаса в ней нет. Поворот считает гироскоп, он понемногу ошибается, а после перезапуска Home Assistant поворот теряется. Если полоска на модели не на том краю, где точка на крышке, положите крышку точкой от себя и нажмите эту кнопку. Калибровку это не трогает." },
+    editor: { title: "Заголовок", model: "Вид модели", show_model: "3D-модель и углы", chips: "Плашки состояния", show_values: "Полоски гироскопа и акселерометра",
+      show_history: "График за 10 с", show_gestures: "Список жестов", buttons: "Кнопки", show_help: "Справка под кнопками",
+      show_controls: "Кнопки и справка (старый переключатель)", admin: "Калибровка и Проверка видны только администраторам.",
+      opt: { state: "Состояние", rate: "Частота", signal: "Сигнал, dBm", battery: "Батарея", link: "Дошло кадров, %", cap: "Triki (встроенная)", glb: "Flopsstuff с текстурами" } },
+    help: { mark: "Жёлтая полоска на модели отмечает край с точкой над буквой Z (на фото обведена). По ней видно, куда повёрнута модель.", cal: "<b>Калибровка</b> — один раз для каждой крышки. Крышка лежит на столе точкой от вас: модель запоминает, как для этой крышки выглядит «ровно», потом вы подгоняете логотип. Сохраняется навсегда.", align: "<b>Выровнять направление</b> — время от времени. Наклон крышка чувствует сама, по силе тяжести, а в какую сторону она повёрнута — нет: компаса в ней нет. Поворот считает гироскоп, он понемногу ошибается, а после перезапуска Home Assistant поворот теряется. Если полоска на модели не на том краю, где точка на крышке, положите крышку точкой от себя и нажмите эту кнопку. Калибровку это не трогает.",
+      led: "<b>Диод</b> включает и выключает зелёный светодиод крышки. Он расходует батарейку, поэтому без нужды его лучше не включать.",
+      check: "<b>Проверка</b> шаг за шагом проходит связь, крутилку, кнопку и включённые жесты и подсказывает, что поменять в настройках. Занимает несколько минут, любой шаг можно пропустить. Запускайте после установки или если жест срабатывает не так." },
     cal: { find: "Найдите на зелёной стороне точку над буквой Z (на фото обведена). На модели этот край отмечен жёлтой полоской.", flat: "Положите крышку на стол любой стороной вверх так, чтобы этот край был от вас, отпустите и нажмите «Готово».", heading: "Положите крышку на стол этим краем от себя и нажмите «Готово»: полоска на модели тоже уйдёт на дальний край.", turned: "Направление выровнено", logo: "Теперь логотип (один раз для каждой крышки: металл обжат под любым углом). Положите крышку зелёной стороной вверх, буквой Z ровно, точкой сверху, и переверните через правый край. Поверните логотип ползунком, чтобы он выглядел как на крышке.", resin: "Зелёная сторона", metal: "После переворота", next: "Готово", cancel: "Отмена", skip: "Пропустить", saved: "Откалибровано",
       err: { moving: "Крышка двигается: подержите её секунду неподвижно", not_flat: "Крышка лежит не ровно", asleep: "Крышка спит: сначала разбудите её", no_data: "Нет данных: разбудите крышку" } },
     reset: "Выровнять направление",
@@ -224,7 +236,13 @@ const STRINGS = {
     dozeLate: "Rozłączony po bezczynności. Naciśnięcia nie są widoczne, dopóki nie zaśnie, a każde zaczyna 3 minuty od nowa: odłóż kapsel i poczekaj", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
     wake: "Naciśnij przycisk na kapslu, żeby go obudzić", gyro: "Żyroskop, °/s",
     accel: "Akcelerometr, g", roll: "Lewo-prawo", pitch: "Przód-tył", yaw: "Obrót wokół osi",
-    help: { mark: "Żółty pasek na modelu oznacza krawędź z kropką nad literą Z (zakreśloną na zdjęciu). Po niej widać, w którą stronę model jest obrócony.", cal: "<b>Kalibracja</b> raz na kapsel. Kapsel leży na stole kropką od ciebie: model zapamiętuje, jak dla tego kapsla wygląda „płasko”, potem dopasowujesz logo. Zapisuje się na stałe.", align: "<b>Wyrównaj kierunek</b> trzeba od czasu do czasu. Przechył kapsel czuje sam, z grawitacji, ale nie wie, w którą stronę jest obrócony: nie ma kompasu. Obrót liczy żyroskop, który powoli się myli, a restart Home Assistant go gubi. Gdy pasek na modelu jest na innej krawędzi niż kropka na kapslu, połóż kapsel kropką od siebie i naciśnij ten przycisk. Kalibracja zostaje." },
+    editor: { title: "Tytuł", model: "Wygląd modelu", show_model: "Model 3D i kąty", chips: "Plakietki stanu", show_values: "Paski żyroskopu i akcelerometru",
+      show_history: "Wykres z 10 s", show_gestures: "Lista gestów", buttons: "Przyciski", show_help: "Pomoc pod przyciskami",
+      show_controls: "Przyciski i pomoc (stary przełącznik)", admin: "Kalibracja i Test są widoczne tylko dla administratorów.",
+      opt: { state: "Stan", rate: "Częstotliwość", signal: "Sygnał, dBm", battery: "Bateria", link: "Odebrane ramki, %", cap: "Triki (wbudowany)", glb: "Flopsstuff z teksturą" } },
+    help: { mark: "Żółty pasek na modelu oznacza krawędź z kropką nad literą Z (zakreśloną na zdjęciu). Po niej widać, w którą stronę model jest obrócony.", cal: "<b>Kalibracja</b> raz na kapsel. Kapsel leży na stole kropką od ciebie: model zapamiętuje, jak dla tego kapsla wygląda „płasko”, potem dopasowujesz logo. Zapisuje się na stałe.", align: "<b>Wyrównaj kierunek</b> trzeba od czasu do czasu. Przechył kapsel czuje sam, z grawitacji, ale nie wie, w którą stronę jest obrócony: nie ma kompasu. Obrót liczy żyroskop, który powoli się myli, a restart Home Assistant go gubi. Gdy pasek na modelu jest na innej krawędzi niż kropka na kapslu, połóż kapsel kropką od siebie i naciśnij ten przycisk. Kalibracja zostaje.",
+      led: "<b>Dioda</b> włącza i wyłącza zieloną diodę kapsla. Zużywa baterię, więc bez potrzeby lepiej jej nie włączać.",
+      check: "<b>Test</b> krok po kroku sprawdza połączenie, pokrętło, przycisk i włączone gesty i podpowiada, co zmienić w opcjach. Trwa kilka minut, każdy krok można pominąć. Uruchom go po instalacji albo gdy gest działa nie tak." },
     calibrate: "Kalibracja",
     cal: { find: "Znajdź po zielonej stronie kropkę nad literą Z (zakreśloną na zdjęciu). Na modelu ta krawędź ma żółty pasek.", flat: "Połóż kapsel na stole dowolną stroną do góry tak, żeby ta krawędź była od ciebie, puść i naciśnij Gotowe.", heading: "Połóż kapsel na stole tą krawędzią od siebie i naciśnij Gotowe: pasek na modelu też przejdzie na daleką krawędź.", turned: "Kierunek wyrównany", logo: "Teraz logo (raz na kapsel: metal jest zaciśnięty pod dowolnym kątem). Połóż kapsel zieloną stroną do góry, literą Z prosto, kropką u góry, i odwróć go przez prawą krawędź. Obróć logo suwakiem, aż będzie wyglądać jak na kapslu.", resin: "Zielona strona", metal: "Po odwróceniu", next: "Gotowe", cancel: "Anuluj", skip: "Pomiń", saved: "Skalibrowano",
       err: { moving: "Kapsel się rusza: przytrzymaj chwilę nieruchomo", not_flat: "Kapsel nie leży płasko", asleep: "Kapsel śpi: najpierw go obudź", no_data: "Brak danych: obudź kapsel" } },
@@ -665,7 +683,8 @@ class TrikiCard extends HTMLElement {
           <button id="led" disabled${off("led")}><ha-icon icon="mdi:led-on"></ha-icon><span class="lbl">${t.led}</span></button>
           <button id="check"${off("check")}><ha-icon icon="mdi:clipboard-check-outline"></ha-icon><span class="lbl">${t.check.open}</span></button>
         </div>
-        <div class="help"${c.show_help ? "" : ' style="display:none"'}><div class="front"><span class="pic"><img src="${asset("tex_resin.webp")}" alt=""><i></i></span><p>${t.help.mark}</p></div><p>${t.help.cal}</p><p>${t.help.align}</p></div>
+        <div class="help"${c.show_help && (c.show_model || c.buttons.length) ? "" : ' style="display:none"'}>${c.show_model ? `<div class="front"><span class="pic"><img src="${asset("tex_resin.webp")}" alt=""><i></i></span><p>${t.help.mark}</p></div>` : ""}${[["calibrate", "cal"], ["align", "align"], ["led", "led"], ["check", "check"]]
+          .filter(([b]) => c.buttons.includes(b)).map(([b, k]) => `<p data-for="${b}">${t.help[k]}</p>`).join("")}</div>
         </div>
         </div>
       </ha-card>`;
@@ -1078,6 +1097,7 @@ class TrikiCard extends HTMLElement {
     if (!this._el) return;
     this._el.check.hidden = !admin;
     this._el.cal.hidden = !admin;
+    for (const p of this.shadowRoot.querySelectorAll('.help [data-for="calibrate"], .help [data-for="check"]')) p.hidden = !admin;
   }
 
   _fmt(text, values = {}) {
@@ -1617,38 +1637,33 @@ class TrikiCardEditor extends HTMLElement {
   set hass(hass) { this._hass = hass; this._render(); }
   _render() {
     if (!this._hass || !this._config) return;
+    const T = STRINGS[(this._hass.locale?.language || this._hass.language || "en").slice(0, 2)] || STRINGS.en;
+    const e = T.editor;
     if (!this._form) {
       this._form = document.createElement("ha-form");
-      this._form.computeLabel = (s) => ({
-        device_id: "Triki", title: "Title", show_values: "Gyro and accelerometer bars",
-        show_history: "Gyro history", show_controls: "Buttons and help (old switch: use the two below)", model: "3D model",
-        show_model: "3D model and angles", chips: "Status chips",
-        buttons: "Buttons", show_help: "Help under the buttons", show_gestures: "Gesture list",
-      })[s.name] || s.name;
       this._form.addEventListener("value-changed", (ev) => {
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: ev.detail.value } }));
       });
       this.appendChild(this._form);
     }
+    this._form.computeLabel = (sc) => (sc.name === "device_id" ? "Triki" : e[sc.name] || sc.name);
+    this._form.computeHelper = (sc) => (sc.name === "buttons" ? e.admin : undefined);
     this._form.hass = this._hass;
     this._form.data = this._config;
+    // top to bottom as on the card
+    const opts = (ids, label) => ids.map((value) => ({ value, label: label(value) }));
     this._form.schema = [
       { name: "device_id", selector: { device: { integration: "triki" } } },
       { name: "title", selector: { text: {} } },
+      { name: "chips", selector: { select: { multiple: true, mode: "list", options: opts(CHIPS, (v) => e.opt[v]) } } },
+      { name: "show_model", selector: { boolean: {} } },
+      { name: "model", selector: { select: { mode: "dropdown", options: opts(["cap", "glb"], (v) => e.opt[v]) } } },
       { name: "show_values", selector: { boolean: {} } },
       { name: "show_history", selector: { boolean: {} } },
-      { name: "show_model", selector: { boolean: {} } },
-      { name: "chips", selector: { select: { multiple: true, mode: "list", options: [
-        { value: "state", label: "State" }, { value: "rate", label: "Rate" },
-        { value: "signal", label: "Signal (dBm)" }, { value: "battery", label: "Battery" },
-        { value: "link", label: "Frames received, %" }] } } },
-      { name: "buttons", selector: { select: { multiple: true, mode: "list", options: [
-        { value: "calibrate", label: "Calibrate" }, { value: "align", label: "Align direction" },
-        { value: "led", label: "LED" }, { value: "check", label: "Check" }] } } },
       { name: "show_gestures", selector: { boolean: {} } },
+      { name: "buttons", selector: { select: { multiple: true, mode: "list", options: opts(BUTTONS,
+        (v) => ({ calibrate: T.calibrate, align: T.reset, led: T.led, check: T.check.open })[v]) } } },
       { name: "show_help", selector: { boolean: {} } },
-      { name: "model", selector: { select: { mode: "dropdown", options: [
-        { value: "cap", label: "Triki (built in)" }, { value: "glb", label: "Flopsstuff textured" }] } } },
     ];
   }
 }

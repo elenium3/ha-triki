@@ -25,3 +25,10 @@ for (const lang of ["ru", "pl"]) {
     for (const [k, v] of Object.entries(en)) assert.deepEqual(holes(other[k]), holes(v), k);
   });
 }
+
+test("the card editor has a label for every field", () => {
+  const ed = src.slice(src.indexOf("class TrikiCardEditor"));
+  const names = [...ed.matchAll(/\{ name: "(\w+)"/g)].map((m) => m[1]).filter((n) => n !== "device_id");
+  assert.ok(names.length >= 9);
+  for (const lang of Object.keys(STRINGS)) for (const n of names) assert.ok(STRINGS[lang].editor[n], `${lang} ${n}`);
+});

@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- The live card's help explains the LED and Check buttons too, and only the
+  buttons that are shown. The card editor is translated (English, Russian,
+  Polish) and lists the parts in the order they sit on the card.
+
 - The live card lists what the cap can do (`show_gestures`): tap a gesture to
   read how to make it, each lights up when it fires, and the ones turned off in
   the options are struck through.
