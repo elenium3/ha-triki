@@ -7,7 +7,7 @@ like
 
 ```
 Triki 4190656753: advert via A0:DD:6C:02:B3:16 rssi -68 age 0.2s
-Triki 4190656753: connected, streaming at 52 Hz (advert age 0.0s, link 0.1s, setup 0.2s: notify 0.1s, write 0.1s)
+Triki 4190656753: connected via esp32-proxy, streaming at 52 Hz (advert age 0.0s, link 0.1s, setup 0.2s: notify 0.1s, write 0.1s)
 Triki 4190656753: event press {'count': 1}
 Triki 4190656753: stream now 26 Hz (idle)
 Triki 4190656753: not connecting: waiting for the token to sleep after an idle disconnect (source …)
@@ -20,8 +20,14 @@ Triki 4190656753: not connecting: waiting for the token to sleep after an idle d
 - Make sure a scanner is in range. In the Bluetooth integration's diagnostics
   the token should appear under `discovered_devices_and_advertisement_data` of
   some scanner with a small `time_since_last_device_detection`.
+- The receiver must be able to connect, not only listen. An ESPHome proxy
+  needs `bluetooth_proxy: active: true`; a Shelly or another listen-only
+  receiver hears the token but cannot link to it. *Add integration* says so
+  when this is the case.
+- Close the Żappka app or turn Bluetooth off on the phone. The token takes
+  one connection at a time and does not advertise while the app holds it.
 - The name must start with `Triki`. Tokens whose name was changed by the app
-  are not matched; add them manually with *Add integration*.
+  are not matched.
 
 ## Connects slowly or drops within a minute
 
@@ -149,6 +155,16 @@ Something else holds the link, usually a phone with the Żappka app that is
 still in range: the token accepts one connection at a time and does not
 advertise while connected. Turn Bluetooth off on the phone or close the app.
 A battery pull also drops that link.
+
+## The card is missing or empty
+
+- Not in the card list right after the first token was added: reload the
+  browser page.
+- *No Triki cap found*: no token is added, or its entry is disabled. Add one
+  under Settings → Devices & services.
+- *Custom element doesn't exist: triki-card*: the integration is not loaded,
+  because every token was removed or disabled. Add or enable one and reload
+  the page.
 
 ## Duplicate notifications on a local adapter
 

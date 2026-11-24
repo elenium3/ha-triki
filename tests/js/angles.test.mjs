@@ -1,4 +1,4 @@
-// The card's left-right angle is read from the side that is up.
+// The card's forward-back angle is read from the side that is up.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

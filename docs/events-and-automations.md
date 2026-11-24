@@ -65,6 +65,12 @@ automation from it and pick the cap's Action entity.
 Both ignore the event entity coming back from unavailable after a restart.
 The source is in [`blueprints/automation/triki`](../blueprints/automation/triki).
 
+The examples below use `event.triki_action`. A real cap's entities carry its
+number, for example `event.triki_4190656753_action`,
+`sensor.triki_4190656753_face_up` and `switch.triki_4190656753_led`: put your
+own in. An example with a wrong entity id saves without an error and never
+runs.
+
 ## Example: button toggles a light, knob dims it, long press for full warm white
 
 This is the setup the integration was developed with. It is split into three
@@ -468,7 +474,7 @@ above works too; it needs the template condition on `event_type` and
 
 ## Tips
 
-- Multi-press delays single presses by the window (0.3–0.5 s). If you do not use
+- Multi-press delays single presses by the window (0.5 s by default). If you do not use
   double or triple press, leave the option off and presses are instant.
 - The press that wakes a sleeping token arrives as `wake` and then `press` with
   `source: wake` (*Count the wake-up as a press*, on by default). Use `press` for

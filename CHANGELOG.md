@@ -19,6 +19,22 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The card's *Left-right* and *Forward-back* angles and the names of the two
+  tilt sensors were swapped: a lean to the side showed as forward-back. The
+  values and the entity ids did not change. (fixed after 0.3.0b2)
+- *Add integration* with no cap to offer now says why: no Bluetooth receiver
+  that can connect, or a cap heard only by a listen-only receiver (a proxy
+  without active connections, a Shelly). Before, it always asked to press the
+  cap. (fixed after 0.3.0b2)
+- A cap that is awake but cannot be linked three times in a row is now a
+  warning in the log, once per outage; it was hidden at the default log level.
+  (fixed after 0.3.0b2)
+- The LED error for a cap that is not connected no longer says to press it
+  while it dozes. The empty card says where to add a cap. (fixed after 0.3.0b2)
+- Docs: the examples say to put in your cap's entity id
+  (`event.triki_<number>_action`); first check, the tilt sensor ids, the
+  multi-press window and the diagnostics fields match the code.
+  (fixed after 0.3.0b2)
 - After a session that had slowed to the idle rate, the next wake timed
   gestures twice too fast for its first seconds: a short press could come out
   as a long press. (fixed after 0.3.0b2)
@@ -68,7 +84,8 @@ All notable changes to this project are documented here. The format follows
   adapter waits for the Bluetooth proxies before linking up.
 - Setup and option texts reworded in English, Polish and Russian. Some option
   names changed (the keys did not). The pitch and roll sensors are *Tilt
-  forward-back* and *Tilt left-right*; entity ids stay `_pitch` and `_roll`.
+  left-right* and *Tilt forward-back*; on an existing install the entity ids
+  stay `_pitch` and `_roll`.
 - *Configure* shows the gestures first; rate, timing, the knob step and
   debug options fold away under *Advanced*.
 - The README starts with install, what the cap can do and the card.

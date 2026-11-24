@@ -1,7 +1,7 @@
 # Diagnostics
 
 Settings → Devices & services → Żabka Triki → ⋮ → *Download diagnostics*
-produces a JSON like this (addresses redacted):
+produces a JSON like this (addresses redacted; shortened, a current download has more fields):
 
 ```json
 {
@@ -22,7 +22,7 @@ produces a JSON like this (addresses redacted):
 |---|---|
 | `connected` | Link up right now. |
 | `stream_rate` | Rate the token was last told to stream at: the configured rate, or 26 while idle. `null` when not connected. |
-| `measured_rate` | Frames per second actually received over the last 2 s. Below `stream_rate` means lost frames; above it, firmware that ignores the requested rate. `null` when not connected or right after a rate change. |
+| `measured_rate` | Frames per second actually received over the last 5 s. Below `stream_rate` means lost frames; above it, firmware that ignores the requested rate. `null` when not connected or right after a rate change. |
 | `gyro_bias` | Gyro zero offset in °/s per axis, learned while the token lies still and subtracted from knob turns. A few °/s is normal. `null` until the token has rested for half a second. |
 | `firmware`, `hardware` | Device Information service, read once per entry lifetime. |
 | `rssi` | Signal of the last advertisement. |

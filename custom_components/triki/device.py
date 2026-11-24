@@ -141,8 +141,9 @@ _WAKE_PRESS_MAX_S = 10.0
 _LED_WRITE_TIMEOUT_S = 5.0
 _LED_WRITE_RETRIES = 3
 _LED_WRITE_RETRY_DELAY_S = 0.3
-# This many connect failures in a row for an awake token is worth one line at
-# info level (the entities only show "asleep", which looks normal).
+# This many connect failures in a row for an awake token is worth one warning
+# per outage: the entities only show "asleep", which looks normal, and the
+# default log level hides anything below a warning.
 _UNREACHABLE_AFTER = 3
 # Battery: the token re-measures only while the stream is stopped and then pushes
 # the value by notification (6 s after STOP on the test unit). The value read
@@ -1014,9 +1015,9 @@ class TrikiDevice:
         _LOGGER.debug("%s: %s: %s", self.name, what, err)
         if self._fail_streak == _UNREACHABLE_AFTER and not self._unreachable_logged:
             self._unreachable_logged = True
-            _LOGGER.info(
-                "%s: %d connect attempts in a row failed (last: %s); "
-                "it is seen but cannot be linked, check the receiver placement",
+            _LOGGER.warning(
+                "%s: %d connect attempts in a row failed (last: %s); it is seen but "
+                "cannot be linked: the receiver is too far or has no free connection slot",
                 self.name,
                 self._fail_streak,
                 err,

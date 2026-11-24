@@ -9,7 +9,8 @@ a short label for each gesture.
 <p align="center"><img src="images/card.png" width="420" alt="The live card while the cap is turned in the hand"></p>
 
 Nothing needs installing: the integration serves the card and loads it into the
-frontend itself. After an update, reload the browser page once.
+frontend itself once a token is added. If the card is not in the list right
+after that, or after an update, reload the browser page once.
 
 ## Adding it
 
@@ -93,7 +94,7 @@ toss), already before Start.
 | Pick up and put down | five pick-ups the way the owner usually picks it up; every gesture that fires meanwhile is a false one |
 | Lean in the hand | right and left, three times each |
 | Button | press, double press, long press; the gap of a double press that came as two |
-| Turn over, Tap, Toss | the face and the motion gestures |
+| Flip, Tap, Toss | the face and the motion gestures |
 | Shake | three shakes; a burst of fast rotation with no shake event is a miss (*2 of 3 recognised*) |
 | Direction drift | how far the heading moves in 30 s at rest |
 | Sleep and wake (optional, ~4 min) | the link drops as after idling, the token dozes (presses not seen) and sleeps, then one press must wake it: it fails if it reconnects while dozing or never falls asleep |
@@ -127,10 +128,11 @@ while the button is held. `model: glb` uses Flopsstuff's textured model.
   dozing token keeps its heading over the reconnect; a Home Assistant restart
   loses it, and until the next alignment the card says so under the model
   (status field `heading_known`). The calibration itself is stored and never resets; the help under
-  the buttons says when to use each. The angles are labelled left-right
-  (roll), forward-back (pitch) and turn about the axis (yaw). Left-right is
+  the buttons says when to use each. The angles are labelled forward-back
+  (roll: the dot edge lifted or lowered), left-right (pitch: a lean to the
+  side) and turn about the axis (yaw). Forward-back is
   read from the side that is up, so a cap lying flat shows 0° either side up
-  (the `euler` the card receives, like the *Tilt left-right* sensor, reads
+  (the `euler` the card receives, like the *Tilt forward-back* sensor, reads
   ±180° metal side up).
 - **Data path:** the card subscribes over Home Assistant's websocket
   (`triki/subscribe`). The integration sends the pose and the last frame at up
@@ -149,6 +151,7 @@ while the button is held. `model: glb` uses Flopsstuff's textured model.
 | `triki/subscribe` | `device_id` (optional with one token) | events: `status`, `motion`, `event` |
 | `triki/reset_heading` | `device_id` (optional with one token) | |
 | `triki/check` (admin) | `device_id`, `session`, `action`: `start` (or renew, every few seconds), `stop`, `sleep` (drop the link as after idling, for the sleep step) | error `busy` when another card checks this token, `not_ready` for `sleep` while not connected |
+| `triki/calibrate` (admin) | `device_id`, `step`: `flat` (lying still: levels the model, zeroes the heading), `logo` with `angle` in degrees, `clear` (forget both) | error `no_data`, `moving`, `not_flat` or `no_angle` when the step is not possible |
 | `triki/apply` (admin) | `device_id`, `options`: any of `invert_rotation`, `sample_rate`, `multi_press_window`, `shake`, `tilt` | `{applied}`; the entry reloads |
 
 When the entry reloads (options saved), each subscription gets a `reload` event

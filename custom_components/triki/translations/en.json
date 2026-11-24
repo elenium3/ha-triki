@@ -25,7 +25,9 @@
     "abort": {
       "already_configured": "This cap is already set up",
       "already_in_progress": "This cap is already being set up",
-      "no_devices_found": "No awake Triki found. Press the cap and try again.",
+      "no_devices_found": "No awake Triki found. Press the cap and try again. If the Żappka app is open on a phone nearby, close it first: the cap takes one connection at a time.",
+      "no_connectable_receiver": "Home Assistant has no Bluetooth receiver that can connect to the cap. Add a Bluetooth adapter or an ESPHome Bluetooth proxy with active connections, then try again.",
+      "heard_not_connectable": "A Triki is in range, but only a receiver that can't connect hears it. Put a Bluetooth adapter or an ESPHome Bluetooth proxy with active connections (active: true) near the cap.",
       "not_supported": "This device isn't supported"
     }
   },
@@ -77,7 +79,7 @@
   },
   "exceptions": {
     "asleep": {
-      "message": "{name} is asleep: press it to wake it up first."
+      "message": "{name} isn't connected. Press it to wake it; if it is dozing off after an idle disconnect, wait about 3 minutes first."
     },
     "led_write_failed": {
       "message": "Couldn't set the LED: {error}"
@@ -143,10 +145,10 @@
         }
       },
       "pitch": {
-        "name": "Tilt forward-back"
+        "name": "Tilt left-right"
       },
       "roll": {
-        "name": "Tilt left-right"
+        "name": "Tilt forward-back"
       }
     }
   },

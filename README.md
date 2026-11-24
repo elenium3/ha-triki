@@ -48,7 +48,8 @@ a scene. It sleeps when left alone and wakes on a press.
    and tick the gestures you want besides press and long press.
 3. Add the **Triki live 3D** card to a dashboard and press **Check** on it (as an admin). It
    walks you through the button, the knob and the gestures in a few minutes and
-   offers the option changes your cap needs in one tap.
+   offers the option changes your cap needs in one tap. If the card is not in
+   the list, reload the page.
 
 You need a Bluetooth receiver near the cap. An ESP32 running
 [ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy.html)
@@ -79,8 +80,15 @@ Gestures are picked when the cap is added; change them later in *Configure*.
 | Light remote: press toggles, the knob dims, long press sets full brightness | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Felenium3%2Fha-triki%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftriki%2Ftriki_light.yaml) |
 | An action for each gesture: press, double, triple and long press, knob, tilt, shake, flip | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Felenium3%2Fha-triki%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftriki%2Ftriki_actions.yaml) |
 
+If a press does nothing, look at the card or the *Readiness* sensor: *Dozing
+off* means the cap went idle and misses presses for about 3 minutes. Wait
+rather than press again.
+
 Or build one in the automation editor: *Add trigger → Device → your Triki*
-and pick the gesture. In YAML every gesture arrives on `event.<name>_action`:
+and pick the gesture. In YAML every gesture arrives on `event.<name>_action`.
+The name carries the cap's number, for example
+`event.triki_4190656753_action`: put your cap's entity in place of
+`event.triki_action` below.
 
 ```yaml
 automation:
@@ -130,7 +138,7 @@ button? Switch the rest off in the card's settings. [Live 3D card](docs/live-car
 | `sensor.<name>_readiness` | whether a press gets through now: `connected`, `dozing` (about 3 min after an idle disconnect, presses are missed), `asleep` (a press wakes it), `not_responding` |
 | `sensor.<name>_link_quality` | % of motion frames that arrived in the last session; a repair notice after three lossy sessions in a row |
 | `sensor.<name>_face_up` | `cap_up`, `pcb_up` or `edge`, once the cap lies still |
-| `sensor.<name>_signal_strength`, `_pitch`, `_roll` | disabled by default |
+| `sensor.<name>_signal_strength`, `_tilt_left_right`, `_tilt_forward_back` | disabled by default (the tilt sensors are `_pitch` and `_roll` on installs made before 0.3.0) |
 
 Every gesture also fires `triki_event` on the bus, with `device_id`, `address`
 and `type`.

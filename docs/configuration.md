@@ -21,7 +21,7 @@ folded, and start at their defaults.
 | Tilt in the hand | off | Hold the token level, with the yellow stripe of the card's model towards you, and lean it right or left by more than 25°: one `tilt_right` or `tilt_left`, then one every 0.4 s while it stays leaned (`repeat: true`). These are not knob events, so picking the token up does not move a dimmer on the knob. Bring it back within 10° of level before the next lean. |
 | Motion gestures | off | Enable `tap`, `throw`, `flip`. Tuned on one hardware session; see [Events](events-and-automations.md#gesture-status). |
 | Double and triple press | off | Off: `press` is reported the moment the button is released. On: single presses are delayed by the window below so that `double_press` and `triple_press` can be told apart. |
-| Multi-press window | 0.5 s | Longest pause between releasing and pressing again that still counts as a multi-press. 0.3 s is a good compromise between a quick single press and a comfortable double press. |
+| Multi-press window | 0.5 s | Longest pause between releasing and pressing again that still counts as a multi-press. From 0.2 to 1.5 s: shorter makes a single press quicker, longer makes a double press easier. The card's **Check** measures your double press and offers a value. |
 | Record raw sessions | off | Write every session to `<config>/triki_captures/*.jsonl`: raw notifications, detected events, rate switches. For debugging and for tuning gestures with `tools/replay.py`. Turn it off when done. A file stops at 50 MB; a new link starts a new file. |
 
 ## Idle and sleep: how the link behaves
@@ -98,7 +98,7 @@ token locked up: treat a low figure on a held link as a real warning.
 | `sensor.<name>_link_quality` | diagnostic | Motion frames that arrived in the last session, % of those the token streamed (rate switches included). Sessions with less than 20 s of stream are not counted. Restored across restarts. |
 | `sensor.<name>_signal_strength` | diagnostic, disabled | Signal of the last advertisement as seen by the scanner that received it. |
 | `sensor.<name>_face_up` | | Which side is up: `cap_up` (metal), `pcb_up` (green board) or `edge`. Set once the token has lain still for 0.3 s; between flat and on edge (z 0.5-0.8 g) the last value stays. Published at most once per second, restored across restarts and kept while the token sleeps. |
-| `sensor.<name>_pitch`, `_roll` | disabled | *Tilt forward-back* and *Tilt left-right*: tilt in degrees from the gravity estimate, published at most once per second. |
+| `sensor.<name>_tilt_left_right`, `_tilt_forward_back` | disabled | The lean to the side and the lift of the dot edge, in degrees from the gravity estimate, published at most once per second. *Tilt forward-back* reads about ±180° while the token lies metal side up. On installs made before 0.3.0 the entity ids are `_pitch` (left-right) and `_roll` (forward-back). |
 
 Disabled entities can be enabled from the entity settings. They are off by
 default because they update often and fill the recorder.

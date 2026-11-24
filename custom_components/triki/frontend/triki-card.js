@@ -55,7 +55,7 @@ const STRINGS = {
     dozeHint: "Dropped after idle. Presses won't register for ~{n} s more, and each one restarts the 3-minute wait: put the cap down and leave it",
     dozeLate: "Dropped after idle. Presses won't register until it falls asleep, and each one restarts the 3-minute wait: put the cap down and leave it", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
     wake: "Press the cap to wake it", heading: "Direction unknown after a restart: lay the cap dot away from you and press Align direction.", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
-    roll: "Left-right", pitch: "Forward-back", yaw: "Turn", reset: "Align direction", led: "LED", calibrate: "Calibrate",
+    roll: "Forward-back", pitch: "Left-right", yaw: "Turn", reset: "Align direction", led: "LED", calibrate: "Calibrate",
     editor: { title: "Title", model: "Model style", show_model: "3D model and angles", chips: "Status chips", show_values: "Gyro and accelerometer bars",
       show_history: "Last 10 s graph", show_gestures: "Gesture list", buttons: "Buttons", show_help: "Help under the buttons",
       show_controls: "Buttons and help (legacy)", admin: "Only admins see Calibrate and Check.",
@@ -69,7 +69,7 @@ const STRINGS = {
       knob: "Knob ↻ ↺", tilt: "Tilt ← →", how: { press: "Press the whole cap.", double_press: "Two quick presses.", triple_press: "Three quick presses.",
         long_press: "Press and hold.", knob: "Turn it flat on the table, like a knob.", tilt: "Hold it in your hand and lean it right or left.",
         shake: "Shake it sharply a few times.", flip: "Flip it onto the other side.", tap: "Tap the table next to it with a finger.", throw: "Toss it up and catch it." } },
-    button: "Button", rate: "Hz", linkq: "Frames received this session", history: "Last 10 s", nodevice: "No Triki cap found",
+    button: "Button", rate: "Hz", linkq: "Frames received this session", history: "Last 10 s", nodevice: "No Triki cap found. Add one in Settings → Devices & services.",
     check: { title: "Check", open: "Check",
       steps: { rest: "Lying still", flat: "Starting position", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", handle: "Pick up and put down", lean: "Lean in the hand", press: "Button", flip: "Flip", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift", sleep: "Sleep and wake" },
       text: {
@@ -152,7 +152,7 @@ const STRINGS = {
     dozeHint: "Связь отключена после простоя. Ещё ~{n} с нажатия не дойдут, а каждое запускает 3 минуты заново: положите крышку и подождите",
     dozeLate: "Связь отключена после простоя. Пока крышка не уснёт, нажатия не дойдут, а каждое запускает 3 минуты заново: положите её и подождите", connected: "Подключена", streaming: "Данные идут", unresponsive: "Не отвечает",
     wake: "Нажмите на крышку, чтобы её разбудить", heading: "После перезапуска направление неизвестно: положите крышку точкой от себя и нажмите «Выровнять направление».", gyro: "Гироскоп, °/с",
-    accel: "Акселерометр, g", roll: "Влево-вправо", pitch: "Вперёд-назад", yaw: "Поворот", calibrate: "Калибровка",
+    accel: "Акселерометр, g", roll: "Вперёд-назад", pitch: "Влево-вправо", yaw: "Поворот", calibrate: "Калибровка",
     editor: { title: "Заголовок", model: "Вид модели", show_model: "3D-модель и углы", chips: "Плашки состояния", show_values: "Полоски гироскопа и акселерометра",
       show_history: "График за последние 10 с", show_gestures: "Список жестов", buttons: "Кнопки", show_help: "Подсказки под кнопками",
       show_controls: "Кнопки и подсказки (старый переключатель)", admin: "«Калибровка» и «Проверка» видны только администраторам.",
@@ -239,7 +239,7 @@ const STRINGS = {
         no_wake_press: "Крышка проснулась, но события нажатия не было.",
         extra: "Сработало лишнее: {extra}.",
       } },
-    nodevice: "Крышка Triki не найдена",
+    nodevice: "Крышка Triki не найдена. Добавьте её: Настройки → Устройства и службы.",
     gestures: {
       press: "Нажатие", single_press: "Нажатие", double_press: "Двойное нажатие", triple_press: "Тройное нажатие",
       long_press: "Долгое нажатие", tap: "Стук", double_tap: "Двойной стук", shake: "Встряхивание",
@@ -252,7 +252,7 @@ const STRINGS = {
     dozeHint: "Rozłączony po bezczynności. Przez ~{n} s naciśnięcia nie dotrą, a każde odlicza 3 minuty od nowa: odłóż kapsel i poczekaj",
     dozeLate: "Rozłączony po bezczynności. Dopóki nie zaśnie, naciśnięcia nie dotrą, a każde odlicza 3 minuty od nowa: odłóż kapsel i poczekaj", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
     wake: "Naciśnij kapsel, żeby go obudzić", heading: "Po restarcie kierunek jest nieznany: połóż kapsel kropką od siebie i naciśnij „Wyrównaj kierunek”.", gyro: "Żyroskop, °/s",
-    accel: "Akcelerometr, g", roll: "Lewo-prawo", pitch: "Przód-tył", yaw: "Obrót wokół osi",
+    accel: "Akcelerometr, g", roll: "Przód-tył", pitch: "Lewo-prawo", yaw: "Obrót wokół osi",
     editor: { title: "Tytuł", model: "Wygląd modelu", show_model: "Model 3D i kąty", chips: "Plakietki stanu", show_values: "Paski żyroskopu i akcelerometru",
       show_history: "Wykres ostatnich 10 s", show_gestures: "Lista gestów", buttons: "Przyciski", show_help: "Pomoc pod przyciskami",
       show_controls: "Przyciski i pomoc (stary przełącznik)", admin: "Przyciski Kalibruj i Test widzą tylko administratorzy.",
@@ -339,7 +339,7 @@ const STRINGS = {
         no_wake_press: "Obudził się, ale budzące naciśnięcie nie doszło jako „Naciśnięcie”.",
         extra: "Zadziałało coś nieproszonego: {extra}.",
       } },
-    nodevice: "Nie znaleziono kapsla Triki",
+    nodevice: "Nie znaleziono kapsla Triki. Dodaj go w sekcji Ustawienia → Urządzenia oraz usługi.",
     gestures: {
       press: "Naciśnięcie", single_press: "Naciśnięcie", double_press: "Podwójne naciśnięcie",
       triple_press: "Potrójne naciśnięcie", long_press: "Długie naciśnięcie", tap: "Stuknięcie",
@@ -986,7 +986,7 @@ class TrikiCard extends HTMLElement {
     }
   }
 
-  // Left-right from the side that is up: the integration measures it from the
+  // Forward-back from the side that is up: the integration measures it from the
   // green side, so a cap lying metal up read ±180°. Past 100° the other side
   // counts as up, and back below 80° (no flicker on the edge).
   _faceRoll(roll) {
