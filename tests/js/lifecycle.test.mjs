@@ -176,3 +176,17 @@ test("a reload of the integration does not blank the card while the cap comes ba
   mock.timers.tick(4000); await flush();
   assert.ok(c._unsub, "back once the entry is up");
 });
+
+test("a check closed while it starts stops what it started", async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const sent = [];
+  const { hass } = makeHass();
+  const c = card();
+  c.hass = hass(); await flush();
+  c._send = async (m) => { sent.push(`${m.action}:${m.device_id}`); if (m.action === "start") await gate; };
+  const open = c._checkOpen();
+  c._checkClose(); // the card was removed meanwhile
+  release(); await open; await flush();
+  assert.deepEqual(sent, ["start:a", "stop:a"]);
+});

@@ -1203,7 +1203,12 @@ class TrikiCard extends HTMLElement {
     this._el.card.classList.add("checking");
     const results = await Promise.allSettled(ids.map((id) =>
       this._send({ type: "triki/check", action: "start", device_id: id, session }).then(() => id)));
-    if (this._chk !== chk) return; // closed meanwhile
+    if (this._chk !== chk) { // closed meanwhile: do not leave the started ones running
+      for (const r of results) if (r.status === "fulfilled") {
+        this._send({ type: "triki/check", action: "stop", device_id: r.value, session }).catch(() => {});
+      }
+      return;
+    }
     for (const r of results) if (r.status === "fulfilled") chk.owned.add(r.value);
     if (!chk.owned.size) { chk.msg = "busy"; this._renderCheck(true); return; }
     chk.renew = setInterval(() => this._checkRenew(), CHECK_RENEW_MS);
