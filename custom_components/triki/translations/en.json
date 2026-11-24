@@ -93,10 +93,10 @@
           "event_type": {
             "state": {
               "wake": "Wake-up",
-              "press": "Press",
-              "double_press": "Double press",
-              "triple_press": "Triple press",
-              "long_press": "Long press",
+              "single_press": "Press",
+              "multi_press": "Double or triple press",
+              "long_press_start": "Long press",
+              "long_press_end": "Long press released",
               "rotate_cw": "Knob clockwise",
               "rotate_ccw": "Knob counter-clockwise",
               "tilt_left": "Tilt left",
@@ -108,6 +108,11 @@
             }
           }
         }
+      }
+    },
+    "number": {
+      "knob_position": {
+        "name": "Knob position"
       }
     },
     "binary_sensor": {
@@ -191,10 +196,11 @@
   "device_automation": {
     "trigger_type": {
       "wake": "Wake-up",
-      "press": "Press",
+      "single_press": "Press",
       "double_press": "Double press",
       "triple_press": "Triple press",
-      "long_press": "Long press",
+      "long_press_start": "Long press",
+      "long_press_end": "Long press released",
       "rotate_cw": "Knob clockwise",
       "rotate_ccw": "Knob counter-clockwise",
       "tilt_left": "Tilt left",

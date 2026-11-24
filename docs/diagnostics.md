@@ -74,7 +74,7 @@ one JSON object per line:
 ```json
 {"t": 0, "meta": {"name": "Triki 4190656753", "rate": 52, "platform": "homeassistant", "firmware": "3.2.1-A", "battery": 82}}
 {"t": 1.234, "hex": "2200f1ff0300fcff0a00f6ff0a08"}
-{"t": 1.240, "event": "press", "data": {"count": 1}}
+{"t": 1.240, "event": "single_press", "data": {}}
 {"t": 40.1, "rate": 26}
 {"t": 99.9, "disconnected": true}
 ```

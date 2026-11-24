@@ -33,6 +33,13 @@ blueprint:
         action: {}
     long_press:
       name: Long press
+      description: Runs while the cap is still held, 0.8 s into the press.
+      default: []
+      selector:
+        action: {}
+    long_press_end:
+      name: Long press released
+      description: Runs when the cap is let go after a long press.
       default: []
       selector:
         action: {}
@@ -79,6 +86,7 @@ variables:
   # to_state is none when the entity is removed
   event: "{{ trigger.to_state.attributes.event_type | default('') if trigger.to_state else '' }}"
   steps: "{{ trigger.to_state.attributes.steps | default(1) | int if trigger.to_state else 1 }}"
+  presses: "{{ trigger.to_state.attributes.press_count | default(0) | int if trigger.to_state else 0 }}"
 
 # a new event has a new timestamp; coming back from unavailable (a restart or a
 # reload of the integration) brings back the last one, which is not a gesture
@@ -91,14 +99,16 @@ conditions:
 
 actions:
   - choose:
-      - conditions: "{{ event == 'press' }}"
+      - conditions: "{{ event == 'single_press' }}"
         sequence: !input press
-      - conditions: "{{ event == 'double_press' }}"
+      - conditions: "{{ event == 'multi_press' and presses == 2 }}"
         sequence: !input double_press
-      - conditions: "{{ event == 'triple_press' }}"
+      - conditions: "{{ event == 'multi_press' and presses == 3 }}"
         sequence: !input triple_press
-      - conditions: "{{ event == 'long_press' }}"
+      - conditions: "{{ event == 'long_press_start' }}"
         sequence: !input long_press
+      - conditions: "{{ event == 'long_press_end' }}"
+        sequence: !input long_press_end
       - conditions: "{{ event == 'rotate_cw' }}"
         sequence: !input rotate_cw
       - conditions: "{{ event == 'rotate_ccw' }}"

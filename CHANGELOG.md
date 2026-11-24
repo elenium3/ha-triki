@@ -8,7 +8,22 @@ All notable changes to this project are documented here. The format follows
 
 **Before you update:**
 
-- The press that wakes the cap now also arrives as `press` (*Count the
+- **The button events have new names**, Home Assistant's standard ones.
+  Automations that check `event_type` need the new name, or they stop
+  running without an error:
+
+  | Was | Now |
+  |---|---|
+  | `press` | `single_press` |
+  | `double_press` | `multi_press` with `press_count: 2` |
+  | `triple_press` | `multi_press` with `press_count: 3` |
+  | `long_press` | `long_press_start` |
+  | (new) | `long_press_end`, when the cap is let go |
+
+  The `count` field is gone. The blueprints and the device triggers of the
+  betas follow the new names (*Press* is `single_press`, *Long press* is
+  `long_press_start`): re-pick them in an automation made with a beta.
+- The press that wakes the cap now also arrives as `single_press` (*Count the
   wake-up as a press* is turned on once for existing installs). An automation
   that catches the first press through `wake` will run twice: drop the `wake`
   trigger or turn the option off.
@@ -92,6 +107,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- **`long_press_end`**: the release after a long press, also sent when the
+  link drops while the cap is held, so "hold to dim" has an end.
+- **Knob position**: `number.<name>_knob_position`, 0 to 100 %, and the same
+  value as `position` in every knob event. One full turn covers the range.
+  Settable, kept across restarts, there while the knob is on.
+- The *Action* entity has the button device class.
 - **Live 3D card** (*Triki live 3D*), served by the integration, nothing to
   install. See docs/live-card.md.
   - The cap in 3D, its sensors, and a list of gestures that light up as they

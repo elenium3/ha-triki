@@ -93,10 +93,10 @@
           "event_type": {
             "state": {
               "wake": "Пробуждение",
-              "press": "Нажатие",
-              "double_press": "Двойное нажатие",
-              "triple_press": "Тройное нажатие",
-              "long_press": "Долгое нажатие",
+              "single_press": "Нажатие",
+              "multi_press": "Двойное или тройное нажатие",
+              "long_press_start": "Долгое нажатие",
+              "long_press_end": "Отпускание после долгого нажатия",
               "rotate_cw": "Крутилка по часовой",
               "rotate_ccw": "Крутилка против часовой",
               "tilt_left": "Наклон влево",
@@ -108,6 +108,11 @@
             }
           }
         }
+      }
+    },
+    "number": {
+      "knob_position": {
+        "name": "Положение крутилки"
       }
     },
     "binary_sensor": {
@@ -191,10 +196,11 @@
   "device_automation": {
     "trigger_type": {
       "wake": "Пробуждение",
-      "press": "Нажатие",
+      "single_press": "Нажатие",
       "double_press": "Двойное нажатие",
       "triple_press": "Тройное нажатие",
-      "long_press": "Долгое нажатие",
+      "long_press_start": "Долгое нажатие",
+      "long_press_end": "Отпускание после долгого нажатия",
       "rotate_cw": "Крутилка по часовой",
       "rotate_ccw": "Крутилка против часовой",
       "tilt_left": "Наклон влево",

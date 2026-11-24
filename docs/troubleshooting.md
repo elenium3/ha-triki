@@ -8,7 +8,7 @@ like
 ```
 Triki 4190656753: advert via A0:DD:6C:02:B3:16 rssi -68 age 0.2s
 Triki 4190656753: connected via esp32-proxy, streaming at 52 Hz (advert age 0.0s, link 0.1s, setup 0.2s: notify 0.1s, write 0.1s)
-Triki 4190656753: event press {'count': 1}
+Triki 4190656753: event single_press {}
 Triki 4190656753: stream now 26 Hz (idle)
 Triki 4190656753: not connecting: waiting for the token to sleep after an idle disconnect (source …)
 ```

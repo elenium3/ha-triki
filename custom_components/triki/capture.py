@@ -3,7 +3,7 @@
 Same line format as tools/triki_probe.py, so tools/replay.py works on both:
   {"t": 0, "meta": {...}}           session header
   {"t": 1.234, "hex": "2200..."}    one BLE notification, as received
-  {"t": 1.240, "event": "press", "data": {...}}
+  {"t": 1.240, "event": "single_press", "data": {...}}
   {"t": 9.9, "disconnected": true}
 """
 

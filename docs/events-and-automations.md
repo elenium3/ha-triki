@@ -10,10 +10,11 @@ device-independent automations.
 | `event_type` | Data | When |
 |---|---|---|
 | `wake` | | The token woke up and the link is established. Not emitted on a quick resume after a weak-signal drop. |
-| `press` | `count: 1`; `source: wake` for the press that woke the token | Button released (immediately, or after the multi-press window if that option is on). |
-| `double_press`, `triple_press` | `count` | Multi-press option on. |
-| `long_press` | | Button held for 0.8 s. Reported while still held; the release does not produce a `press`. |
-| `rotate_cw`, `rotate_ccw` | `steps`, `degrees`, `speed` | Turned around the vertical axis by at least one knob step, flat on a surface or held within 40° of level. Once the token goes edge-on (picked up off the table, say), the knob is off until it lies still again. Not while the token is being picked up or handled: when less than 65 % of its turning over the last 0.5 s is about the vertical, the knob does not count. Several steps can arrive in one event after a fast turn. Muted while the button is down and for 0.8 s after release, and for 0.5 s after a jolt, a shake or free fall. |
+| `single_press` | `source: wake` for the press that woke the token | One short press: on release, or after the multi-press window if that option is on. |
+| `multi_press` | `press_count`: 2 or 3 | Multi-press option on: a double or triple press. More than three presses count as three. |
+| `long_press_start` | | Button held for 0.8 s. Reported while still held. |
+| `long_press_end` | | Button released after a long press, or the link dropped while it was held. The release does not produce a `single_press`. |
+| `rotate_cw`, `rotate_ccw` | `steps`, `degrees`, `speed`, `position` | Turned around the vertical axis by at least one knob step, flat on a surface or held within 40° of level. Once the token goes edge-on (picked up off the table, say), the knob is off until it lies still again. Not while the token is being picked up or handled: when less than 65 % of its turning over the last 0.5 s is about the vertical, the knob does not count. Several steps can arrive in one event after a fast turn. Muted while the button is down and for 0.8 s after release, and for 0.5 s after a jolt, a shake or free fall. |
 | `tilt_right`, `tilt_left` | `repeat` | *Tilt in the hand* option: the token held level and leaned right or left by more than 25°; one event with `repeat: false`, then one every 0.4 s with `repeat: true` while it stays leaned. |
 | `shake` | | Several quick back-and-forth swings. One event per episode. |
 | `tap` | | A jolt on a token that is at rest: a finger tap on the table, a light knock. Reported once the token is still again (up to 0.4 s). Motion gestures option. |
@@ -92,7 +93,7 @@ automation:
       - condition: template
         value_template: >-
           {{ trigger.to_state.state not in ['unavailable', 'unknown']
-             and trigger.to_state.attributes.event_type == 'press' }}
+             and trigger.to_state.attributes.event_type == 'single_press' }}
     actions:
       - action: light.toggle
         target:
@@ -135,7 +136,7 @@ automation:
       - condition: template
         value_template: >-
           {{ trigger.to_state.state not in ['unavailable', 'unknown']
-             and trigger.to_state.attributes.event_type == 'long_press' }}
+             and trigger.to_state.attributes.event_type == 'long_press_start' }}
     actions:
       - action: light.turn_on
         target:
@@ -143,6 +144,65 @@ automation:
         data:
           brightness_pct: 100
           color_temp_kelvin: 2700
+```
+
+## Example: hold to brighten, let go to stop
+
+`long_press_start` arrives while the cap is still held and `long_press_end`
+when it is let go. In `restart` mode any new event ends the running loop, so
+the release stops the dimming; the repeat count is only a safety limit.
+
+```yaml
+automation:
+  - alias: "Triki: hold to brighten"
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
+    actions:
+      - condition: template
+        value_template: >-
+          {{ trigger.to_state.state not in ['unavailable', 'unknown']
+             and trigger.to_state.attributes.event_type == 'long_press_start' }}
+      - repeat:
+          count: 20
+          sequence:
+            - action: light.turn_on
+              target:
+                entity_id: light.ceiling
+              data:
+                brightness_step_pct: 5
+                transition: 0.2
+            - delay: 0.2
+```
+
+## Example: the knob sets the brightness directly
+
+Every knob event carries `position`, 0 to 100: one full turn covers the whole
+range and it stops at the ends. The same value is the entity
+`number.<name>_knob_position`, kept across restarts; set it from an automation
+(to the lamp's current brightness, say) and the next turn goes on from there.
+
+```yaml
+automation:
+  - alias: "Triki: the knob is the brightness"
+    mode: restart
+    triggers:
+      - trigger: state
+        entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
+    conditions:
+      - condition: template
+        value_template: >-
+          {{ trigger.to_state.state not in ['unavailable', 'unknown']
+             and trigger.to_state.attributes.event_type in ['rotate_cw', 'rotate_ccw'] }}
+    actions:
+      - action: light.turn_on
+        target:
+          entity_id: light.ceiling
+        data:
+          brightness_pct: "{{ trigger.to_state.attributes.position }}"
 ```
 
 ## Example: a fast turn changes the volume in bigger steps
@@ -197,7 +257,8 @@ Add a condition on `sensor.triki_face_up` to each knob automation:
       - condition: template
         value_template: >-
           {{ trigger.to_state.state not in ['unavailable', 'unknown']
-             and trigger.to_state.attributes.event_type == 'double_press' }}
+             and trigger.to_state.attributes.event_type == 'multi_press'
+             and trigger.to_state.attributes.press_count == 2 }}
     actions:
       - variables:
           presets: [2700, 4000, 6500]
@@ -231,7 +292,9 @@ step; otherwise the whole effect waits for the slowest lamp.
       - condition: template
         value_template: >-
           {{ trigger.to_state.state not in ['unavailable', 'unknown']
-             and trigger.to_state.attributes.event_type in ['triple_press', 'shake'] }}
+             and (trigger.to_state.attributes.event_type == 'shake'
+                  or (trigger.to_state.attributes.event_type == 'multi_press'
+                      and trigger.to_state.attributes.press_count == 3)) }}
     actions:
       - if:
           - condition: state
@@ -270,7 +333,7 @@ a fast turn must not queue twenty service calls behind a slow receiver.
       - condition: template
         value_template: >-
           {{ trigger.to_state.state not in ['unavailable', 'unknown']
-             and trigger.to_state.attributes.event_type == 'press' }}
+             and trigger.to_state.attributes.event_type == 'single_press' }}
     actions:
       - action: media_player.media_play_pause
         target:
@@ -307,7 +370,8 @@ a fast turn must not queue twenty service calls behind a slow receiver.
       - condition: template
         value_template: >-
           {{ trigger.to_state.state not in ['unavailable', 'unknown']
-             and trigger.to_state.attributes.event_type == 'double_press' }}
+             and trigger.to_state.attributes.event_type == 'multi_press'
+             and trigger.to_state.attributes.press_count == 2 }}
     actions:
       - action: media_player.media_next_track
         target:
@@ -355,12 +419,12 @@ a fast turn must not queue twenty service calls behind a slow receiver.
       - variables:
           kind: "{{ trigger.to_state.attributes.event_type }}"
       - choose:
-          - conditions: "{{ kind == 'press' }}"
+          - conditions: "{{ kind == 'single_press' }}"
             sequence:
               - action: cover.toggle
                 target:
                   entity_id: cover.living_room
-          - conditions: "{{ kind == 'long_press' }}"
+          - conditions: "{{ kind == 'long_press_start' }}"
             sequence:
               - action: cover.stop_cover
                 target:
@@ -394,7 +458,9 @@ who cannot find the button.
       - condition: template
         value_template: >-
           {{ trigger.to_state.state not in ['unavailable', 'unknown']
-             and trigger.to_state.attributes.event_type in ['triple_press', 'shake'] }}
+             and (trigger.to_state.attributes.event_type == 'shake'
+                  or (trigger.to_state.attributes.event_type == 'multi_press'
+                      and trigger.to_state.attributes.press_count == 3)) }}
     actions:
       - action: notify.notify
         data:
@@ -455,8 +521,10 @@ a plain numeric state trigger is enough.
 ## Using the device trigger UI
 
 In the automation editor: *Add trigger → Device → your Triki*, then pick a
-gesture (*Press*, *Long press*, *Knob clockwise*…). The list shows the gestures
-turned on for the cap. Knob events carry `steps` in
+gesture (*Press*, *Double press*, *Long press*, *Knob clockwise*…). The list shows the gestures
+turned on for the cap. Double and triple press are separate triggers here
+(`double_press`, `triple_press`), although the entity reports both as
+`multi_press`. Knob events carry `steps` in
 `trigger.event.data.steps`.
 
 ```yaml
@@ -464,7 +532,7 @@ triggers:
   - trigger: device
     domain: triki
     device_id: 0123456789abcdef0123456789abcdef
-    type: press
+    type: single_press
 ```
 
 Device triggers listen to the `triki_event` bus event, so a restart does not
@@ -476,8 +544,8 @@ above works too; it needs the template condition on `event_type` and
 
 - Multi-press delays single presses by the window (0.5 s by default). If you do not use
   double or triple press, leave the option off and presses are instant.
-- The press that wakes a sleeping token arrives as `wake` and then `press` with
-  `source: wake` (*Count the wake-up as a press*, on by default). Use `press` for
+- The press that wakes a sleeping token arrives as `wake` and then `single_press` with
+  `source: wake` (*Count the wake-up as a press*, on by default). Use `single_press` for
   "the button was pressed"; `wake` alone also fires after a Home Assistant
   restart or a dropped link, when nobody pressed anything.
 - Holding the link (sleep timeout 0) makes the token react at any time but costs

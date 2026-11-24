@@ -40,9 +40,19 @@ export function cardConfig(config) {
   return c;
 }
 
+// The integration sends Home Assistant's standard button event types. The card
+// and the check name a gesture by what the hand did, so a double and a triple
+// press are two gestures although both arrive as multi_press.
+function gestureOf(event, data) {
+  if (event === "single_press") return "press";
+  if (event === "multi_press") return (data?.press_count || 2) >= 3 ? "triple_press" : "double_press";
+  if (event === "long_press_start") return "long_press";
+  return event;
+}
+
 // the gesture list: [item, events that light it, option that turns it on]
 const GESTURES = [
-  ["press", ["press", "single_press"], null], ["double_press", ["double_press"], "multi_press"],
+  ["press", ["press"], null], ["double_press", ["double_press"], "multi_press"],
   ["triple_press", ["triple_press"], "multi_press"], ["long_press", ["long_press"], null],
   ["knob", ["rotate_cw", "rotate_ccw"], "knob"], ["tilt", ["tilt_left", "tilt_right"], "tilt"],
   ["shake", ["shake"], "shake"], ["flip", ["flip"], "motion_gestures"],
@@ -142,8 +152,8 @@ const STRINGS = {
         extra: "Unexpected events: {extra}.",
       } },
     gestures: {
-      press: "Press", single_press: "Press", double_press: "Double press", triple_press: "Triple press",
-      long_press: "Long press", tap: "Tap", double_tap: "Double tap", shake: "Shake",
+      press: "Press", double_press: "Double press", triple_press: "Triple press",
+      long_press: "Long press", long_press_end: "Released", tap: "Tap", double_tap: "Double tap", shake: "Shake",
       throw: "Toss", flip: "Flip", rotate_cw: "Knob ↻", rotate_ccw: "Knob ↺", tilt_left: "Tilt ←", tilt_right: "Tilt →", wake: "Woke up", motion: "Motion",
     },
   },
@@ -241,8 +251,8 @@ const STRINGS = {
       } },
     nodevice: "Крышка Triki не найдена. Добавьте её: Настройки → Устройства и службы.",
     gestures: {
-      press: "Нажатие", single_press: "Нажатие", double_press: "Двойное нажатие", triple_press: "Тройное нажатие",
-      long_press: "Долгое нажатие", tap: "Стук", double_tap: "Двойной стук", shake: "Встряхивание",
+      press: "Нажатие", double_press: "Двойное нажатие", triple_press: "Тройное нажатие",
+      long_press: "Долгое нажатие", long_press_end: "Отпущено", tap: "Стук", double_tap: "Двойной стук", shake: "Встряхивание",
       throw: "Бросок", flip: "Переворот", rotate_cw: "Крутилка ↻", rotate_ccw: "Крутилка ↺", tilt_left: "Наклон ←", tilt_right: "Наклон →", wake: "Проснулась",
       motion: "Движение",
     },
@@ -341,8 +351,8 @@ const STRINGS = {
       } },
     nodevice: "Nie znaleziono kapsla Triki. Dodaj go w sekcji Ustawienia → Urządzenia oraz usługi.",
     gestures: {
-      press: "Naciśnięcie", single_press: "Naciśnięcie", double_press: "Podwójne naciśnięcie",
-      triple_press: "Potrójne naciśnięcie", long_press: "Długie naciśnięcie", tap: "Stuknięcie",
+      press: "Naciśnięcie", double_press: "Podwójne naciśnięcie",
+      triple_press: "Potrójne naciśnięcie", long_press: "Długie naciśnięcie", long_press_end: "Zwolniono", tap: "Stuknięcie",
       double_tap: "Podwójne stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", flip: "Odwrócenie",
       rotate_cw: "Pokrętło ↻", rotate_ccw: "Pokrętło ↺", tilt_left: "Przechył ←", tilt_right: "Przechył →", wake: "Pobudka", motion: "Ruch",
     },
@@ -918,6 +928,7 @@ class TrikiCard extends HTMLElement {
 
   _onMessage(id, msg) {
     if (msg.type === "reload") { this._resubscribeSoon(); return; }
+    if (msg.type === "event") msg = { ...msg, event: gestureOf(msg.event, msg.data) };
     if (msg.type === "status") {
       const was = this._isLive(this._statuses[id]);
       this._statuses[id] = msg;

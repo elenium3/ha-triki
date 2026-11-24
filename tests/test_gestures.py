@@ -51,7 +51,7 @@ def test_press_inside_the_startup_discard_is_reported():
     the discard window (2026-11-24 review: it was lost)."""
     d = GestureDetector(RATE, startup_discard=20, multi_press=False)
     out = feed(d, 5, button=True) + feed(d, 30)
-    assert [e.type for e in out] == ["press"]
+    assert [e.type for e in out] == ["single_press"]
 
 
 def test_flush_reports_only_enabled_gestures():
@@ -71,7 +71,7 @@ def test_flush_reports_only_enabled_gestures():
 def test_single_press():
     d = det()
     ev = feed(d, secs(0.1), button=True) + feed(d, secs(0.6))
-    assert types(ev) == ["press"]
+    assert types(ev) == ["single_press"]
 
 
 def test_double_press():
@@ -82,7 +82,8 @@ def test_double_press():
         + feed(d, secs(0.1), button=True)
         + feed(d, secs(0.6))
     )
-    assert types(ev) == ["double_press"]
+    assert types(ev) == ["multi_press"]
+    assert ev[0].data == {"press_count": 2}
 
 
 def test_slow_double_press_within_default_window():
@@ -93,7 +94,7 @@ def test_slow_double_press_within_default_window():
         + feed(d, secs(0.1), button=True)
         + feed(d, secs(0.7))
     )
-    assert types(ev) == ["double_press"]
+    assert types(ev) == ["multi_press"]
 
 
 def test_multi_press_window_is_configurable():
@@ -105,7 +106,7 @@ def test_multi_press_window_is_configurable():
         + feed(d, secs(0.1), button=True)
         + feed(d, secs(0.7))
     )
-    assert types(ev) == ["press", "press"]
+    assert types(ev) == ["single_press", "single_press"]
 
 
 def test_triple_press():
@@ -114,13 +115,32 @@ def test_triple_press():
     for _ in range(3):
         ev += feed(d, secs(0.1), button=True) + feed(d, secs(0.2))
     ev += feed(d, secs(0.7))
-    assert types(ev) == ["triple_press"]
+    assert types(ev) == ["multi_press"]
+    assert ev[0].data == {"press_count": 3}
+
+
+def test_more_than_three_presses_count_as_three():
+    d = det()
+    ev = []
+    for _ in range(5):
+        ev += feed(d, secs(0.1), button=True) + feed(d, secs(0.2))
+    ev += feed(d, secs(0.7))
+    assert [(e.type, e.data) for e in ev] == [("multi_press", {"press_count": 3})]
 
 
 def test_long_press():
     d = det()
-    ev = feed(d, secs(1.2), button=True) + feed(d, secs(0.6))
-    assert types(ev) == ["long_press"]
+    held = feed(d, secs(1.2), button=True)
+    assert types(held) == ["long_press_start"]  # while the button is still down
+    assert types(feed(d, secs(0.6))) == ["long_press_end"]  # on release
+
+
+def test_a_long_press_cut_off_by_the_disconnect_ends():
+    """Hold-to-dim must stop when the link drops with the button down."""
+    d = det()
+    assert types(feed(d, secs(1.2), button=True)) == ["long_press_start"]
+    assert types(d.flush()) == ["long_press_end"]
+    assert d.flush() == []  # once
 
 
 def test_knob_ccw_and_cw():
@@ -137,7 +157,7 @@ def test_knob_muted_while_button_down_and_shortly_after():
     d = det()
     # the token twists in the hand while the button is pressed and released
     ev = feed(d, secs(0.3), button=True, gz=185.0) + feed(d, secs(0.6), gz=185.0)
-    assert types(ev) == ["press"]
+    assert types(ev) == ["single_press"]
     # a real turn a second after the release is reported again
     ev = feed(d, secs(0.5)) + feed(d, secs(1.0), gz=185.0)
     assert set(types(ev)) == {"rotate_ccw"}
@@ -228,14 +248,14 @@ def test_single_press_is_immediate_without_multi_press():
     d = GestureDetector(RATE, startup_discard=0, multi_press=False)
     feed(d, RATE // 2)
     assert types(feed(d, secs(0.1), button=True)) == []
-    assert types(feed(d, 1)) == ["press"]  # on release, no waiting window
+    assert types(feed(d, 1)) == ["single_press"]  # on release, no waiting window
     ev = (
         feed(d, secs(0.1), button=True)
         + feed(d, secs(0.15))
         + feed(d, secs(0.1), button=True)
         + feed(d, secs(0.6))
     )
-    assert types(ev) == ["press", "press"]  # no double_press
+    assert types(ev) == ["single_press", "single_press"]  # no double_press
 
 
 def test_knob_only_reports_rotation():
@@ -400,7 +420,7 @@ def test_double_press_timing_with_frame_loss(rate, loss, seed):
         seed,
         [(0.2, {"button": True}), (0.15, {}), (0.2, {"button": True}), (1.0, {})],
     )
-    assert types(ev) == ["double_press"]
+    assert types(ev) == ["multi_press"]
 
 
 def test_timed_frames_never_step_back():

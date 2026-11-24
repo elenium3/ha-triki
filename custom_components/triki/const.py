@@ -42,12 +42,22 @@ DEFAULT_MULTI_PRESS_WINDOW = 0.5  # s between releasing and pressing again
 
 BUS_EVENT = "triki_event"
 
+# The button uses Home Assistant's standard button event types
+# (homeassistant.components.event.ButtonEventType), written as plain strings
+# because the supported cores are older than the enum.
+EVENT_SINGLE_PRESS = "single_press"
+EVENT_MULTI_PRESS = "multi_press"  # data: press_count, 2 or 3
+EVENT_LONG_PRESS_START = "long_press_start"  # held past the threshold, still down
+EVENT_LONG_PRESS_END = "long_press_end"  # released after a long press
+ATTR_PRESS_COUNT = "press_count"
+MULTI_PRESS_MAX = 3  # more presses than this count as three, as they always did
+
 EVENT_TYPES = [
     "wake",
-    "press",
-    "double_press",
-    "triple_press",
-    "long_press",
+    EVENT_SINGLE_PRESS,
+    EVENT_MULTI_PRESS,
+    EVENT_LONG_PRESS_START,
+    EVENT_LONG_PRESS_END,
     "rotate_cw",
     "rotate_ccw",
     "tilt_left",
@@ -57,6 +67,15 @@ EVENT_TYPES = [
     "throw",
     "flip",
 ]
+
+# What the automation editor offers under "Device": one line per gesture, so a
+# double and a triple press are separate although both arrive as multi_press.
+TRIGGER_TYPES = [
+    trigger
+    for kind in EVENT_TYPES
+    for trigger in (("double_press", "triple_press") if kind == EVENT_MULTI_PRESS else (kind,))
+]
+
 
 # Tilt sensors are throttled to keep the recorder sane.
 TILT_PUBLISH_INTERVAL = 1.0

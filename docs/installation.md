@@ -65,7 +65,7 @@ off, *Readiness* says asleep and the battery and the other sensors show
 ## First check
 
 Press the button once. The *Action* event entity should show `wake` and then
-`press`, the *Connected* binary sensor should turn on, and the battery sensor should get a
+`single_press`, the *Connected* binary sensor should turn on, and the battery sensor should get a
 value within a few seconds (a low first value is normal: it is measured under
 load and corrected at the first idle pause, see [Configuration](configuration.md#entities)). If the connection takes more than a second or the
 link drops within a minute, the receiver is too far from the token. See

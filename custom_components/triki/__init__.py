@@ -40,6 +40,7 @@ from .websocket import async_register as async_register_websocket
 PLATFORMS = [
     Platform.BINARY_SENSOR,
     Platform.EVENT,
+    Platform.NUMBER,
     Platform.SENSOR,
     Platform.SWITCH,
 ]

@@ -86,8 +86,8 @@ async def test_wake_stream_events(hass: HomeAssistant, setup) -> None:
     for i in range(0, len(stream), 20):
         notify(None, bytearray(stream[i : i + 20]))
     await hass.async_block_till_done()
-    assert hass.states.get(EVENT).attributes["event_type"] == "press"
-    assert [e.data["type"] for e in bus] == ["wake", "press"]
+    assert hass.states.get(EVENT).attributes["event_type"] == "single_press"
+    assert [e.data["type"] for e in bus] == ["wake", "single_press"]
 
     # LED
     await hass.services.async_call("switch", "turn_on", {"entity_id": LED}, blocking=True)

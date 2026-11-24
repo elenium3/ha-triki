@@ -60,7 +60,7 @@ async def test_button_press_restores_full_rate(hass: HomeAssistant, setup) -> No
     assert dev.button is True
     notify(None, bytearray(frame() * 2))
     await hass.async_block_till_done()
-    assert [e.data["type"] for e in bus] == ["press"]
+    assert [e.data["type"] for e in bus] == ["single_press"]
 
 
 async def test_activity_during_idle_write_restores_full_rate(hass: HomeAssistant, setup) -> None:

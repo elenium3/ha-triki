@@ -63,9 +63,9 @@ Manual install, without HACS: [Installation](docs/installation.md).
 
 | Gesture | How | Event | Out of the box |
 |---|---|---|---|
-| Press | press the cap | `press` | on |
-| Long press | press and hold | `long_press` | on |
-| Double, triple press | two or three quick presses | `double_press`, `triple_press` | off: it delays a single press by half a second |
+| Press | press the cap | `single_press` | on |
+| Long press | press and hold, let go | `long_press_start`, `long_press_end` | on |
+| Double, triple press | two or three quick presses | `multi_press` with `press_count` 2 or 3 | off: it delays a single press by half a second |
 | Knob | turn it flat on the table | `rotate_cw`, `rotate_ccw` | off |
 | Tilt | hold it level, lean right or left | `tilt_right`, `tilt_left` | off |
 | Shake | a second of sharp shaking | `shake` | off |
@@ -98,7 +98,7 @@ automation:
         entity_id: event.triki_action
         not_from: unavailable  # a restart restores the last event
     conditions:
-      - "{{ trigger.to_state.attributes.event_type == 'press' }}"
+      - "{{ trigger.to_state.attributes.event_type == 'single_press' }}"
     actions:
       - action: light.toggle
         target:
@@ -130,9 +130,10 @@ button? Switch the rest off in the card's settings. [Live 3D card](docs/live-car
 
 | Entity | Notes |
 |---|---|
-| `event.<name>_action` | `wake`, `press`, `double_press`, `triple_press` (`count`), `long_press`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`, `speed`), `tilt_left` / `tilt_right` (`repeat`), `shake`, `tap`, `throw`, `flip` |
+| `event.<name>_action` | `wake`, `single_press`, `multi_press` (`press_count`), `long_press_start`, `long_press_end`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`, `speed`, `position`), `tilt_left` / `tilt_right` (`repeat`), `shake`, `tap`, `throw`, `flip` |
 | `binary_sensor.<name>_button` | live button state, off while asleep |
 | `binary_sensor.<name>_connected` | diagnostic |
+| `number.<name>_knob_position` | where the knob stands, 0-100 %; settable; exists while the knob is on |
 | `switch.<name>_led` | the green LED, on and off buttons: the cap can't report it; changeable only while connected |
 | `sensor.<name>_battery` | measured while idle, at most every 30 min |
 | `sensor.<name>_readiness` | whether a press gets through now: `connected`, `dozing` (about 3 min after an idle disconnect, presses are missed), `asleep` (a press wakes it), `not_responding` |

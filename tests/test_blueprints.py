@@ -48,7 +48,7 @@ async def test_light_remote(hass: HomeAssistant, blueprints) -> None:
     hass.states.async_set(LIGHT, "on", {"brightness": 128})  # 50 %
     await _setup(hass, "triki/triki_light.yaml", {"light": LIGHT})
 
-    await _gesture(hass, 1, "press")
+    await _gesture(hass, 1, "single_press")
     assert len(toggle) == 1 and toggle[0].data["entity_id"] == [LIGHT]
 
     await _gesture(hass, 2, "rotate_cw", steps=2, degrees=60)
@@ -58,7 +58,7 @@ async def test_light_remote(hass: HomeAssistant, blueprints) -> None:
     await _gesture(hass, 3, "rotate_ccw", steps=3, degrees=90)
     assert turn_on[-1].data["brightness_pct"] == 1  # not off
 
-    await _gesture(hass, 4, "long_press")
+    await _gesture(hass, 4, "long_press_start")
     assert turn_on[-1].data["brightness_pct"] == 100
 
     n = len(turn_on)
@@ -77,9 +77,9 @@ async def test_an_action_per_gesture(hass: HomeAssistant, blueprints) -> None:
         "triki/triki_actions.yaml",
         {"press": act("press"), "rotate_ccw": act("ccw"), "tilt_left": act("left")},
     )
-    await _gesture(hass, 1, "press")
+    await _gesture(hass, 1, "single_press")
     await _gesture(hass, 2, "rotate_ccw", steps=3)
-    await _gesture(hass, 3, "double_press")  # left empty: nothing
+    await _gesture(hass, 3, "multi_press", press_count=2)  # left empty: nothing
     await _gesture(hass, 4, "tilt_left", repeat=False)
     assert [(c.data["name"], c.data["steps"]) for c in calls] == [
         ("press", 1),
@@ -88,21 +88,42 @@ async def test_an_action_per_gesture(hass: HomeAssistant, blueprints) -> None:
     ]
 
 
+async def test_presses_by_count_and_the_release(hass: HomeAssistant, blueprints) -> None:
+    calls = async_mock_service(hass, "test", "gesture")
+    act = lambda name: [{"action": "test.gesture", "data": {"name": name}}]  # noqa: E731
+    await _setup(
+        hass,
+        "triki/triki_actions.yaml",
+        {
+            "double_press": act("double"),
+            "triple_press": act("triple"),
+            "long_press": act("held"),
+            "long_press_end": act("released"),
+        },
+    )
+    await _gesture(hass, 1, "multi_press", press_count=3)
+    await _gesture(hass, 2, "multi_press", press_count=2)
+    await _gesture(hass, 3, "long_press_start")
+    await _gesture(hass, 4, "long_press_end")
+    await _gesture(hass, 5, "single_press")  # left empty: nothing
+    assert [c.data["name"] for c in calls] == ["triple", "double", "held", "released"]
+
+
 async def test_a_restored_state_is_not_a_gesture(hass: HomeAssistant, blueprints) -> None:
     """A restart or a reload takes the entity through unavailable and back to
     the last event: that must not toggle the light. The first event of a new
     cap (from unknown) is a real one."""
     toggle = async_mock_service(hass, "light", "toggle")
     await _setup(hass, "triki/triki_light.yaml", {"light": LIGHT})
-    await _gesture(hass, 1, "press")
+    await _gesture(hass, 1, "single_press")
     assert len(toggle) == 1
     hass.states.async_set(EVENT, "unavailable", {})
     await hass.async_block_till_done()
-    await _gesture(hass, 1, "press")  # restored: the same press again
+    await _gesture(hass, 1, "single_press")  # restored: the same press again
     assert len(toggle) == 1
     hass.states.async_set(EVENT, "unknown", {})
     await hass.async_block_till_done()
-    await _gesture(hass, 2, "press")
+    await _gesture(hass, 2, "single_press")
     assert len(toggle) == 2
 
 
@@ -115,16 +136,16 @@ async def test_the_readme_example_ignores_a_restart(hass: HomeAssistant) -> None
     block = readme.split("```yaml\n", 1)[1].split("```", 1)[0]
     config = yaml.safe_load(block)
     toggle = async_mock_service(hass, "light", "toggle")
-    hass.states.async_set(EVENT, "2026-11-24T00:00:00.000+00:00", {"event_type": "press"})
+    hass.states.async_set(EVENT, "2026-11-24T00:00:00.000+00:00", {"event_type": "single_press"})
     assert await async_setup_component(hass, "automation", config)
     await hass.async_block_till_done()
-    await _gesture(hass, 1, "press")
+    await _gesture(hass, 1, "single_press")
     assert len(toggle) == 1
     hass.states.async_set(EVENT, "unavailable", {})
     await hass.async_block_till_done()
-    await _gesture(hass, 1, "press")  # restored
+    await _gesture(hass, 1, "single_press")  # restored
     assert len(toggle) == 1
-    await _gesture(hass, 2, "press")
+    await _gesture(hass, 2, "single_press")
     assert len(toggle) == 2
 
 

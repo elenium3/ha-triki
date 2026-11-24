@@ -93,10 +93,10 @@
           "event_type": {
             "state": {
               "wake": "Pobudka",
-              "press": "Naciśnięcie",
-              "double_press": "Podwójne naciśnięcie",
-              "triple_press": "Potrójne naciśnięcie",
-              "long_press": "Długie naciśnięcie",
+              "single_press": "Naciśnięcie",
+              "multi_press": "Podwójne lub potrójne naciśnięcie",
+              "long_press_start": "Długie naciśnięcie",
+              "long_press_end": "Zwolnienie po długim naciśnięciu",
               "rotate_cw": "Pokrętło w prawo",
               "rotate_ccw": "Pokrętło w lewo",
               "tilt_left": "Przechył w lewo",
@@ -108,6 +108,11 @@
             }
           }
         }
+      }
+    },
+    "number": {
+      "knob_position": {
+        "name": "Pozycja pokrętła"
       }
     },
     "binary_sensor": {
@@ -191,10 +196,11 @@
   "device_automation": {
     "trigger_type": {
       "wake": "Pobudka",
-      "press": "Naciśnięcie",
+      "single_press": "Naciśnięcie",
       "double_press": "Podwójne naciśnięcie",
       "triple_press": "Potrójne naciśnięcie",
-      "long_press": "Długie naciśnięcie",
+      "long_press_start": "Długie naciśnięcie",
+      "long_press_end": "Zwolnienie po długim naciśnięciu",
       "rotate_cw": "Pokrętło w prawo",
       "rotate_ccw": "Pokrętło w lewo",
       "tilt_left": "Przechył w lewo",

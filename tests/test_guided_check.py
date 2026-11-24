@@ -40,15 +40,15 @@ async def test_check_keeps_gestures_out_of_automations(hass: HomeAssistant, setu
     assert dev.start_check(SESSION)
     _press(notify)
     await hass.async_block_till_done()
-    assert card == ["press"]  # the card sees it
+    assert card == ["single_press"]  # the card sees it
     assert bus == []  # automations do not
     assert hass.states.get(EVENT).attributes.get("event_type") == before
 
     dev.stop_check(SESSION)
     _press(notify)
     await hass.async_block_till_done()
-    assert [e.data["type"] for e in bus] == ["press"]
-    assert hass.states.get(EVENT).attributes["event_type"] == "press"
+    assert [e.data["type"] for e in bus] == ["single_press"]
+    assert hass.states.get(EVENT).attributes["event_type"] == "single_press"
 
 
 async def test_one_check_per_token(hass: HomeAssistant, setup) -> None:
