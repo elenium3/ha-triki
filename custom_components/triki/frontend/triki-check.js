@@ -226,16 +226,21 @@ export class CheckRun {
       v.ghost = { type: "flip" };
       v.live = { stage: st.stage || 0, face: this.status?.face || null };
     } else if (s.id === "press") {
+      v.ghost = { type: "press" };
       v.live = { want: this._pressTargets(), got: st.got || 0, hint: st.hint || null };
     } else if (s.id === "rest" || s.id === "drift") {
       v.live = { moved: !!st.moved };
     } else if (s.id === "tap" || s.id === "throw") {
+      v.ghost = { type: s.id };
       v.live = { count: st[s.id] || 0, want: s.id === "tap" ? 2 : 1 };
     } else if (s.id === "shake") {
+      v.ghost = { type: "shake" };
       v.live = { count: st.shake || 0, want: SHAKE_WANT, tries: st.tries || 0 };
     } else if (s.id === "lean") {
+      v.ghost = { type: "lean" };
       v.live = { count: st.got || 0, want: LEAN_TARGETS.length, hint: st.hint || null };
     } else if (s.id === "handle") {
+      v.ghost = { type: "lift" };
       v.live = { count: st.count || 0, want: HANDLE_WANT };
     } else if (s.id === "sleep") {
       v.live = { stage: st.stage || 0, left: this.status?.doze_left_s ?? null };

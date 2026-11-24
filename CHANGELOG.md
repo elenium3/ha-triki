@@ -8,6 +8,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- The guided check shows every move it asks for on the model: the faint hint
+  cap now also picks itself up, leans in the hand, presses, shakes, knocks and
+  is tossed, next to the tilt, turn and flip it showed, and it plays before
+  Start too.
+
 - The card's parts can be hidden one by one: `show_model`, `chips` (a list of
   state, rate, signal, battery, and a new *link* chip: the share of frames
   received), `buttons` (a list of calibrate, align, led, check) and `show_help`, next to

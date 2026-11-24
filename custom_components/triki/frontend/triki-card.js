@@ -310,6 +310,42 @@ function loadCheck() {
 }
 const CHECK_RENEW_MS = 10000; // the server lets a check lapse 30 s after the last renewal
 const GHOST_TILT = (20 * Math.PI) / 180;
+const DEG = Math.PI / 180;
+const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+const between = (t, a, b) => smooth((t - a) / (b - a));
+// The hint's moves for the steps without a pose of their own: lift (scene units,
+// the cap is ~2.3 across), tilt and lean (radians), over one loop of `sec`.
+export function ghostMotion(type, sec) {
+  if (type === "lift") { // up off the table, held a moment, back down
+    const t = sec % 4;
+    const up = between(t, 0, 0.9) - between(t, 2.1, 3.1);
+    return { lift: 0.45 * up, tilt: 25 * DEG * up * (1 - 0.3 * Math.sin(t * 6) * (t > 0.9 && t < 2.1)) };
+  }
+  if (type === "lean") { // in the hand: lean right, back, lean left, back
+    const t = sec % 4;
+    const lean = 40 * DEG * (between(t, 0, 0.7) - between(t, 1.2, 1.9) - between(t, 2, 2.7) + between(t, 3.2, 3.9));
+    return { lift: 0.25, lean };
+  }
+  if (type === "press") { // pushed down once, then a pause
+    const t = sec % 2;
+    return { lift: -0.15 * (between(t, 0, 0.1) - between(t, 0.3, 0.4)) };
+  }
+  if (type === "shake") { // a quick burst back and forth, then a pause
+    const t = sec % 2.5;
+    return { lift: 0.25, tilt: t < 1.2 ? 35 * DEG * Math.sin(t * 2 * Math.PI * 4) * Math.sin(Math.PI * t / 1.2) : 0 };
+  }
+  if (type === "tap") { // a jolt: two quick knocks
+    const t = sec % 2;
+    const knock = (a) => 0.12 * Math.sin(Math.PI * Math.min(1, Math.max(0, (t - a) / 0.12)));
+    return { lift: knock(0) + knock(0.35) };
+  }
+  if (type === "throw") { // tossed up and caught
+    const t = sec % 3;
+    const f = t < 1 ? 4 * t * (1 - t) : 0;
+    return { lift: 0.25 + 0.4 * f, tilt: 2 * Math.PI * smooth(t) * (t < 1) };
+  }
+  return null;
+}
 function loadCap() {
   if (!capPromise) capPromise = import(asset("triki-cap.js"));
   return capPromise;
@@ -1178,7 +1214,8 @@ class TrikiCard extends HTMLElement {
       el.checkBarText.textContent = run ? t.summary : t.title;
       el.checkTime.style.width = "0";
     }
-    this._setGhost(v && !v.finished && v.phase === "running" ? v : null);
+    // shown before Start too, so the move is seen before it is asked for
+    this._setGhost(v && !v.finished && (v.phase === "running" || v.phase === "ready") ? v : null);
   }
 
   _checkHtml(v) {
@@ -1277,11 +1314,12 @@ class TrikiCard extends HTMLElement {
   }
 
   // ------------------------------------------------------------------ hint model
-  // A faint copy of the cap showing where to move it: tilt the dot edge, a slow turn,
-  // or turning over, all from the pose the step started in.
+  // A faint copy of the cap showing what to do, from the pose the step started in:
+  // tilt the dot edge, a slow turn, turning over, a pick-up, leaning in the hand,
+  // a press, a shake, a tap, a toss. Built-in model only.
   _setGhost(v) {
     const kind = v?.ghost?.type || null;
-    if (!kind || !this._chk?.ref) {
+    if (!kind || !(this._chk?.ref || this._target)) {
       if (this._ghost) this._ghost.visible = false;
       this._ghostView = null;
       return;
@@ -1309,7 +1347,10 @@ class TrikiCard extends HTMLElement {
   }
 
   _ghostPose(T) {
-    const v = this._ghostView, ref = this._chk?.ref;
+    const v = this._ghostView;
+    const running = v?.phase === "running";
+    // before Start the hint moves from the live pose
+    const ref = (running && this._chk?.ref) || this._target;
     if (!v || !ref) return null;
     const q0 = new T.Quaternion(ref[1], ref[2], ref[3], ref[0]);
     const d = new T.Vector3(0, -1, 0).applyQuaternion(q0); // the dot edge in the world
@@ -1317,7 +1358,7 @@ class TrikiCard extends HTMLElement {
     if (h.lengthSq() < 1e-6) h.set(0, -1, 0);
     h.normalize();
     const up = new T.Vector3(0, 0, 1);
-    const sec = this._chk.run?._elapsed?.() ?? v.elapsed ?? 0; // live, not the 4 Hz panel tick
+    const sec = running ? this._chk.run?._elapsed?.() ?? v.elapsed ?? 0 : performance.now() / 1000; // live, not the 4 Hz panel tick
     let r;
     if (v.ghost.type === "tilt") {
       r = new T.Quaternion().setFromAxisAngle(new T.Vector3().crossVectors(h, up).normalize(), GHOST_TILT);
@@ -1328,7 +1369,19 @@ class TrikiCard extends HTMLElement {
     } else if (v.ghost.type === "flip") {
       const p = Math.min(1, (sec % 3) / 1.5);
       r = new T.Quaternion().setFromAxisAngle(h, Math.PI * p);
-    } else return null;
+    } else {
+      const m = ghostMotion(v.ghost.type, sec);
+      if (!m) return null;
+      // tilts about the dot edge's sideways axis, leans about the cap's own
+      // left-right axis (as the tilt gesture reads it)
+      const side = new T.Vector3().crossVectors(h, up).normalize();
+      const lr = new T.Vector3(1, 0, 0).applyQuaternion(q0);
+      r = new T.Quaternion().setFromAxisAngle(side, m.tilt || 0)
+        .multiply(new T.Quaternion().setFromAxisAngle(lr, m.lean || 0));
+      this._ghost.position.z = m.lift || 0;
+      return r.multiply(q0);
+    }
+    this._ghost.position.z = 0;
     return r.multiply(q0);
   }
 

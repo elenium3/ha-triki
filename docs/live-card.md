@@ -70,6 +70,9 @@ model: gestures and sensors measure against gravity and do not use it.
 
 **Check** (admins only) walks through the link, the knob, the presses and the
 gestures that are turned on, and judges each step. Any step can be skipped.
+On every step that asks for a move, a faint copy of the cap on the model shows
+the move (a tilt, a turn, a pick-up, a lean, a press, a flip, a shake, a tap, a
+toss), already before Start.
 
 | Step | What it measures |
 |---|---|
