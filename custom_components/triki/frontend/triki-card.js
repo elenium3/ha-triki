@@ -604,8 +604,15 @@ class TrikiCard extends HTMLElement {
   static getConfigElement() { return document.createElement("triki-card-editor"); }
 
   setConfig(config) {
+    const was = this._config?.device_id;
     this._config = cardConfig(config);
     if (this._built) this._build();
+    // a saved edit reaches a live card through setConfig: follow a new cap
+    if (this._config.device_id !== was && (this._unsub || this._subscribing || this._empty)) {
+      this._unsubscribe();
+      this._deviceId = null;
+      if (this.isConnected && this._hass) this._subscribe();
+    }
   }
 
   getCardSize() { return 8; }
@@ -618,29 +625,43 @@ class TrikiCard extends HTMLElement {
     const t = cardStrings(hass);
     const relang = this._t && t !== this._t && !this._chk;
     if (!this._t || relang) this._t = t;
-    if (!this._built || relang) this._build();
+    if (this._empty) { if (relang) this._noDevice(); }
+    else if (!this._built || relang) this._build();
     else this._applyAdmin();
-    if (this.isConnected && !this._unsub && !this._subscribing) this._subscribe();
+    if (this.isConnected && this._canSubscribe()) this._subscribe();
   }
 
+  // a failed subscribe is retried by its own timer, not by every hass update
+  _canSubscribe() { return !this._unsub && !this._subscribing && !this._retryTimer; }
+
   connectedCallback() {
-    if (this._hass && !this._unsub && !this._subscribing) this._subscribe();
+    clearTimeout(this._teardownTimer);
+    if (this._hass && this._canSubscribe()) this._subscribe();
     if (this._io) this._io.observe(this);
   }
 
   disconnectedCallback() {
     this._checkClose();
     this._unsubscribe();
+    clearTimeout(this._retryTimer);
+    this._retryTimer = null;
     clearInterval(this._dozeTimer);
     this._dozeTimer = null;
     if (this._io) this._io.disconnect();
     this._visible = false;
+    // the browser keeps about 16 WebGL contexts: give this one back unless the
+    // card was only moved (dashboard edit mode moves cards around)
+    clearTimeout(this._teardownTimer);
+    this._teardownTimer = setTimeout(() => { if (!this.isConnected) this._teardownScene(); }, 1000);
   }
 
   // ------------------------------------------------------------------ DOM
   _build() {
     const t = this._t || STRINGS.en;
     const c = this._config || {};
+    // the renderer is bound to the canvas the new markup replaces
+    this._teardownScene();
+    if (this._io) this._io.disconnect();
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     const buttons = c.buttons || BUTTONS;
     const off = (name) => (buttons.includes(name) ? "" : " data-off");
@@ -649,7 +670,7 @@ class TrikiCard extends HTMLElement {
     this.shadowRoot.innerHTML = `<style>${CSS}</style>
       <ha-card>
         <div class="head">
-          <div class="name" id="name">${c.title || "Triki"}</div>
+          <div class="name" id="name"></div>
           <div class="chip" id="state" data-chip="state"><div class="dot"></div><span id="stateText">${t.asleep}</span></div>
           <div class="chip" id="rateChip" data-chip="rate" hidden><ha-icon icon="mdi:sine-wave" style="--mdc-icon-size:14px"></ha-icon><span id="rate"></span></div>
           <div class="chip" id="rssiChip" data-chip="signal" hidden><ha-icon icon="mdi:bluetooth" style="--mdc-icon-size:14px"></ha-icon><span id="rssi"></span></div>
@@ -734,6 +755,7 @@ class TrikiCard extends HTMLElement {
     for (const b of this.shadowRoot.querySelectorAll(".gitem")) {
       b.addEventListener("click", () => this._pickGesture(b.dataset.g));
     }
+    this._el.name.textContent = c.title || "Triki"; // text, not markup
     this._el.reset.addEventListener("click", () => this._wizard("heading"));
     this._el.led.addEventListener("click", () => this._toggleLed());
     this._el.cal.addEventListener("click", () => this._wizard("flat"));
@@ -757,16 +779,31 @@ class TrikiCard extends HTMLElement {
   // ------------------------------------------------------------------ data
   async _subscribe() {
     this._subscribing = true;
+    // a newer subscribe, an unsubscribe or a removed card makes this one stale
+    const gen = this._subGen = (this._subGen || 0) + 1;
+    const stale = () => gen !== this._subGen || !this.isConnected;
+    let unsubs = [];
+    const drop = () => { for (const u of unsubs) u().catch?.(() => {}); };
     try {
       // a fixed token from the config, otherwise every token: the card then shows
       // whichever one is awake (a home can have several, most of them asleep)
       let ids = this._config?.device_id ? [this._config.device_id] : null;
+      let names = this._names;
       if (!ids) {
         const devices = await this._hass.connection.sendMessagePromise({ type: "triki/devices" });
+        if (stale()) return;
         ids = devices.map((d) => d.device_id);
-        if (!ids.length) { this._noDevice(); return; }
-        this._names = Object.fromEntries(devices.map((d) => [d.device_id, d.name]));
+        // none loaded yet (Home Assistant still starting, an entry reloading)
+        if (!ids.length) { this._lost(); return; }
+        names = Object.fromEntries(devices.map((d) => [d.device_id, d.name]));
       }
+      const results = await Promise.allSettled(ids.map((id) => this._hass.connection.subscribeMessage(
+        (msg) => this._onMessage(id, msg), { type: "triki/subscribe", device_id: id })));
+      unsubs = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
+      if (stale()) { drop(); return; }
+      const failed = results.find((r) => r.status === "rejected");
+      if (failed) throw failed.reason; // all or none: the rest are dropped and retried
+      this._names = names;
       this._ids = ids;
       this._statuses = {};
       // the pick is per browser: "auto" follows the awake token, an id pins one
@@ -774,33 +811,54 @@ class TrikiCard extends HTMLElement {
       this._pick = stored && ids.includes(stored) ? stored : "auto";
       this._deviceId = this._pick !== "auto" ? this._pick
         : this._deviceId && ids.includes(this._deviceId) ? this._deviceId : ids[0];
-      this._unsubs = await Promise.all(ids.map((id) => this._hass.connection.subscribeMessage(
-        (msg) => this._onMessage(id, msg), { type: "triki/subscribe", device_id: id })));
-      this._unsub = () => Promise.all(this._unsubs.map((u) => u()));
+      this._unsubs = unsubs;
+      this._unsub = () => Promise.all(unsubs.map((u) => u()));
+      this._retryDelay = 0;
+      this._reloadSince = null;
+      if (this._empty) { this._empty = false; this._build(); }
       this._renderTabs();
     } catch (err) {
+      drop();
+      if (stale()) return;
       console.warn("triki-card: subscribe failed", err);
-      this._noDevice();
+      this._lost();
     } finally {
-      this._subscribing = false;
+      if (gen === this._subGen) this._subscribing = false;
     }
   }
 
   _unsubscribe() {
+    this._subGen = (this._subGen || 0) + 1; // a subscribe in flight is dropped
+    this._subscribing = false;
     if (this._unsub) { this._unsub().catch?.(() => {}); this._unsub = null; }
   }
 
+  // Try again later, backing off to a minute: Home Assistant may still be
+  // starting, or an entry reloading, which is not worth a request per hass update.
+  _retrySoon(delay) {
+    if (this._retryTimer || !this.isConnected) return;
+    this._retryDelay = delay ?? Math.min(60000, (this._retryDelay || 1000) * 2);
+    this._retryTimer = setTimeout(() => {
+      this._retryTimer = null;
+      if (this.isConnected && this._hass && !this._unsub && !this._subscribing) this._subscribe();
+    }, this._retryDelay);
+  }
+
+  // No cap to show. Right after a reload of the integration that is expected for
+  // a few seconds: the card keeps its last look meanwhile instead of blinking.
+  _lost() {
+    const reloading = this._built && this._reloadSince && Date.now() - this._reloadSince < 30000;
+    if (!reloading) this._noDevice();
+    this._retrySoon();
+  }
+
   // The integration reloaded (its options changed): subscribe to the new device
-  // objects once they are up, trying for a while.
-  _resubscribeSoon(tries = 10) {
-    if (this._reloadTimer) return;
+  // objects once they are up.
+  _resubscribeSoon() {
     this._unsubscribe();
-    this._reloadTimer = setTimeout(async () => {
-      this._reloadTimer = null;
-      if (!this.isConnected || this._unsub || this._subscribing) return;
-      await this._subscribe();
-      if (!this._unsub && tries > 1) this._resubscribeSoon(tries - 1);
-    }, 2000);
+    this._reloadSince ??= Date.now();
+    this._retryDelay = 0;
+    this._retrySoon(2000);
   }
 
   _isLive(s) { return !!(s && s.connected && s.streaming); }
@@ -848,7 +906,12 @@ class TrikiCard extends HTMLElement {
     for (const b of el.querySelectorAll(".tab")) b.addEventListener("click", () => this._choose(b.dataset.pick));
   }
 
+  // replaces the card's body: the built card is gone until a cap is found
   _noDevice() {
+    this._teardownScene();
+    if (this._io) this._io.disconnect();
+    this._empty = true;
+    this._built = false;
     const card = this.shadowRoot?.querySelector("ha-card");
     if (card) card.innerHTML = `<div class="empty">${(this._t || STRINGS.en).nodevice}</div>`;
   }
@@ -1504,13 +1567,34 @@ class TrikiCard extends HTMLElement {
   }
 
   // ------------------------------------------------------------------ 3D
+  // Give the WebGL context back: dispose() alone keeps it, and the browser drops
+  // the oldest one past about 16 (the editor preview makes a card per keystroke).
+  // The canvas is swapped for a fresh one, as a lost context cannot be reused.
+  _teardownScene() {
+    if (this._raf) cancelAnimationFrame(this._raf);
+    this._raf = null;
+    this._ro?.disconnect();
+    this._ro = null;
+    const r = this._renderer;
+    if (r) {
+      r.dispose();
+      r.forceContextLoss();
+      const gl = this._el?.gl;
+      if (gl?.isConnected) { const fresh = gl.cloneNode(false); gl.replaceWith(fresh); this._el.gl = fresh; }
+    }
+    this._renderer = this._scene = this._camera = this._pivot = this._headingGroup = null;
+    this._cap = this._ghost = null;
+  }
+
   async _ensureScene() {
     if (this._scene || this._sceneLoading) return;
     this._sceneLoading = true;
+    let renderer, again = false;
     try {
       const T = await loadThree();
       this._T = T;
-      const renderer = new T.WebGLRenderer({ canvas: this._el.gl, antialias: true, alpha: true });
+      const canvas = this._el.gl;
+      renderer = new T.WebGLRenderer({ canvas, antialias: true, alpha: true });
       renderer.outputColorSpace = T.SRGBColorSpace;
       renderer.toneMapping = T.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.0;
@@ -1558,6 +1642,12 @@ class TrikiCard extends HTMLElement {
         this._capLogo = undefined;
         if (this._status) this._setModelState(this._status.led, this._status.button);
       }
+      if (canvas !== this._el?.gl || !this.isConnected) { // rebuilt or removed while loading
+        renderer.dispose();
+        renderer.forceContextLoss();
+        again = true; // the new canvas asked for a scene while this one loaded
+        return;
+      }
       Object.assign(this, { _renderer: renderer, _scene: scene, _camera: camera, _pivot: pivot, _headingGroup: heading });
       this._q = new T.Quaternion();
       this._qTarget = new T.Quaternion();
@@ -1568,6 +1658,7 @@ class TrikiCard extends HTMLElement {
       console.warn("triki-card: 3D view unavailable", err);
     } finally {
       this._sceneLoading = false;
+      if (again && this._visible && this.isConnected) this._startRender();
     }
   }
 

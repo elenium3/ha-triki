@@ -19,6 +19,24 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- After a session that had slowed to the idle rate, the next wake timed
+  gestures twice too fast for its first seconds: a short press could come out
+  as a long press. (fixed after 0.3.0b2)
+- A press that wakes the cap and is released within 0.4 s of the stream
+  starting was lost. (fixed after 0.3.0b2)
+- If the stream did not restart after the battery check, presses stopped
+  arriving until the link dropped, never with *Disconnect after idle* at 0.
+  The link is now dropped and a press wakes the cap. (fixed after 0.3.0b2)
+- An unload or reload no longer fails when BlueZ times out closing the link.
+  (fixed after 0.3.0b2)
+- A link drop right after turning the cap no longer sends knob events with the
+  knob off. (fixed after 0.3.0b2)
+- The card: a blank 3D view after a change of language or of the card's
+  settings; "No Triki cap found" for good when the card loaded while Home
+  Assistant was starting; the 3D views of removed cards and editor previews
+  no longer use up the browser's WebGL contexts; a card set to another cap now
+  follows it; the card title is shown as text. (fixed after 0.3.0b2)
+
 - Picking the cap up turned the knob: ten pick-ups made 24 steps, now 2.
 - Slow knob turns lost steps (8-10 of 12 per revolution, now 11), and so did
   a link that drops frames or delivers them in bursts.
