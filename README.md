@@ -17,6 +17,11 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT"></a>
 </p>
 
+<p align="center">
+  <img src="docs/images/card-live.gif" width="480" alt="The live 3D card replaying a recording of a real Triki: the cap turned on the table (Knob events pop up), tilted in the hand to the right and left (Tilt events), pressed once, twice and held (Button lights up), flipped onto its green side and shaken, while the 3D model, the angles, the gyro and accelerometer bars and the 10 s gyro graph follow">
+  <br><sub>The live 3D card that ships with the integration, replaying a recording of a real Triki.</sub>
+</p>
+
 ## What it is
 
 <p align="center">
@@ -141,10 +146,7 @@ The integration also ships a dashboard card, `custom:triki-card`: a 3D model of
 the token that moves with it, with live gyro and accelerometer readings. Add
 **Triki live 3D** from the card picker; see [Live 3D card](docs/live-card.md). Every part of the card (model, status chips, bars, graph, each button, help) can be hidden on its own.
 
-<p align="center">
-  <img src="docs/images/card-anim.gif" width="420" alt="The live card in motion: the cap held in the hand is turned like a knob and back (Knob events pop up), tilted to the side, pressed (Button lights up) and flipped onto its green side (a Flip event), while the angles, the gyro and accelerometer bars and the 10 s gyro graph follow">
-  <br><sub>Knob turn, tilt in the hand, press and flip. Rendered from synthetic motion data.</sub>
-</p>
+The animation at the top of this page is this card.
 
 ## Documentation
 
