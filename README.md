@@ -125,7 +125,7 @@ button? Switch the rest off in the card's settings. [Live 3D card](docs/live-car
 | `event.<name>_action` | `wake`, `press`, `double_press`, `triple_press` (`count`), `long_press`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`, `speed`), `tilt_left` / `tilt_right` (`repeat`), `shake`, `tap`, `throw`, `flip` |
 | `binary_sensor.<name>_button` | live button state, off while asleep |
 | `binary_sensor.<name>_connected` | diagnostic |
-| `switch.<name>_led` | the green LED; changeable only while connected |
+| `switch.<name>_led` | the green LED, on and off buttons: the cap can't report it; changeable only while connected |
 | `sensor.<name>_battery` | measured while idle, at most every 30 min |
 | `sensor.<name>_readiness` | whether a press gets through now: `connected`, `dozing` (about 3 min after an idle disconnect, presses are missed), `asleep` (a press wakes it), `not_responding` |
 | `sensor.<name>_link_quality` | % of motion frames that arrived in the last session; a repair notice after three lossy sessions in a row |

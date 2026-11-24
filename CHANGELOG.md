@@ -31,7 +31,10 @@ All notable changes to this project are documented here. The format follows
   the cap more than 40° from level (was 60°) are ignored.
 - Saving the options right after an idle disconnect linked up to the dozing
   cap again.
-- The LED switch read *unknown* after a restart until the cap woke.
+- The LED switch and the card showed the LED on while it was off: the cap
+  reads its LED register back as `ff` whatever the LED does. The LED is now
+  shown as on and off buttons, and as on only after Home Assistant turned it
+  on during the current link.
 - A cap in firmware-update mode (`TrikiDfu…`) was offered as a new device.
 - Firmware that streams faster than asked sped up gesture timing.
 - Docs: the cap wakes only on a button press, not on motion; the IMU axes in

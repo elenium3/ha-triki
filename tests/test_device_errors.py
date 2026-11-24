@@ -60,7 +60,7 @@ async def test_session_setup_failure_disconnects(hass: HomeAssistant, setup) -> 
 
 
 async def test_optional_reads_may_fail(hass: HomeAssistant, setup) -> None:
-    """Firmware, battery and LED reads failing must not abort the session."""
+    """Firmware and battery reads failing must not abort the session."""
     client = make_client()
 
     async def read(uuid):
@@ -74,7 +74,6 @@ async def test_optional_reads_may_fail(hass: HomeAssistant, setup) -> None:
     assert dev.connected is True
     assert dev.firmware is None
     assert dev.battery is None
-    assert dev.led_on is None
 
 
 async def test_hung_connect_does_not_swallow_next_wakeup(hass: HomeAssistant, setup) -> None:
@@ -475,7 +474,7 @@ async def test_led_write_error(hass: HomeAssistant, setup) -> None:
         pytest.raises(HomeAssistantError),
     ):
         await dev.async_set_led(True)
-    assert dev.led_on is False  # unchanged
+    assert dev.led_on is None  # unchanged: nothing set on this link
     assert client.write_gatt_char.await_count == 3  # all tries used
     assert dev.stats.led_write_retries == 2
 

@@ -320,6 +320,8 @@ class TrikiDevice:
         # the link dropped on its own and the token has not been heard since
         self.unresponsive = False
         self.button = False
+        # what Home Assistant last set during the current link, else unknown: the
+        # token's CTRL reads back ff whatever the LED does (firmware 3.2.1-A)
         self.led_on: bool | None = None
         self.battery: int | None = None
         # the last level measured during a stream pause in this process; the
@@ -1038,11 +1040,6 @@ class TrikiDevice:
                 # taken under load right after the connect, so a low number; the
                 # first stream pause replaces it. Better than nothing until then.
                 await self._read_battery(client)
-            try:
-                ctrl = await client.read_gatt_char(CTRL_UUID)
-                self.led_on = bool(ctrl and ctrl[0] & 0x01)
-            except BleakError:
-                self.led_on = None
             # the measured value arrives by notification after a stream pause
             try:
                 await client.start_notify(
@@ -1204,6 +1201,7 @@ class TrikiDevice:
         # the next link takes tilt from the accelerometer again; the heading is
         # carried over (a dozing token lies where it was), so a calibration lasts
         self._orientation.reset(keep_heading=True)
+        self.led_on = None  # what the LED does while the token dozes and sleeps is not known
         self._last_sample = None
         for attr in ("_unsub_idle", "_unsub_battery", "_unsub_watchdog"):
             self._cancel_timer(attr)
