@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/card-live.gif" width="480" alt="The live 3D card replaying a recording of a real Triki: the cap turned on the table (Knob events pop up), tilted in the hand to the right and left (Tilt events), pressed once, twice and held (Button lights up), flipped onto its green side and shaken, while the 3D model, the angles, the gyro and accelerometer bars, the 10 s gyro graph and the gesture list (each gesture lights up as it fires) follow">
+  <img src="docs/images/card-live.gif" width="800" alt="The live 3D card replaying a recording of a real Triki: the cap turned on the table (Knob events pop up), tilted in the hand to the right and left (Tilt events), pressed once, twice and held (Button lights up), flipped onto its green side and shaken, while the 3D model, the angles, the gyro and accelerometer bars, the 10 s gyro graph and the gesture list (each gesture lights up as it fires) follow">
   <br><sub>The 3D card that comes with the integration, replaying a real Triki.</sub>
 </p>
 
