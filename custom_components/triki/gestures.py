@@ -19,12 +19,15 @@ tune them via the constants or the integration options.
 
 from __future__ import annotations
 
+import logging
 import math
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
 from .protocol import Sample
+
+_LOGGER = logging.getLogger(__name__)
 
 # --- button ---
 LONG_PRESS_S = 0.8
@@ -63,6 +66,10 @@ SHAKE_ACTIVE_FRACTION = 0.6
 SHAKE_REVERSALS = 2
 SHAKE_MIN_FRAMES = 5  # fewer frames in the window say nothing
 SHAKE_QUIET_S = 0.6  # no active frame this long ends a shake episode
+# A shake has a jolt: every shake on hardware reached 6-17 g (|a| - 1 g), the
+# gentlest of the 2026-11-23 check included, while the wrist swings of a pick-up
+# that fired shake reached 1.0 and 2.1.
+SHAKE_JOLT_G = 3.0
 FLIP_STABLE_S = 0.3
 # Which face is up, from the accelerometer z while the token lies still (+z points
 # out of the green PCB, -z out of the metal cap). Between the bands the last face
@@ -116,6 +123,29 @@ KNOB_SHOCK_GUARD_S = 0.5
 # before the shake was recognised. Steps are held this long and dropped when a
 # shake, a jolt or free fall comes first (one motion, one gesture).
 KNOB_HOLD_S = 0.3
+# Picking the token up turns it too, but mostly about other axes than the vertical:
+# in a labelled run (2026-11-23, tests/fixtures/handling-2026-11-23) the turning
+# about gravity was 0.04-0.82 of the gyro energy in the 0.5 s before the false
+# steps of ten pick-ups, and 0.86-1.00 before the wanted steps of turns on the
+# table. While the share over KNOB_PURITY_WINDOW_S is below KNOB_PURITY the turn
+# is not counted (the partial turn waits) and steps still held are dropped: 24
+# false steps became 2, 35 of 37 wanted ones stayed, slow turns lost none.
+KNOB_PURITY = 0.65
+KNOB_PURITY_WINDOW_S = 0.5
+# Lifted: once the token has been edge-on (tilted past 60 deg in a few calm
+# frames in a row, read from the raw accelerometer: the gravity estimate leans
+# in a fast turn) the knob waits until it lies still again, as on a table (a
+# hand trembles at 30-110 deg/s). A pick-up that swings it up on its edge left
+# it wobbling level in the hand, and the wobble made steps (2026-11-24 check: 3
+# in one pick-up). Replays: those 3 and the 23:00 check's pick-up step 1 -> 0;
+# the check's turns (24 steps), the labelled turns on the table, slow and fast
+# (35), and the slow turns of 2026-11-18 (33) unchanged.
+KNOB_LIFT_COS = 0.5
+KNOB_LIFT_TOL_G = 0.2
+KNOB_LIFT_FRAMES = 3
+KNOB_REST_DPS = 10.0
+KNOB_REST_G = 0.1  # as BIAS_STILL_G: a cap may read a little off 1 g lying still
+KNOB_REST_S = 0.3
 # A gap longer than this between two frames counts as this long for the knob
 # angle: the rate in the gap is unknown. Good links show gaps of 115-155 ms,
 # rarely 340 ms; 26 Hz with heavy loss needs more than 150.
@@ -139,7 +169,10 @@ FAST_STREAM_FACTOR = 1.5
 # 3.1 °/s off, every later frame on the table was too far from it to count, and
 # the card's model turned 141°/min until a restart. Lying on a table the gyro
 # spreads by 0.07-0.3 °/s over half a second (1-4 LSB), a hand by degrees.
-BIAS_STILL_G = 0.05  # |a| - 1 g
+# The |a| test only rules out motion; the gyro spread decides. Accelerometers
+# of this class read some tens of mg off at rest; at 0.05 g a cap reading
+# 1.08 g never learned its offset and lost every knob turn after a pick-up.
+BIAS_STILL_G = 0.1  # |a| - 1 g
 BIAS_SETTLE_S = 0.5  # the window that must be still before it is learned from
 BIAS_SPREAD_DPS = 0.5  # per axis, max - min over the window
 BIAS_RESEED_DPS = 0.5  # a still window this far from the estimate replaces it
@@ -151,12 +184,18 @@ BIAS_MAX_DPS = 10.0  # per axis; more is not an offset
 # with the stripe of the card's model towards the owner, and leaned to a side.
 # Heading-free like the knob: the lean is read from gravity alone, so it does not
 # drift (xardag's BeatSurfer "W dloni" mode does the same with a calibrated zero).
-# One step when the lean passes TILT_ON_DEG, then one per TILT_REPEAT_S while it
-# is held; the next lean needs a return within TILT_OFF_DEG of level first.
+# One tilt_right / tilt_left when the lean passes TILT_ON_DEG, then one per
+# TILT_REPEAT_S while it is held (``repeat: true``); the next lean needs a return
+# within TILT_OFF_DEG of level first. Own event names, not the knob's: an
+# automation on the knob must not react to a lean (picking the token up leans it).
 TILT_ON_DEG = 25.0
 TILT_OFF_DEG = 10.0
-# Beyond this the token stands on its edge or is turned over, not leaned.
-TILT_MAX_DEG = 60.0
+# Beyond this the token stands on its edge or is turned over, not leaned; a lean
+# that goes deeper on the same side stays a lean (no new step, no reset). 60
+# missed half the leans of the 2026-11-23 check: asked for "more than 25", the
+# owner leaned to 70-85. At 80 the check caught 28 of 32 leans (60: 15), for
+# 16 lone leans in 233 everyday captures instead of 12.
+TILT_MAX_DEG = 80.0
 TILT_PITCH_MAX_DEG = 30.0  # leaned forward or back as much: not a side lean
 # Held still this long at the lean before the first step.
 TILT_CONFIRM_S = 0.2
@@ -164,10 +203,18 @@ TILT_REPEAT_S = 0.4
 # Held, not swung: Baartek's music controller gates on 0.8-1.2 g the same way.
 TILT_ACCEL_TOL_G = 0.2
 TILT_STILL_DPS = 80.0
-TILT_SOURCE = "tilt"
+# Gravity this far on the other face's side: it went over the edge since it was
+# level. Picking the token up often turns it nearly over and back, and it comes
+# to rest in the hand leaned (2 false leans in the 2026-11-23 pick-up step, both
+# so); a lean in the hand never passes the edge. Replay: false leans in 233
+# everyday captures 16 -> 10, wanted leans of the check unchanged (28 of 32).
+TILT_FLIP_Z = 0.1
+TILT_EVENTS = frozenset({"tilt_left", "tilt_right"})
 
 KNOB_EVENTS = frozenset({"rotate_cw", "rotate_ccw"})
-MOTION_EVENTS = frozenset({"rotate_cw", "rotate_ccw", "shake", "tap", "throw", "flip"})
+MOTION_EVENTS = (
+    frozenset({"rotate_cw", "rotate_ccw", "shake", "tap", "throw", "flip"}) | TILT_EVENTS
+)
 EXPERIMENTAL_EVENTS = frozenset({"tap", "throw", "flip"})  # the "motion gestures" option
 
 # The shake recorder keeps this much of the stream before each shake (diagnostics):
@@ -263,7 +310,12 @@ class GestureDetector:
         self._turn_acc = 0.0
         self._turn_idle_since = 0.0
         self._knob_mute_until = 0.0
+        self._knob_lifted = False
+        self._edge_run = 0
+        self._knob_rest_since: float | None = None
         self._knob_held: list[tuple[float, Event]] = []
+        # t, gyro energy, its part about gravity: how pure the recent turning is
+        self._purity_win: deque[tuple[float, float, float]] = deque()
         self._turn_run = 0  # consecutive frames above the deadband
         self._turn_held = 0.0  # their angle, counted once the run is confirmed
         self._speed_deg = 0.0  # angle and time turned since the last step, for speed
@@ -271,6 +323,7 @@ class GestureDetector:
         # tilt in the hand: armed again only after a return to level
         self._tilt_armed = False
         self._tilt_dir = 0
+        self._tilt_side = 0  # which face was up when it was last level
         self._tilt_next = 0.0
         # tap
         self._prev_accel: tuple[float, float, float] | None = None
@@ -280,8 +333,9 @@ class GestureDetector:
         # free fall
         self._ff_since: float | None = None
         # shake: (t, active, sign of the dominant gyro axis) per frame in the window
-        self._shake_frames: list[tuple[float, bool, int]] = []
+        self._shake_frames: list[tuple[float, bool, int, float]] = []
         self._shake_latched = False
+        self._shake_nojolt_logged = False
         self._last_active_t = 0.0
         self._last: dict[str, float] = {}
         # (detector time, arrival time, |a|, |gyro|, button) of the recent frames
@@ -393,7 +447,7 @@ class GestureDetector:
                 e
                 for e in out
                 if e.type not in MOTION_EVENTS
-                or (self.tilt if e.data.get("source") == TILT_SOURCE else e.type in allowed)
+                or (self.tilt if e.type in TILT_EVENTS else e.type in allowed)
             ]
         return out
 
@@ -417,6 +471,9 @@ class GestureDetector:
         the token (picking it up, knocking it) then left a stale 40° lean that
         made steps on the 2026-10-29 replay.
         """
+        uz = s.az / a if a else 0.0
+        if self._tilt_armed and uz * self._tilt_side < -TILT_FLIP_Z:
+            self._tilt_armed = False  # over the edge since it was level: level again first
         if disturbed:
             self._tilt_armed = False  # level again first: the swing may end tilted
             self._tilt_dir = 0
@@ -433,11 +490,14 @@ class GestureDetector:
         if abs(roll) < TILT_OFF_DEG and abs(pitch) < TILT_PITCH_MAX_DEG:
             self._tilt_armed = True
             self._tilt_dir = 0
+            self._tilt_side = 1 if uz > 0 else -1
             return
+        d = 1 if roll > 0 else -1
+        if abs(roll) > TILT_MAX_DEG and self._tilt_dir == d:
+            return  # leaned on past the range: still the same lean
         if not (TILT_ON_DEG <= abs(roll) <= TILT_MAX_DEG and abs(pitch) <= TILT_PITCH_MAX_DEG):
             self._tilt_dir = 0
             return
-        d = 1 if roll > 0 else -1
         if self._tilt_dir != d:
             if not self._tilt_armed:
                 return  # still the last lean, or picked up leaned
@@ -446,19 +506,47 @@ class GestureDetector:
         if self.button or self.t - self._release_t < KNOB_BUTTON_GUARD_S:
             self._tilt_next = max(self._tilt_next, self.t + TILT_CONFIRM_S)
         elif self.t >= self._tilt_next:
+            repeat = not self._tilt_armed
             self._tilt_armed = False
             self._tilt_next = self.t + TILT_REPEAT_S
-            cw = (d > 0) != self.invert_rotation
             # held like the knob's steps: a shake that starts as a lean drops it
-            self._knob_held.append(
-                (
-                    self.t,
-                    Event(
-                        "rotate_cw" if cw else "rotate_ccw",
-                        {"steps": 1, "degrees": self.knob_step, "source": TILT_SOURCE},
-                    ),
-                )
-            )
+            kind = "tilt_right" if d > 0 else "tilt_left"
+            self._knob_held.append((self.t, Event(kind, {"repeat": repeat})))
+
+    def _knob_lift(self, s: Sample, a: float) -> None:
+        """Edge-on marks the token lifted; lying still again puts it back down."""
+        edge = abs(a - 1.0) < KNOB_LIFT_TOL_G and abs(s.az) < KNOB_LIFT_COS * a
+        self._edge_run = self._edge_run + 1 if edge else 0
+        if self._edge_run >= KNOB_LIFT_FRAMES and not self._knob_lifted:
+            self._knob_lifted = True
+            self._turn_acc = 0.0
+            self._knob_held = [(t, e) for t, e in self._knob_held if e.type in TILT_EVENTS]
+        bx, by, bz = self.gyro_bias or (0.0, 0.0, 0.0)
+        rate = math.sqrt((s.gx - bx) ** 2 + (s.gy - by) ** 2 + (s.gz - bz) ** 2)
+        if rate < KNOB_REST_DPS and abs(a - 1.0) < KNOB_REST_G and not edge:
+            if self._knob_rest_since is None:
+                self._knob_rest_since = self.t
+            elif self.t - self._knob_rest_since >= KNOB_REST_S:
+                self._knob_lifted = False
+        else:
+            self._knob_rest_since = None
+
+    def _turn_purity(self, s: Sample) -> float:
+        """Share of the gyro energy about gravity over KNOB_PURITY_WINDOW_S.
+
+        1.0 while the token hardly turns: noise says nothing about handling.
+        """
+        bx, by, bz = self.gyro_bias or (0.0, 0.0, 0.0)
+        w = (s.gx - bx, s.gy - by, s.gz - bz)
+        about = _dot(w, self.gravity) if self.gravity is not None else 0.0
+        win = self._purity_win
+        win.append((self.t, w[0] * w[0] + w[1] * w[1] + w[2] * w[2], about * about))
+        while win and self.t - win[0][0] > KNOB_PURITY_WINDOW_S:
+            win.popleft()
+        total = sum(x[1] for x in win)
+        if total < len(win) * KNOB_DEADBAND_DPS * KNOB_DEADBAND_DPS:
+            return 1.0
+        return sum(x[2] for x in win) / total
 
     # ----------------------------------------------------------------- button
     def _emit_clicks(self, out: list[Event]) -> None:
@@ -617,12 +705,14 @@ class GestureDetector:
             active = False  # turning, not swinging
         sign = (1 if rates[dominant] > 0 else -1) if active else 0
         frames = self._shake_frames
-        frames.append((self.t, active, sign))
+        frames.append((self.t, active, sign, abs(a - 1.0)))
         while frames and self.t - frames[0][0] > SHAKE_WINDOW_S:
             frames.pop(0)
         if active:
             self._last_active_t = self.t
-        elif self._shake_latched and self.t - self._last_active_t >= SHAKE_QUIET_S:
+        elif self.t - self._last_active_t >= SHAKE_QUIET_S:
+            self._shake_nojolt_logged = False
+        if not active and self._shake_latched and self.t - self._last_active_t >= SHAKE_QUIET_S:
             # the episode is over: the next one is judged on its own frames
             self._shake_latched = False
             frames.clear()
@@ -633,17 +723,25 @@ class GestureDetector:
         n_active = sum(1 for f in episode if f[1])
         reversals = 0
         last_sign = 0
-        for _t, _act, sg in episode:
+        for _t, _act, sg, _j in episode:
             if sg and last_sign and sg != last_sign:
                 reversals += 1
             if sg:
                 last_sign = sg
-        shaking = (
+        swinging = (
             active
             and len(episode) >= SHAKE_MIN_FRAMES
             and n_active >= SHAKE_ACTIVE_FRACTION * len(episode)
             and reversals >= SHAKE_REVERSALS
         )
+        jolt = max((f[3] for f in episode), default=0.0)
+        shaking = swinging and jolt >= SHAKE_JOLT_G
+        if swinging and not shaking and not self._shake_latched and not self._shake_nojolt_logged:
+            # for a bug report: a shake that was not counted, and how hard it was
+            self._shake_nojolt_logged = True
+            _LOGGER.debug(
+                "shake-like swing without a jolt (%.1f g of %.1f), not a shake", jolt, SHAKE_JOLT_G
+            )
         if shaking and not self._shake_latched:
             # one event per episode: a 2 s shake must not fire two or three times
             self._shake_latched = True
@@ -659,6 +757,8 @@ class GestureDetector:
         # knob: rotation rate about the vertical (gravity) axis. Shaking swings the
         # token around every axis: a hard jolt or a latched shake drops the partial
         # turn and mutes the knob for a moment.
+        purity = self._turn_purity(s)  # every frame, so the window has no gaps
+        self._knob_lift(s, a)
         if disturbed:
             # a shake, a jolt or free fall: whatever turned was not a knob
             self._turn_acc = 0.0
@@ -666,12 +766,16 @@ class GestureDetector:
             self._knob_mute_until = self.t + KNOB_SHOCK_GUARD_S
         elif self.button or self.t - self._release_t < KNOB_BUTTON_GUARD_S:
             self._turn_acc = 0.0  # a press twists the token: not a turn
-        elif self.t < self._knob_mute_until:
+        elif self.t < self._knob_mute_until or self._knob_lifted:
             self._turn_acc = 0.0
+            self._turn_run = 0  # back on, a turn confirms from scratch
         elif abs(a - 1.0) > KNOB_LIFT_G:
             pass  # being swung: this frame says nothing about turning, keep the rest
         elif self.gravity is not None and abs(self.gravity[2]) < KNOB_LEVEL_COS:
             pass  # held edge-on: handled, not turned
+        elif purity < KNOB_PURITY:
+            # handled, not turned: steps still held go, the partial turn waits
+            self._knob_held = [(t, e) for t, e in self._knob_held if e.type in TILT_EVENTS]
         elif self.gravity is not None:
             bx, by, bz = self.gyro_bias or (0.0, 0.0, 0.0)
             rate = _dot((s.gx - bx, s.gy - by, s.gz - bz), self.gravity)

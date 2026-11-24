@@ -6,81 +6,85 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Added
-- **Live 3D card**, `custom:triki-card`, served and registered by the
-  integration: nothing to install, search for *Triki live 3D* when adding a
-  card. See docs/live-card.md.
-  - A 3D model of the token follows it: roll, pitch and yaw, gyro and
-    accelerometer readings with a 10 s graph, button, battery, signal, stream
-    rate and a label for each gesture.
-    Orientation is computed in the integration (Madgwick filter) and goes
-    over a websocket subscription (`triki/subscribe`), not into entity states.
-  - The default model is our own, built from calipered dimensions, with
-    photo textures; Flopsstuff's textured model (MIT) is `model: glb`.
-  - Calibration: lay the token on the table with the dot above the Z away
-    from you, and the model levels itself and points the same way. The logo
-    angle on the metal side is matched once by eye; both are stored per token.
-  - **Check** (admins only): a guided walk through lying still (stream rate,
-    lost frames, noise and the receiver the link goes through), level, tilt,
-    knob turns each way, the presses, turning over and the gestures that are
-    turned on. Each step has an instruction, a timer and live numbers, and
-    ends with the likely cause when it fails ("19 % of frames lost, move it
-    closer to the receiver"). The report folds out for an issue.
-  - With several tokens, tabs: *Auto* follows the awake one, or pin one.
-  - `show_controls: false` hides the buttons and the help, for a wall tablet.
-  - English, Russian and Polish, picked from the Home Assistant language.
-- `sensor.<name>_face_up`: which side is up (`cap_up`, `pcb_up` or `edge`), set
-  once the token has lain still for 0.3 s and kept while it sleeps.
-- `speed` (°/s) in `rotate_cw` / `rotate_ccw` events, so a fast turn can do
-  more than a slow one.
-- *Tilt in the hand* option, off by default: hold the token level and lean it
-  right or left past 25° for `rotate_cw` / `rotate_ccw` (with `source: tilt`),
-  one step and then one every 0.4 s while it stays leaned. Checked on
-  hardware: right gives `rotate_cw`, left `rotate_ccw`.
-- Russian translation of the integration (setup, options, repairs, entity
-  names).
-- Diagnostics: `measured_rate`, `gyro_bias`, `link_via` (the receiver the
-  link actually went through; the advert's source was reported before) and
-  `shakes`, the 1.5 s of stream before each of the last three shakes.
+**Before you update:**
 
-### Changed
-- One motion, one gesture: knob steps are held 0.3 s and dropped if the motion
-  turns out to be a shake, a jolt or a fall. A shake used to fire two knob
-  steps before it was recognised.
-- The knob ignores turns with the token tilted more than 40° from level (was
-  60°): knocking it edge-on against the table no longer turns it.
-- Slow knob turns are counted: the knob follows rotation from 10 °/s (was
-  15 °/s) and keeps a partial turn through 1 s pauses (was 0.6 s). A slow hand
-  turn of one revolution used to report 8-10 of its 12 steps, now 11.
-- Knob turns are integrated over the frames' arrival times instead of one
-  sample period per frame: with half the frames lost the knob used to report
-  half the steps.
-- The gyro's zero offset is learned while the token lies still and subtracted
-  from knob turns and the card's 3D model; it is kept across reconnects.
-  "Still" means the readings spread by under 0.5 °/s over half a second, so a
-  steady hand does not count, and an offset learned wrongly is replaced the
-  next time the token lies on the table.
-- For 30 s after Home Assistant starts, a token heard only through a local
-  adapter waits for the Bluetooth proxies instead of connecting at once: the
-  link used to go through the Pi's adapter at −85 dBm before the proxies had
-  reported the token.
-- Firmware that streams faster than requested no longer speeds up gesture
-  timing (multi-press window, long press).
+- The press that wakes the cap now also arrives as `press` (*Count the
+  wake-up as a press* is turned on once for existing installs). An automation
+  that catches the first press through `wake` will run twice: drop the `wake`
+  trigger or turn the option off.
+- Automations copied from the docs could run on their own after a restart.
+  Add `not_from: unavailable` to their trigger, as the examples now do.
+- From 0.3.0b1: tilt sends `tilt_right` / `tilt_left`, not `rotate_cw` /
+  `rotate_ccw` with `source: tilt`.
 
 ### Fixed
-- Battery: a stream pause now reports its highest level, once. The token can
-  send a low series (21-27 %) alongside the real one (82-94 %) during the
-  pause; each value went to the sensor and the last one counted as the level
-  at rest, so a pause ending on a low value could have turned on the battery
-  saver and raised the low-battery notice on a healthy cell.
-- Knob: a link that holds the stream back for a second or two and then
-  delivers it at once no longer drops a partial turn.
-- A token in its firmware-update bootloader (advertising as `TrikiDfu…`) is
-  no longer offered as a new device.
-- The LED switch keeps its last known state across Home Assistant restarts. It
-  read unknown until the token next woke, which could take hours.
-- Docs: the IMU axes in `docs/protocol.md`. +z points out of the green PCB (Ż)
-  side, not the metal side. The status byte section says what is known.
+
+- Picking the cap up turned the knob: ten pick-ups made 24 steps, now 2.
+- Slow knob turns lost steps (8-10 of 12 per revolution, now 11), and so did
+  a link that drops frames or delivers them in bursts.
+- A shake added knob steps before it was recognised.
+- Wrist swings while picking the cap up counted as a shake. A shake now needs
+  a jolt of 3 g or more: real shakes reach 6-17 g, the swings 1-2 g.
+- A healthy cell could read 21-27 % for a moment and turn on the battery saver
+  and the low-battery notice.
+- Knocking the cap on its edge against the table turned the knob: turns with
+  the cap more than 40° from level (was 60°) are ignored.
+- Saving the options right after an idle disconnect linked up to the dozing
+  cap again.
+- The LED switch and the card showed the LED on while it was off: the cap
+  reads its LED register back as `ff` whatever the LED does. The LED is now
+  shown as on and off buttons, and as on only after Home Assistant turned it
+  on during the current link.
+- A cap in firmware-update mode (`TrikiDfu…`) was offered as a new device.
+- Firmware that streams faster than asked sped up gesture timing.
+- Docs: the cap wakes only on a button press, not on motion; the IMU axes in
+  `docs/protocol.md`.
+
+### Changed
+
+- The press that wakes the cap is counted only after real sleep, not after a
+  restart or a dropped link.
+- The gyro's zero offset is learned while the cap lies still, so the knob and
+  the card's model do not drift.
+- For 30 s after Home Assistant starts, a cap heard only through a local
+  adapter waits for the Bluetooth proxies before linking up.
+- Setup and option texts reworded in English, Polish and Russian. Some option
+  names changed (the keys did not). The pitch and roll sensors are *Tilt
+  forward-back* and *Tilt left-right*; entity ids stay `_pitch` and `_roll`.
+- *Configure* shows the gestures first; rate, timing, the knob step and
+  debug options fold away under *Advanced*.
+- The README starts with install, what the cap can do and the card.
+
+### Added
+
+- **Live 3D card** (*Triki live 3D*), served by the integration, nothing to
+  install. See docs/live-card.md.
+  - The cap in 3D, its sensors, and a list of gestures that light up as they
+    fire.
+  - **Check** (admins only) walks through the button, the knob and the enabled
+    gestures, shows each move on the model, names the likely cause when a step
+    fails and offers the setting that fixes it.
+  - **Calibrate** and **Align direction** match the model to the cap.
+  - Every part can be hidden, from a visual editor. Several caps get tabs.
+  - After a Home Assistant restart it says the direction is unknown until
+    **Align direction**.
+  - English, Polish and Russian, from the Home Assistant language.
+- **Device triggers**: in the automation editor, *Add trigger → Device →
+  Triki → Press* (or any gesture turned on), no template needed.
+- Two **blueprints** with one-click import: a light remote (press toggles, the
+  knob dims, long press sets a brightness) and an action for each gesture.
+- Adding a cap asks which gestures to turn on.
+- *Tilt in the hand*, off by default: hold the cap level and lean it right or
+  left by 25-80° for `tilt_right` / `tilt_left`, repeated every 0.4 s while it
+  stays leaned.
+- Sensors: *Readiness* (will a press get through now; for about 3 minutes
+  after an idle disconnect presses are missed), *Link quality* (share of
+  motion frames received, with a repair notice after three bad sessions) and
+  *Face up*.
+- `speed` (°/s) in knob events.
+- Russian translation.
+- Diagnostics: `measured_rate`, `gyro_bias`, `link_via` and the stream before
+  the last three shakes; the debug log notes a swing too soft to be a shake.
 
 ## [0.2.5] - 2026-11-14
 

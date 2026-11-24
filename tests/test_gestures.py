@@ -169,7 +169,9 @@ def test_shake():
     d = det()
     ev = []
     for i in range(8):  # ~6 Hz wrist shake
-        ev += feed(d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, az=1.0)
+        ev += feed(
+            d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, ax=5.0 if i % 2 else -5.0, az=1.0
+        )
     assert "shake" in types(ev)
     assert not any(t.startswith("rotate") for t in types(ev))
 
@@ -234,7 +236,9 @@ def test_knob_off_reports_no_rotation():
 def _shake(d, swings):
     ev = []
     for i in range(swings):  # ~6 Hz swings, real shakes peak at 1000-2300 dps
-        ev += feed(d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, az=1.0)
+        ev += feed(
+            d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, ax=5.0 if i % 2 else -5.0, az=1.0
+        )
     return ev
 
 
@@ -246,6 +250,20 @@ def test_long_shake_is_one_event_and_next_shake_fires_again():
     ev = feed(d, secs(1.5), az=1.0)  # pause
     ev += _shake(d, 8)
     assert types(ev).count("shake") == 1
+
+
+def test_swings_without_a_jolt_are_not_a_shake(caplog):
+    """A pick-up that swings the wrist fast (1230 deg/s on hardware) but without
+    the jolt of a shake (1.0-2.1 g) fired shake on 2026-11-23 and 2026-11-24."""
+    d = det()
+    ev = []
+    for i in range(10):
+        ev += feed(
+            d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, ax=1.5 if i % 2 else -1.5, az=1.0
+        )
+    assert "shake" not in types(ev)
+    # said once in the debug log, for a bug report
+    assert caplog.text.count("without a jolt") == 1, caplog.text
 
 
 def test_hand_motion_is_not_a_shake():
@@ -263,7 +281,9 @@ def test_shake_option_reports_only_shake():
     feed(d, RATE // 2)
     ev = []
     for i in range(8):
-        ev += feed(d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, az=1.0)
+        ev += feed(
+            d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, ax=5.0 if i % 2 else -5.0, az=1.0
+        )
     assert set(types(ev)) == {"shake"}
 
 
@@ -274,7 +294,9 @@ def test_shake_off_reports_nothing():
     feed(d, RATE // 2)
     ev = []
     for i in range(8):
-        ev += feed(d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, az=1.0)
+        ev += feed(
+            d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, ax=5.0 if i % 2 else -5.0, az=1.0
+        )
     assert types(ev) == []
 
 
@@ -303,8 +325,12 @@ def timed(rate, loss, seed, segments):
     return events
 
 
-def swings(count, dps, seconds=0.08):
-    return [(seconds, {"gx": dps if i % 2 else -dps, "az": 1.0}) for i in range(count)]
+def swings(count, dps, seconds=0.08, jolt=5.0):
+    """Swings of a shake: a real one jolts 6-17 g at every reversal."""
+    return [
+        (seconds, {"gx": dps if i % 2 else -dps, "ax": jolt if i % 2 else -jolt, "az": 1.0})
+        for i in range(count)
+    ]
 
 
 TWO_SHAKES = [*swings(26, 1500.0), (1.5, {"az": 1.0}), *swings(14, 1500.0)]  # 2.1 s, 1.1 s
@@ -334,7 +360,7 @@ def test_shake_at_idle_rate_with_heavy_loss_is_a_data_limit():
 @pytest.mark.parametrize("rate", [52, 26])
 @pytest.mark.parametrize("seed", range(5))
 def test_hand_motion_with_frame_loss_is_not_a_shake(rate, seed):
-    ev = timed(rate, 0.5, seed, swings(14, 400.0))
+    ev = timed(rate, 0.5, seed, swings(14, 400.0, jolt=0.0))
     assert "shake" not in types(ev)
 
 
@@ -373,7 +399,9 @@ def test_motion_gestures_option_does_not_enable_knob_or_shake():
     assert types(feed(d, secs(1.0), gz=185.0)) == []
     ev = []
     for i in range(8):
-        ev += feed(d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, az=1.0)
+        ev += feed(
+            d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, ax=5.0 if i % 2 else -5.0, az=1.0
+        )
     assert "shake" not in types(ev)
     feed(d, secs(0.4))  # at rest, as a tap needs
     assert "tap" in types(feed(d, 2, az=3.0) + feed(d, secs(0.3)))  # the experimental ones do work

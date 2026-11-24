@@ -10,11 +10,11 @@ device-independent automations.
 | `event_type` | Data | When |
 |---|---|---|
 | `wake` | | The token woke up and the link is established. Not emitted on a quick resume after a weak-signal drop. |
-| `press` | `count: 1`; `source: wake` for synthetic presses | Button released (immediately, or after the multi-press window if that option is on). |
+| `press` | `count: 1`; `source: wake` for the press that woke the token | Button released (immediately, or after the multi-press window if that option is on). |
 | `double_press`, `triple_press` | `count` | Multi-press option on. |
 | `long_press` | | Button held for 0.8 s. Reported while still held; the release does not produce a `press`. |
-| `rotate_cw`, `rotate_ccw` | `steps`, `degrees`, `speed` | Turned around the vertical axis by at least one knob step, flat on a surface or held within 40° of level. Several steps can arrive in one event after a fast turn. Muted while the button is down and for 0.8 s after release, and for 0.5 s after a jolt, a shake or free fall. |
-| `rotate_cw`, `rotate_ccw` | `steps: 1`, `degrees`, `source: tilt` | *Tilt in the hand* option: the token held level and leaned right (`cw`) or left (`ccw`) by more than 25°; one step, then one every 0.4 s while it stays leaned. |
+| `rotate_cw`, `rotate_ccw` | `steps`, `degrees`, `speed` | Turned around the vertical axis by at least one knob step, flat on a surface or held within 40° of level. Once the token goes edge-on (picked up off the table, say), the knob is off until it lies still again. Not while the token is being picked up or handled: when less than 65 % of its turning over the last 0.5 s is about the vertical, the knob does not count. Several steps can arrive in one event after a fast turn. Muted while the button is down and for 0.8 s after release, and for 0.5 s after a jolt, a shake or free fall. |
+| `tilt_right`, `tilt_left` | `repeat` | *Tilt in the hand* option: the token held level and leaned right or left by more than 25°; one event with `repeat: false`, then one every 0.4 s with `repeat: true` while it stays leaned. |
 | `shake` | | Several quick back-and-forth swings. One event per episode. |
 | `tap` | | A jolt on a token that is at rest: a finger tap on the table, a light knock. Reported once the token is still again (up to 0.4 s). Motion gestures option. |
 | `throw` | | Free fall of at least 60 ms: a toss or a drop. Motion gestures option. |
@@ -28,12 +28,12 @@ and a Raspberry Pi 5 adapter):
 | Gesture | Status |
 |---|---|
 | wake, press, long press, double and triple press | Reliable. |
-| rotate | Reliable flat on a surface or held level. On the 29 Oct 2026 session a brisk back-and-forth spin on the table reported 85 % of the turned angle, between the fingers 65–70 % (the rest is the remainder dropped at every reversal and pause). A press twists the token in the hand; those false rotations are filtered. Picking the token up and turning it in the same move still counts as a turn. |
+| rotate | Reliable flat on a surface or held level. On the 29 Oct 2026 session a brisk back-and-forth spin on the table reported 85 % of the turned angle, between the fingers 65–70 % (the rest is the remainder dropped at every reversal and pause). A press twists the token in the hand; those false rotations are filtered. A token that went edge-on on the way up does not turn the knob until it lies still again. |
 | shake | Confirmed: 4 of 4 through a proxy, one event per shake about a second after it starts, no false taps or rotations while swinging. Timed on the frames' arrival clock, so lost frames and the 26 Hz idle rate only delay it. |
 | tap | Confirmed on the table: 4 of 5 finger taps. Not detected when the token is knocked against something while being moved in the hand (by design: it must be at rest before the jolt). |
 | throw | Confirmed: 3 tosses and a drop gave 5 events, a catch can count twice. |
 | flip | Confirmed on a real turn-over. Also fires when the token is held upside down in the hand for 0.3 s. |
-| tilt in the hand | Confirmed: 5 steps right (`rotate_cw`) and 5 left (`rotate_ccw`) in the card's check, no wrong side; no false steps from knocks or tosses on the recorded sessions. |
+| tilt in the hand | Confirmed: 5 steps right and 5 left in the card's check, no wrong side; no false steps from knocks or tosses on the recorded sessions. |
 
 ## Bus event
 
@@ -52,6 +52,19 @@ data:
 pauses left out. On hardware a slow hand turn reads 25-40, a normal one 40-150,
 a flick of the wrist several hundred.
 
+## Blueprints
+
+Two blueprints cover the usual cases without YAML. Import one, then create an
+automation from it and pick the cap's Action entity.
+
+| Blueprint | What it does | |
+|---|---|---|
+| Light remote | Press toggles a light, the knob dims it (never below 1 %, so it does not switch off), long press sets a brightness (100 % by default). The step per knob notch is an input. | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Felenium3%2Fha-triki%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftriki%2Ftriki_light.yaml) |
+| An action for each gesture | One action field per gesture: press, double, triple and long press, both knob directions, tilt right and left, shake, flip. Empty fields do nothing. In knob actions `{{ steps }}` is the number of notches. | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Felenium3%2Fha-triki%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftriki%2Ftriki_actions.yaml) |
+
+Both ignore the event entity coming back from unavailable after a restart.
+The source is in [`blueprints/automation/triki`](../blueprints/automation/triki).
+
 ## Example: button toggles a light, knob dims it, long press for full warm white
 
 This is the setup the integration was developed with. It is split into three
@@ -68,6 +81,7 @@ automation:
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -83,6 +97,7 @@ automation:
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -109,6 +124,7 @@ automation:
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -131,6 +147,7 @@ automation:
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -169,6 +186,7 @@ Add a condition on `sensor.triki_face_up` to each knob automation:
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -202,6 +220,7 @@ step; otherwise the whole effect waits for the slowest lamp.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -240,6 +259,7 @@ a fast turn must not queue twenty service calls behind a slow receiver.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -255,6 +275,7 @@ a fast turn must not queue twenty service calls behind a slow receiver.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -275,6 +296,7 @@ a fast turn must not queue twenty service calls behind a slow receiver.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -294,6 +316,7 @@ a fast turn must not queue twenty service calls behind a slow receiver.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -318,6 +341,7 @@ a fast turn must not queue twenty service calls behind a slow receiver.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: "{{ trigger.to_state.state not in ['unavailable', 'unknown'] }}"
@@ -359,6 +383,7 @@ who cannot find the button.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -389,6 +414,7 @@ right after the link comes up. Here it shows whether a window is open.
     triggers:
       - trigger: state
         entity_id: event.triki_action
+        not_from: unavailable  # a restart restores the last event
     conditions:
       - condition: template
         value_template: >-
@@ -422,18 +448,31 @@ a plain numeric state trigger is enough.
 
 ## Using the device trigger UI
 
-The event entity works with the standard *State* trigger in the automation
-editor. Pick the `event.<name>_action` entity, leave *to* empty, and add a
-template condition on `trigger.to_state.attributes.event_type` as in the
-examples above. The state of an event entity is the timestamp of the last event,
-which is why the trigger fires on every gesture even when two identical gestures
-follow each other.
+In the automation editor: *Add trigger → Device → your Triki*, then pick a
+gesture (*Press*, *Long press*, *Knob clockwise*…). The list shows the gestures
+turned on for the cap. Knob events carry `steps` in
+`trigger.event.data.steps`.
+
+```yaml
+triggers:
+  - trigger: device
+    domain: triki
+    device_id: 0123456789abcdef0123456789abcdef
+    type: press
+```
+
+Device triggers listen to the `triki_event` bus event, so a restart does not
+fire them. The State trigger on `event.<name>_action` used in the examples
+above works too; it needs the template condition on `event_type` and
+`not_from: unavailable`.
 
 ## Tips
 
 - Multi-press delays single presses by the window (0.3–0.5 s). If you do not use
   double or triple press, leave the option off and presses are instant.
-- The press that wakes a sleeping token is reported as `wake`, not `press`. If
-  you want the first press to count, enable *Treat wake-up as a press*.
+- The press that wakes a sleeping token arrives as `wake` and then `press` with
+  `source: wake` (*Count the wake-up as a press*, on by default). Use `press` for
+  "the button was pressed"; `wake` alone also fires after a Home Assistant
+  restart or a dropped link, when nobody pressed anything.
 - Holding the link (sleep timeout 0) makes the token react at any time but costs
   battery; see [Configuration](configuration.md#idle-and-sleep-how-the-link-behaves).

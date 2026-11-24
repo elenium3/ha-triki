@@ -291,6 +291,23 @@ async def test_migrate_v1_without_idle_timeout_keeps_defaults(
     assert entry.runtime_data.options.sleep_timeout == DEFAULT_SLEEP_TIMEOUT
 
 
+async def test_wake_as_press_is_turned_on_once(hass: HomeAssistant) -> None:
+    """The old default (off) was saved with any change of options: 0.3.0 turns it
+    on once, without a version bump (an older release must still load the entry),
+    and leaves a later choice alone."""
+    entry = await _setup_entry(hass, options={"wake_as_press": False, CONF_RATE: 26})
+    assert entry.version == 2
+    assert entry.options["wake_as_press"] is True
+    assert entry.options[CONF_RATE] == 26
+    assert entry.data["wake_press_on"] is True
+    assert entry.runtime_data.options.wake_as_press is True
+    # the owner turns it off again: that sticks across a reload
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "wake_as_press": False})
+    await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.options["wake_as_press"] is False
+
+
 async def test_migrate_refuses_newer_entry(hass: HomeAssistant, mock_bluetooth) -> None:
     entry = MockConfigEntry(
         domain=DOMAIN, unique_id=ADDRESS, title=NAME, data={CONF_ADDRESS: ADDRESS}, version=3
@@ -331,20 +348,31 @@ async def test_capture_stops_at_the_size_limit(
     await hass.async_block_till_done()
 
 
-@pytest.mark.parametrize("restored", ["on", "off"])
-async def test_led_state_restored_while_asleep(
-    hass: HomeAssistant, mock_bluetooth, restored: str
+async def test_the_led_state_is_only_what_was_set_on_this_link(
+    hass: HomeAssistant, mock_bluetooth
 ) -> None:
-    """After a restart the sleeping token's LED shows its last known state, not unknown."""
-    mock_restore_cache(hass, [State(LED, restored)])
+    """The token's CTRL reads back ff whatever its LED shows (firmware 3.2.1-A,
+    2026-11-24: the switch said on for a day while the LED was off). The switch
+    knows only what Home Assistant set during the current link."""
+    mock_restore_cache(hass, [State(LED, "on")])
     entry = MockConfigEntry(
         domain=DOMAIN, unique_id=ADDRESS, title=NAME, data={CONF_ADDRESS: ADDRESS}
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    assert hass.states.get(LED).state == restored
-    assert entry.runtime_data.led_on is (restored == "on")
+    state = hass.states.get(LED)
+    assert state.state == STATE_UNKNOWN  # a restart: nothing is known
+    assert state.attributes.get("assumed_state") is True  # on/off buttons, not a toggle
+    client, _ = await connect(hass, entry)
+    assert hass.states.get(LED).state == STATE_UNKNOWN  # not read from the token
+    assert all(c.args[0] != CTRL_UUID for c in client.read_gatt_char.await_args_list)
+    await entry.runtime_data.async_set_led(True)
+    await hass.async_block_till_done()
+    assert hass.states.get(LED).state == "on"
+    entry.runtime_data._on_disconnect(client)
+    await hass.async_block_till_done()
+    assert hass.states.get(LED).state == STATE_UNKNOWN  # dozing: not known any more
 
 
 async def test_face_sensor(hass: HomeAssistant, setup) -> None:

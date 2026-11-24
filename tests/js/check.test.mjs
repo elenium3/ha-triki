@@ -191,7 +191,7 @@ test("a 45 degree knob step expects 4 steps; the knob off measures the turn only
   run.start();
   turn(run, clock, 180, 0);
   run.done();
-  assert.equal(run.results.turn_ccw.status, "skip");
+  assert.equal(run.results.turn_ccw.status, "pass");
   assert.equal(run.results.turn_ccw.reason, "knob_off");
 });
 
@@ -301,7 +301,7 @@ test("tap needs two taps, shake one; a step that sees none fails", () => {
   ({ run, clock } = rig());
   goTo(run, "shake");
   run.start();
-  clock.advance(31_000);
+  clock.advance(61_000);
   assert.equal(run.results.shake.reason, "not_detected");
   assert.equal(run.view().optional, false);
 });
@@ -360,14 +360,28 @@ test("the lean step is there only with the tilt option", () => {
   assert.ok(new CheckRun({ options: { ...OPTS, tilt: true } }).steps.some((s) => s.id === "lean"));
 });
 
-test("lean: right then left passes; repeats while held are fine", () => {
+// right, left, three times
+function leanAll(run) {
+  for (let i = 0; i < 3; i++) {
+    run.feedEvent("tilt_right", { repeat: false });
+    run.feedEvent("tilt_left", { repeat: false });
+  }
+}
+
+test("lean: right then left three times passes; repeats while held are fine", () => {
   const { run } = rig({ ...OPTS, tilt: true });
   goTo(run, "lean");
   run.start();
-  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
-  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" }); // held: a repeat
+  run.feedEvent("tilt_right", { repeat: false });
+  run.feedEvent("tilt_right", { repeat: true }); // held: a repeat
   assert.equal(run.view().live.count, 1);
-  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" });
+  assert.equal(run.view().live.want, 6);
+  run.feedEvent("tilt_left", { repeat: false });
+  assert.equal(run.phase, "running");
+  for (let i = 0; i < 2; i++) {
+    run.feedEvent("tilt_right", { repeat: false });
+    run.feedEvent("tilt_left", { repeat: false });
+  }
   assert.equal(run.results.lean.status, "pass");
   assert.equal(run.results.lean.values.repeats, 1);
 });
@@ -376,11 +390,10 @@ test("lean: the other side first warns; a knob step during it is a false alarm",
   const { run, clock } = rig({ ...OPTS, tilt: true });
   goTo(run, "lean");
   run.start();
-  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" }); // held the wrong way round
+  run.feedEvent("tilt_left", { repeat: false }); // held the wrong way round
   assert.equal(run.view().live.hint, "lean_wrong");
   run.feedEvent("rotate_cw", { steps: 1 }); // the knob, not the lean
-  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
-  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" });
+  leanAll(run);
   const r = run.results.lean;
   assert.equal(r.status, "warn");
   assert.match(r.values.extra, /rotate_cw×1/);
@@ -388,19 +401,29 @@ test("lean: the other side first warns; a knob step during it is a false alarm",
   const again = rig({ ...OPTS, tilt: true });
   goTo(again.run, "lean");
   again.run.start();
-  again.run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
-  again.clock.advance(41_000);
+  again.run.feedEvent("tilt_right", { repeat: false });
+  again.clock.advance(61_000);
   assert.equal(again.run.results.lean.reason, "lean_left");
   void clock;
 });
 
-test("lean follows invert_rotation", () => {
+test("lean does not follow invert_rotation: right is tilt_right", () => {
   const { run } = rig({ ...OPTS, tilt: true, invert_rotation: true });
   goTo(run, "lean");
   run.start();
-  run.feedEvent("rotate_ccw", { steps: 1, source: "tilt" });
-  run.feedEvent("rotate_cw", { steps: 1, source: "tilt" });
+  leanAll(run);
   assert.equal(run.results.lean.status, "pass");
+});
+
+test("a lean is never counted as a knob step", () => {
+  const { run, clock } = rig({ ...OPTS, tilt: true });
+  goTo(run, "turn_cw");
+  run.start();
+  run.feedEvent("tilt_right", { repeat: false });
+  turn(run, clock, -180, 6);
+  run.done();
+  assert.equal(run.results.turn_cw.values.steps, 6);
+  assert.equal(run.results.turn_cw.values.wrong, 0);
 });
 
 test("the flat step is confirmed straight away, without a Start", () => {
@@ -415,4 +438,328 @@ test("the flat step is confirmed straight away, without a Start", () => {
   run.next();
   assert.notEqual(run.step.id, "flat");
   assert.equal(run.view().external, false); // the next step has its Start again
+});
+
+// ------------------------------------------------------------------ suggestions
+const keys = (run) => run.suggestions().map((g) => `${g.key}=${g.value}`);
+
+test("turns that came out the other way round both times suggest swapping the direction", () => {
+  const { run, clock } = rig();
+  goTo(run, "turn_cw");
+  run.start();
+  turn(run, clock, -180, 6, "rotate_ccw"); // the hand turned clockwise, the events said ccw
+  run.done();
+  run.next();
+  run.start();
+  turn(run, clock, 180, 6, "rotate_cw");
+  run.done();
+  assert.deepEqual(keys(run), ["invert_rotation=true"]);
+  assert.match(run.report(), /suggest invert_rotation: false -> true/);
+});
+
+test("one turn the wrong way, or a hand that turned the wrong way, suggests nothing", () => {
+  let { run, clock } = rig();
+  goTo(run, "turn_cw");
+  run.start();
+  turn(run, clock, -180, 6, "rotate_ccw");
+  run.done();
+  run.next();
+  run.start();
+  turn(run, clock, 180, 6, "rotate_ccw"); // this one was right
+  run.done();
+  assert.deepEqual(keys(run), []);
+
+  ({ run, clock } = rig());
+  goTo(run, "turn_cw");
+  run.start();
+  turn(run, clock, 180, 6, "rotate_ccw"); // turned the wrong way: redo, not a setting
+  run.done();
+  assert.deepEqual(keys(run), []);
+});
+
+test("a lossy link suggests 26 Hz, unless it already runs at 26", () => {
+  let { run, clock } = rig();
+  run.start();
+  stream(run, clock, 10.1, 26);
+  assert.deepEqual(keys(run), ["sample_rate=26"]);
+
+  ({ run, clock } = rig());
+  run.start();
+  stream(run, clock, 10.1, 13, () => ({ rate: 26 }));
+  assert.equal(run.results.rest.reason, "loss");
+  assert.deepEqual(keys(run), []);
+});
+
+test("a double press that came as two presses suggests a wider window", () => {
+  const { run, clock } = rig({ ...OPTS, multi_press_window: 0.3 });
+  goTo(run, "press");
+  run.start();
+  run.feedEvent("press", { count: 1 }); // the single press asked for first
+  clock.advance(3000);
+  run.feedEvent("press", { count: 1 }); // the double press, 0.45 s apart
+  clock.advance(450);
+  run.feedEvent("press", { count: 1 });
+  clock.advance(61000); // the step times out without a double_press
+  assert.equal(run.results.press.status, "fail");
+  assert.equal(run.results.press.values.double_gap, 0.45);
+  const [g] = run.suggestions();
+  assert.equal(g.key, "multi_press_window");
+  assert.equal(g.value, 0.5);
+  assert.equal(g.from, 0.3);
+});
+
+test("a double press that made it on a retry still suggests the window", () => {
+  const { run, clock } = rig({ ...OPTS, multi_press_window: 0.3 });
+  goTo(run, "press");
+  run.start();
+  run.feedEvent("press", { count: 1 });
+  clock.advance(3000);
+  run.feedEvent("press", { count: 1 }); // the first try came as two presses
+  clock.advance(450);
+  run.feedEvent("press", { count: 1 });
+  clock.advance(2000);
+  run.feedEvent("double_press", { count: 2 }); // the retry made it
+  clock.advance(2000);
+  run.feedEvent("long_press", {});
+  clock.advance(100);
+  assert.equal(run.results.press.status, "pass");
+  assert.equal(run.results.press.values.double_gap, 0.45);
+  assert.deepEqual(keys(run), ["multi_press_window=0.5"]);
+});
+
+test("a window that already fits, or presses far apart, suggest nothing", () => {
+  const { run, clock } = rig({ ...OPTS, multi_press_window: 0.6 });
+  goTo(run, "press");
+  run.start();
+  run.feedEvent("press", { count: 1 });
+  clock.advance(400);
+  run.feedEvent("press", { count: 1 });
+  clock.advance(2000);
+  run.feedEvent("press", { count: 1 });
+  clock.advance(61000);
+  assert.deepEqual(keys(run), []);
+});
+
+test("a shake or a lean that fires by itself twice suggests turning it off", () => {
+  let { run, clock } = rig({ ...OPTS, tilt: true });
+  goTo(run, "turn_cw");
+  run.start();
+  run.feedEvent("shake");
+  run.feedEvent("tilt_right", { repeat: false });
+  turn(run, clock, -180, 6);
+  run.done();
+  run.next();
+  run.start();
+  run.feedEvent("shake");
+  run.feedEvent("tilt_left", { repeat: false });
+  turn(run, clock, 180, 6, "rotate_ccw");
+  run.done();
+  assert.deepEqual(keys(run), ["shake=false", "tilt=false"]);
+
+  ({ run, clock } = rig());
+  goTo(run, "turn_cw");
+  run.start();
+  run.feedEvent("shake"); // once is a remark, not a setting
+  turn(run, clock, -180, 6);
+  run.done();
+  assert.deepEqual(keys(run), []);
+});
+
+test("a redone step forgets what fired during the first try", () => {
+  const { run, clock } = rig();
+  goTo(run, "turn_cw");
+  run.start();
+  run.feedEvent("shake");
+  run.feedEvent("shake");
+  turn(run, clock, -180, 6);
+  run.done();
+  run.redo();
+  run.start();
+  turn(run, clock, -180, 6);
+  run.done();
+  assert.deepEqual(keys(run), []);
+});
+
+// a burst of fast rotation (a shake try) in motion messages, then a quiet second
+function shakeTry(run, clock, { event = true } = {}) {
+  for (let i = 0; i < 12; i++) {
+    run.feedMotion(motion(clock, { gyro: [i % 2 ? 900 : -900, 0, 0] }));
+    clock.advance(33);
+    if (event && i === 8) run.feedEvent("shake");
+  }
+  for (let i = 0; i < 40; i++) {
+    run.feedMotion(motion(clock));
+    clock.advance(33);
+  }
+}
+
+test("shake: three tries, three shakes pass", () => {
+  const { run, clock } = rig();
+  goTo(run, "shake");
+  run.start();
+  shakeTry(run, clock);
+  shakeTry(run, clock);
+  assert.equal(run.phase, "running");
+  assert.deepEqual([run.view().live.count, run.view().live.want], [2, 3]);
+  shakeTry(run, clock);
+  assert.equal(run.results.shake.status, "pass");
+  assert.deepEqual(run.results.shake.values, { count: 3, tries: 3 });
+});
+
+test("shake: a try with no shake event is a miss", () => {
+  const { run, clock } = rig();
+  goTo(run, "shake");
+  run.start();
+  shakeTry(run, clock, { event: false }); // gentle: not recognised
+  assert.equal(run.view().live.tries, 1);
+  shakeTry(run, clock);
+  shakeTry(run, clock);
+  shakeTry(run, clock);
+  const r = run.results.shake;
+  assert.equal(r.status, "warn");
+  assert.equal(r.reason, "shake_missed");
+  assert.deepEqual(r.values, { count: 3, tries: 4 });
+});
+
+test("shake: the step ends after six tries even with misses", () => {
+  const { run, clock } = rig();
+  goTo(run, "shake");
+  run.start();
+  for (let i = 0; i < 6; i++) shakeTry(run, clock, { event: i === 2 });
+  assert.equal(run.results.shake.status, "warn");
+  assert.deepEqual(run.results.shake.values, { count: 1, tries: 6 });
+});
+
+// picked up (moved for `secs`), then put down and still for 1.2 s
+function handling(run, clock, secs = 1, during = () => {}) {
+  const n = Math.round(secs * 30);
+  for (let i = 0; i < n; i++) {
+    run.feedMotion(motion(clock, { gyro: [80, 60, 20], accel: [0.3, 0.2, -0.9] }));
+    if (i === Math.floor(n / 2)) during();
+    clock.advance(33);
+  }
+  for (let i = 0; i < 36; i++) {
+    run.feedMotion(motion(clock));
+    clock.advance(33);
+  }
+}
+
+test("handle: five pick-ups with nothing firing pass", () => {
+  const { run, clock } = rig();
+  goTo(run, "handle");
+  run.start();
+  for (let i = 0; i < 4; i++) handling(run, clock);
+  assert.equal(run.view().live.count, 4);
+  assert.equal(run.phase, "running");
+  handling(run, clock);
+  for (let i = 0; i < 20; i++) { run.feedMotion(motion(clock)); clock.advance(33); }
+  assert.equal(run.results.handle.status, "pass");
+  assert.deepEqual(run.results.handle.values, { count: 5 });
+});
+
+test("handle: a nudge is not a pick-up; what fires is a false alarm and counts for suggestions", () => {
+  const { run, clock } = rig({ ...OPTS, tilt: true });
+  goTo(run, "handle");
+  run.start();
+  handling(run, clock, 0.2); // a nudge
+  assert.equal(run.view().live.count, 0);
+  handling(run, clock, 1, () => run.feedEvent("rotate_cw", { steps: 1 }));
+  handling(run, clock, 1, () => run.feedEvent("shake"));
+  handling(run, clock, 1, () => run.feedEvent("tilt_right", { repeat: false }));
+  handling(run, clock, 1, () => run.feedEvent("tilt_left", { repeat: false }));
+  handling(run, clock, 1, () => run.feedEvent("shake"));
+  for (let i = 0; i < 20; i++) { run.feedMotion(motion(clock)); clock.advance(33); }
+  const r = run.results.handle;
+  assert.equal(r.status, "warn");
+  assert.match(r.values.extra, /rotate_cw×1/);
+  assert.deepEqual(keys(run), ["shake=false", "tilt=false"]);
+});
+
+test("handle: holding it still in the hand is not putting it down", () => {
+  const { run, clock } = rig();
+  goTo(run, "handle");
+  run.start();
+  for (let i = 0; i < 30; i++) { // picked up
+    run.feedMotion(motion(clock, { gyro: [80, 60, 20], accel: [0.3, 0.2, -0.9] }));
+    clock.advance(33);
+  }
+  for (let i = 0; i < 60; i++) { // held for 2 s: a hand trembles
+    run.feedMotion(motion(clock, { gyro: [15, 12, 8], accel: [0.1, 0.1, -0.99] }));
+    clock.advance(33);
+  }
+  assert.equal(run.view().live.count, 0);
+  for (let i = 0; i < 36; i++) { run.feedMotion(motion(clock)); clock.advance(33); } // on the table
+  assert.equal(run.view().live.count, 1);
+});
+
+test("handle: too few pick-ups by the time limit fail", () => {
+  const { run, clock } = rig();
+  goTo(run, "handle");
+  run.start();
+  handling(run, clock);
+  clock.advance(91_000);
+  assert.equal(run.results.handle.reason, "handle_few");
+});
+
+const SLEEP_OPTS = { ...OPTS, wake_as_press: true };
+
+function toSleep(clock, run) {
+  goTo(run, "sleep");
+  assert.equal(run.view().optional, true);
+  assert.ok(run.start());
+}
+
+test("sleep: drop, doze, asleep, a press wakes it: pass with the doze time", () => {
+  const { run, clock } = rig(SLEEP_OPTS);
+  toSleep(clock, run);
+  run.feedStatus({ ...LIVE, connected: false, streaming: false, readiness: "dozing", doze_left_s: 180 });
+  assert.equal(run.phase, "running"); // the drop does not pause this step
+  assert.equal(run.view().live.stage, 1);
+  clock.advance(178_000);
+  run.feedStatus({ ...LIVE, connected: false, streaming: false, readiness: "asleep" });
+  assert.equal(run.view().live.stage, 2);
+  clock.advance(5_000);
+  run.feedStatus({ ...LIVE, readiness: "connected" });
+  run.feedEvent("wake");
+  assert.equal(run.phase, "running"); // the wake press is on its way
+  run.feedEvent("press", { count: 1, source: "wake" });
+  const r = run.results.sleep;
+  assert.equal(r.status, "pass");
+  assert.equal(r.values.doze_s, 178);
+});
+
+test("sleep: connecting while dozing fails; so does no sleep in time", () => {
+  let { run, clock } = rig(SLEEP_OPTS);
+  toSleep(clock, run);
+  run.feedStatus({ ...LIVE, connected: false, streaming: false, readiness: "dozing" });
+  clock.advance(10_000);
+  run.feedStatus({ ...LIVE, readiness: "connected" });
+  assert.equal(run.results.sleep.reason, "woke_dozing");
+
+  ({ run, clock } = rig(SLEEP_OPTS));
+  toSleep(clock, run);
+  run.feedStatus({ ...LIVE, connected: false, streaming: false, readiness: "dozing" });
+  clock.advance(361_000);
+  assert.equal(run.results.sleep.reason, "no_sleep");
+});
+
+test("sleep: a wake with no press warns when the wake should be a press", () => {
+  const { run, clock } = rig(SLEEP_OPTS);
+  toSleep(clock, run);
+  run.feedStatus({ ...LIVE, connected: false, streaming: false, readiness: "dozing" });
+  clock.advance(180_000);
+  run.feedStatus({ ...LIVE, connected: false, streaming: false, readiness: "asleep" });
+  run.feedStatus({ ...LIVE, readiness: "connected" });
+  run.feedEvent("wake");
+  clock.advance(4_000);
+  assert.equal(run.results.sleep.reason, "no_wake_press");
+});
+
+test("a press before it slept does not end the sleep step", () => {
+  const { run, clock } = rig(SLEEP_OPTS);
+  toSleep(clock, run);
+  run.feedStatus({ ...LIVE, connected: false, streaming: false, readiness: "dozing" });
+  run.feedEvent("press");
+  assert.equal(run.phase, "running");
+  void clock;
 });

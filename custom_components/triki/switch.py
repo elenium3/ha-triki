@@ -5,10 +5,9 @@ from __future__ import annotations
 from typing import Any
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
-from homeassistant.const import STATE_OFF, STATE_ON, EntityCategory
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from homeassistant.helpers.restore_state import RestoreEntity
 
 from . import TrikiConfigEntry
 from .entity import TrikiEntity
@@ -30,21 +29,13 @@ async def async_setup_entry(
     async_add_entities([TrikiLed(entry.runtime_data, DESCRIPTION)])
 
 
-class TrikiLed(TrikiEntity, SwitchEntity, RestoreEntity):
-    # keep the last known state while the token sleeps instead of flapping
-    # unavailable on every wake/sleep cycle; turning it on while asleep raises
+class TrikiLed(TrikiEntity, SwitchEntity):
+    # The token's LED cannot be read back (CTRL reads ff whatever it shows), so
+    # the state is only what Home Assistant set during the current link: on and
+    # off are offered as two buttons, not a toggle that claims to know.
+    _attr_assumed_state = True
+    # available while the token sleeps; turning it on then says it is asleep
     _requires_connection = False
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        # the token may sleep for hours: without this the LED reads unknown after
-        # every Home Assistant restart until it wakes and the CTRL read runs
-        if (
-            self.device.led_on is None
-            and (last := await self.async_get_last_state())
-            and last.state in (STATE_ON, STATE_OFF)
-        ):
-            self.device.led_on = last.state == STATE_ON
 
     @property
     def is_on(self) -> bool | None:

@@ -19,212 +19,332 @@ const BASE = new URL(".", import.meta.url).href;
 const VERSION = new URL(import.meta.url).searchParams.get("v") || "";
 const asset = (name) => `${BASE}${name}${VERSION ? `?v=${VERSION}` : ""}`;
 
+// The card's buttons, as named in its `buttons` option.
+const BUTTONS = ["calibrate", "align", "led", "check"];
+// status chips; "state" also carries the chip of a check open elsewhere
+const CHIPS = ["state", "rate", "signal", "battery", "link"];
+
+/** The card's texts in the user's language (profile, then server), else English. */
+function cardStrings(hass) {
+  return STRINGS[(hass.locale?.language || hass.language || "en").slice(0, 2)] || STRINGS.en;
+}
+
+/** The card config with its defaults filled in. */
+export function cardConfig(config) {
+  const c = { show_values: true, show_history: true, show_controls: true, show_model: true, show_status: true, show_gestures: true, ...config };
+  // show_controls: false is the old way to hide every button and the help
+  c.buttons = Array.isArray(c.buttons) ? c.buttons : (c.show_controls ? [...BUTTONS] : []);
+  c.show_help ??= !!c.show_controls;
+  // show_status: false is the old way to hide every chip
+  c.chips = Array.isArray(c.chips) ? c.chips : (c.show_status === false ? [] : [...CHIPS]);
+  return c;
+}
+
+// the gesture list: [item, events that light it, option that turns it on]
+const GESTURES = [
+  ["press", ["press", "single_press"], null], ["double_press", ["double_press"], "multi_press"],
+  ["triple_press", ["triple_press"], "multi_press"], ["long_press", ["long_press"], null],
+  ["knob", ["rotate_cw", "rotate_ccw"], "knob"], ["tilt", ["tilt_left", "tilt_right"], "tilt"],
+  ["shake", ["shake"], "shake"], ["flip", ["flip"], "motion_gestures"],
+  ["tap", ["tap", "double_tap"], "motion_gestures"], ["throw", ["throw"], "motion_gestures"],
+];
+
 const STRINGS = {
   en: {
     auto: "Auto", asleep: "Asleep", dozing: "Dozing off",
-    dozeHint: "Disconnected after idling. Put the cap down: once it has slept (up to ~3 min) a press wakes it again", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
-    wake: "Press or shake the cap to wake it", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
-    roll: "Left-right", pitch: "Forward-back", yaw: "Turn about the axis", reset: "Align direction", led: "LED", calibrate: "Calibrate",
-    help: { mark: "The yellow stripe on the model marks the edge with the dot above the letter Z (circled in the photo). It shows which way the model is turned.", cal: "<b>Calibrate</b> once per cap. The cap lies on the table, dot away from you: the model learns what level looks like for this cap, then you match the logo. It is saved for good.", align: "<b>Align direction</b> is needed from time to time. The cap senses tilt by itself, from gravity, but not which way it is turned: it has no compass. The gyroscope counts the turn and slowly drifts, and a Home Assistant restart loses it. When the stripe on the model is at a different edge than the dot on the cap, lay the cap dot away from you and press this button. The calibration stays." },
-    cal: { find: "Find the dot above the letter Z on the green side (circled in the photo). On the model that edge has the yellow stripe.", flat: "Lay the cap on the table, either side up, with that edge away from you, let go and press Done.", heading: "Lay the cap on the table with that edge away from you and press Done: the stripe on the model moves to the far edge too.", turned: "Direction aligned", logo: "Now the logo (once per cap: it is crimped on at any angle). Lay the cap green side up with the Z upright, dot at the top, then turn it over across its right edge. Turn the logo below with the slider until it looks like the one on your cap.", resin: "Green side", metal: "After turning over", next: "Done", cancel: "Cancel", skip: "Skip", saved: "Calibrated",
-      err: { moving: "It is moving: hold still for a second", not_flat: "It is not lying flat", asleep: "The cap is asleep: wake it first", no_data: "No data yet: wake the cap" } },
-    button: "Button", rate: "Hz", history: "Last 10 s", nodevice: "No Triki token found",
+    dozeHint: "Dropped after idle. Presses won't register for ~{n} s more, and each one restarts the 3-minute wait: put the cap down and leave it",
+    dozeLate: "Dropped after idle. Presses won't register until it falls asleep, and each one restarts the 3-minute wait: put the cap down and leave it", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
+    wake: "Press the cap to wake it", heading: "Direction unknown after a restart: lay the cap dot away from you and press Align direction.", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
+    roll: "Left-right", pitch: "Forward-back", yaw: "Turn", reset: "Align direction", led: "LED", calibrate: "Calibrate",
+    editor: { title: "Title", model: "Model style", show_model: "3D model and angles", chips: "Status chips", show_values: "Gyro and accelerometer bars",
+      show_history: "Last 10 s graph", show_gestures: "Gesture list", buttons: "Buttons", show_help: "Help under the buttons",
+      show_controls: "Buttons and help (legacy)", admin: "Only admins see Calibrate and Check.",
+      opt: { state: "State", rate: "Rate", signal: "Signal, dBm", battery: "Battery", link: "Frames received, %", cap: "Triki (built-in)", glb: "Flopsstuff (textured)" } },
+    help: { mark: "The yellow stripe on the model marks the edge with the dot above the Z (circled in the photo), so you can tell which way the model is turned.", cal: "<b>Calibrate</b> once per cap. Lay it on the table, dot away from you, so the model learns what level means for this cap, then match the logo. It's saved for good.", align: "<b>Align direction</b> now and then. The cap feels tilt through gravity, but it has no compass, so it can't tell which way it's turned. The gyroscope tracks turns but slowly drifts, and a Home Assistant restart loses the direction. If the stripe on the model isn't on the same edge as the dot on the cap, lay the cap dot away from you and press this button. Calibration is kept.",
+      led: "<b>LED</b> turns the cap's green light on and off. The cap can't report the light, so the button is lit only after you turn it on, until the cap dozes off. It drains the coin cell: keep it off unless you need it.",
+      check: "<b>Check</b> walks you through the link, the knob, the button and every gesture you've turned on, then suggests option changes. It takes a few minutes, and you can skip any step. Run it after setup or whenever a gesture misfires." },
+    cal: { find: "Find the dot above the Z on the green side (circled in the photo). On the model, that edge has the yellow stripe.", flat: "Lay the cap on the table, either side up, with that edge away from you. Let go and press Done.", heading: "Lay the cap on the table, that edge away from you, and press Done. The stripe on the model moves to the far edge too.", turned: "Direction aligned", logo: "Now the logo (once per cap: it's crimped on at any angle). Lay the cap green side up with the Z upright and the dot on top, then flip it over its right edge. Turn the logo below with the slider until it matches your cap.", resin: "Green side", metal: "After the flip", next: "Done", cancel: "Cancel", skip: "Skip", saved: "Calibrated",
+      err: { moving: "It's moving: hold still for a second", not_flat: "It's not lying flat", asleep: "The cap is asleep: wake it first", no_data: "No data yet: wake the cap" } },
+    glist: { title: "What the cap can do", hint: "Tap a name to see how. It lights up when the cap does it.", off: "turned off in the integration options",
+      knob: "Knob ↻ ↺", tilt: "Tilt ← →", how: { press: "Press the whole cap.", double_press: "Two quick presses.", triple_press: "Three quick presses.",
+        long_press: "Press and hold.", knob: "Turn it flat on the table, like a knob.", tilt: "Hold it in your hand and lean it right or left.",
+        shake: "Shake it sharply a few times.", flip: "Flip it onto the other side.", tap: "Tap the table next to it with a finger.", throw: "Toss it up and catch it." } },
+    button: "Button", rate: "Hz", linkq: "Frames received this session", history: "Last 10 s", nodevice: "No Triki cap found",
     check: { title: "Check", open: "Check",
-      steps: { rest: "Lying still", flat: "Starting position", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", lean: "Lean in the hand", press: "Button", flip: "Turn over", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift" },
+      steps: { rest: "Lying still", flat: "Starting position", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", handle: "Pick up and put down", lean: "Lean in the hand", press: "Button", flip: "Flip", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift", sleep: "Sleep and wake" },
       text: {
-        identify: "Pick the cap below, or press the button on it.",
-        wake: "Press the button on the cap to wake it.",
-        rest: "Put the cap on the table and do not touch it for 10 seconds. This measures the link and the sensor noise.",
-        flat: "Lay the cap on the table, dot away from you, let go and press Done. The model measures tilts and turns from this position.",
-        tilt: "Lift the edge with the dot by 2–3 cm and hold it. The model should tilt like the faint hint.",
-        turn_cw: "Turn the cap on the table a quarter turn clockwise: the stripe goes from the far edge to the right. Let go, regrip and turn another quarter. Then press Done.",
-        turn_ccw: "The same counter-clockwise: two quarter turns, letting go in between. Then press Done.",
-        lean: "Hold the cap level in your hand, stripe towards you. Lean it to the right until a step comes, level it, then lean it to the left.",
+        identify: "Pick the cap below, or just press it.",
+        wake: "Press the cap to wake it.",
+        rest: "Put the cap on the table and leave it alone for 10 seconds. This measures the link and the sensor noise.",
+        flat: "Lay the cap on the table, dot away from you, let go and press Done. Tilts and turns are measured from here, and it's saved as the cap's calibration too.",
+        tilt: "Lift the dot edge about 1 cm (a fingertip) and hold it for a second. The model should tilt like the faint hint.",
+        turn_cw: "Turn the cap a quarter turn clockwise on the table: the stripe moves from the far edge to the right. Let go, regrip and turn another quarter. Then press Done.",
+        turn_ccw: "Now the same counter-clockwise: two quarter turns, letting go in between. Then press Done.",
+        knobOff: "The knob is off in the options, so this step only checks that the model turns with the cap.",
+        lean: "Hold the cap level in your hand, dot edge towards you. Lean it right about 30° until Tilt → shows, then level it; lean it left, then level it. Do this three times.",
         tap: "Tap the table next to the cap with a finger 2–3 times, a second apart.",
-        shake: "Pick the cap up and give it 2–3 short shakes.",
-        throw: "Toss the cap 10–20 cm up and catch it. You can skip this.",
-        press: "Press the button in this order:",
+        shake: "Take the cap in your hand and shake it 3 times, a couple of seconds apart, just as you will in real use.",
+        handle: "Pick the cap up the way you would before a gesture, hold it and put it back. Do it 5 times, a bit differently each time. Don't turn or lean it on purpose: anything that fires is a false alarm. A pick-up counts once the cap lies still on the table again.",
+        sleep: "Put the cap down and leave it. Home Assistant now drops the link as if after idle: for about 3 minutes the cap dozes off and presses won't register. When this says Asleep, press the cap once. You can skip this step.",
+        throw: "Toss the cap 10–20 cm up and catch it. You can skip this one.",
+        press: "Press the cap in this order (long press: hold for about a second):",
         flip: "Turn the cap over, wait a second, then turn it back.",
-        drift: "Leave the cap lying for 30 seconds. This measures how far the direction drifts without motion.",
+        drift: "Leave the cap lying still for 30 seconds. This measures how far the direction drifts on its own.",
       },
-      start: "Start", done: "Done", redo: "Redo", skip: "Skip", next: "Next", close: "Close", report: "Report text",
-      paused: "The link dropped. The step starts over when the cap is back.",
-      busy: "This cap is being checked in another window.", other: "Check running",
-      stepOf: "Step {n} of {total}", count: "Steps", times: "Times", sec: "s", pick: "Which cap?", angle: "Turn", wrong: "wrong way",
-      status: { pass: "Good", warn: "Remarks", fail: "Failed", skip: "Skipped" },
-      summary: "Result", flipStage: ["Lay it flat first", "Turn it over", "Now turn it back", "Done"],
-      values: { rest: "{rate} Hz of {asked}, {loss_pct}% lost, noise {noise_dps}°/s, via {via}", turn: "{steps} steps for {angle}°", drift: "{drift_deg_min}°/min" },
+      start: "Start", done: "Done", redo: "Redo", skip: "Skip", next: "Next", close: "Close", report: "Bug report text",
+      paused: "Link lost. The step restarts when the cap is back. If it doesn't come back, wait for Asleep and press the cap.",
+      busy: "This cap is already being checked in another window.", other: "Check in progress",
+      stepOf: "Step {n} of {total}", sleepStage: ["Disconnecting…", "Dozing off: don't touch, ~{left} s left", "Asleep: press the cap once", "Woke up"], lifts: "Pick-ups", recognised: "Recognised", tries: "Tries: {n}", count: "Steps", leans: "Leans", times: "Times", sec: "s", pick: "Which cap?", angle: "Turn", wrong: "wrong way",
+      status: { pass: "Good", warn: "Notes", fail: "Failed", skip: "Skipped" },
+      summary: "Results", flipStage: ["Lay it flat first", "Turn it over", "Now turn it back", "Done"],
+      sug: { title: "Suggested changes", apply: "Save to options", err: "Not saved: {e}",
+        note: "These go to the integration options; the link drops briefly and reconnects.",
+        applied: "Saved. The cap reconnects with the new settings, or on its next press if it's asleep.",
+        invert_rotation: "The knob runs backwards: toggle Invert knob direction.",
+        sample_rate: "{loss}% of frames are lost: lower Sensor rate from {from} to {value} Hz.",
+        multi_press_window: "Your double press arrived as two presses: set Multi-press window to {value} s (now {from} s).",
+        shake: "Shake fired on its own ×{count}: turn it off.",
+        tilt: "Tilt in the hand fired on its own ×{count}: turn it off." },
+      values: { rest: "{rate} Hz of {asked}, {loss_pct}% lost, noise {noise_dps}°/s, via {via}", turn: "{steps} steps for {angle}°", drift: "{drift_deg_min}°/min", handle: "Pick-ups: {count}.", shake: "{count} of {tries}", sleep: "dozed for {doze_s} s" },
       reason: {
-        loss: "{loss_pct}% of the frames are lost. Move the cap closer to the receiver ({via}).",
-        noise: "The sensor is noisy: the table shakes or the cap was touched.",
-        moved: "The cap moved. Redo without touching it.",
+        loss: "{loss_pct}% of frames are lost. Move the cap closer to the receiver ({via}).",
+        noise: "The sensor is noisy: the table is shaking or the cap was touched.",
+        moved: "The cap moved. Redo it without touching the cap.",
         no_frames: "No data from the cap.",
-        not_raised: "The edge with the dot was not lifted.",
-        model_wrong: "The model tilted the wrong way. Redo the calibration.",
-        other_edge: "That is the other edge. Lift the one with the dot.",
-        model: "The model does not tilt like the cap.",
-        short: "Turned {angle}°: a full turn is needed.",
-        long: "Turned {angle}°: more than one turn. Redo.",
-        direction: "Turned the other way.",
+        not_raised: "The dot edge wasn't lifted.",
+        model_wrong: "The model tilted the wrong way. Run Calibrate again.",
+        other_edge: "Wrong edge: lift the one with the dot.",
+        model: "The model doesn't tilt like the cap.",
+        short: "Only {angle}° turned: it takes two quarter turns.",
+        long: "Turned {angle}°, more than two quarter turns. Redo it.",
+        direction: "Turned the wrong way.",
         steps: "{steps} steps, expected {expected}.",
         wrong_way: "Steps came in the opposite direction.",
-        knob_off: "The knob is off in the options: steps are not checked.",
-        lean_right: "Leaning to the right gave no step.",
-        lean_left: "Leaning to the left gave no step.",
-        lean_wrong: "A step came for the other side: hold the stripe towards you.",
+        knob_off: "The model turned with the cap. Knob steps weren't checked: the knob is off in the options.",
+        lean_right: "Leaning right gave no event.",
+        lean_left: "Leaning left gave no event.",
+        lean_wrong: "A lean registered on the wrong side: hold the dot edge towards you.",
         missing: "Not received: {missing}.",
         not_flat: "Lay the cap flat.",
-        not_flipped: "The cap was not turned over.",
-        flip_events: "The side changed, but {flips} of 2 flip events came.",
+        not_flipped: "The cap wasn't turned over.",
+        flip_events: "The side changed, but {flips} of 2 flip events arrived.",
         drift: "The direction drifts {drift_deg_min}°/min.",
-        wrong_press: "That was {got}; now {want}.",
-        not_detected: "The gesture was not recognised.",
-        extra: "Something fired that was not asked for: {extra}.",
+        wrong_press: "That was {got}. Next: {want}.",
+        not_detected: "The gesture wasn't recognised.",
+        shake_missed: "{count} of {tries} shakes recognised.",
+        handle_few: "Picked up {count} of 5 times.",
+        woke_dozing: "It reconnected while dozing off instead of sleeping first. Redo it, and don't touch the cap until it says Asleep.",
+        no_drop: "The link didn't drop. Redo it, and don't touch the cap until it says Asleep.",
+        no_sleep: "It didn't fall asleep in time. Was it pressed while dozing? Each press restarts the 3 minutes.",
+        no_wake: "The press didn't wake it.",
+        long_doze: "It dozed for {doze_s} s: was it pressed meanwhile?",
+        no_wake_press: "It woke up, but the press didn't register as a press.",
+        extra: "Unexpected events: {extra}.",
       } },
     gestures: {
       press: "Press", single_press: "Press", double_press: "Double press", triple_press: "Triple press",
       long_press: "Long press", tap: "Tap", double_tap: "Double tap", shake: "Shake",
-      flip: "Flip", rotate_cw: "Knob ↻", rotate_ccw: "Knob ↺", wake: "Woke up", motion: "Motion",
+      throw: "Toss", flip: "Flip", rotate_cw: "Knob ↻", rotate_ccw: "Knob ↺", tilt_left: "Tilt ←", tilt_right: "Tilt →", wake: "Woke up", motion: "Motion",
     },
   },
   ru: {
     auto: "Авто", asleep: "Спит", dozing: "Засыпает",
-    dozeHint: "Отключился по простою. Положи крышку: когда уснёт (до ~3 мин), нажатие снова её разбудит", connected: "Подключён", streaming: "Онлайн", unresponsive: "Не отвечает",
-    wake: "Нажми или встряхни крышку, чтобы разбудить", gyro: "Гироскоп, °/с",
-    accel: "Акселерометр, g", roll: "Влево-вправо", pitch: "Вперёд-назад", yaw: "Поворот вокруг оси", calibrate: "Калибровка",
-    help: { mark: "Жёлтая полоска на модели отмечает край с точкой над буквой Z (на фото обведена). По ней видно, куда повёрнута модель.", cal: "<b>Калибровка</b> — один раз для каждой крышки. Крышка лежит на столе точкой от тебя: модель запоминает, как для этой крышки выглядит «ровно», потом подгоняешь логотип. Сохраняется навсегда.", align: "<b>Выровнять направление</b> — нужно время от времени. Наклон крышка чувствует сама, по силе тяжести, а в какую сторону повёрнута — нет: компаса в ней нет. Поворот считает гироскоп, он понемногу ошибается, а после перезапуска Home Assistant поворот теряется. Если полоска на модели не на том краю, где точка на крышке, положи крышку точкой от себя и нажми эту кнопку. Калибровку это не трогает." },
-    cal: { find: "Найди на зелёной стороне точку над буквой Z (на фото обведена). На модели этот край отмечен жёлтой полоской.", flat: "Положи крышку на стол любой стороной вверх так, чтобы этот край был от тебя, отпусти и нажми «Готово».", heading: "Положи крышку на стол этим краем от себя и нажми «Готово»: полоска на модели тоже уйдёт на дальний край.", turned: "Направление выровнено", logo: "Теперь логотип (один раз для каждой крышки: металл обжат под любым углом). Положи крышку зелёной стороной вверх, буквой Z ровно, точкой сверху, и переверни через правый край. Поверни логотип ползунком, чтобы он выглядел как на крышке.", resin: "Зелёная сторона", metal: "После переворота", next: "Готово", cancel: "Отмена", skip: "Пропустить", saved: "Откалибровано",
-      err: { moving: "Крышка двигается: подержи секунду неподвижно", not_flat: "Крышка лежит не ровно", asleep: "Крышка спит: сначала разбуди её", no_data: "Нет данных: разбуди крышку" } },
+    dozeHint: "Связь отключена после простоя. Ещё ~{n} с нажатия не дойдут, а каждое запускает 3 минуты заново: положите крышку и подождите",
+    dozeLate: "Связь отключена после простоя. Пока крышка не уснёт, нажатия не дойдут, а каждое запускает 3 минуты заново: положите её и подождите", connected: "Подключена", streaming: "Данные идут", unresponsive: "Не отвечает",
+    wake: "Нажмите на крышку, чтобы её разбудить", heading: "После перезапуска направление неизвестно: положите крышку точкой от себя и нажмите «Выровнять направление».", gyro: "Гироскоп, °/с",
+    accel: "Акселерометр, g", roll: "Влево-вправо", pitch: "Вперёд-назад", yaw: "Поворот", calibrate: "Калибровка",
+    editor: { title: "Заголовок", model: "Вид модели", show_model: "3D-модель и углы", chips: "Плашки состояния", show_values: "Полоски гироскопа и акселерометра",
+      show_history: "График за последние 10 с", show_gestures: "Список жестов", buttons: "Кнопки", show_help: "Подсказки под кнопками",
+      show_controls: "Кнопки и подсказки (старый переключатель)", admin: "«Калибровка» и «Проверка» видны только администраторам.",
+      opt: { state: "Состояние", rate: "Частота", signal: "Сигнал, dBm", battery: "Батарея", link: "Дошло кадров, %", cap: "Triki (встроенная)", glb: "Flopsstuff с текстурами" } },
+    help: { mark: "Жёлтая полоска на модели — это край с точкой над буквой Z (на фото обведена). По ней видно, как повёрнута модель.", cal: "<b>Калибровка</b> нужна каждой крышке один раз. Крышка лежит на столе точкой от вас, модель запоминает, как она лежит ровно, а потом вы подгоняете логотип. Сохраняется навсегда.", align: "<b>Выровнять направление</b> приходится время от времени. Наклон крышка чувствует сама, по силе тяжести, а куда она повёрнута — нет: компаса в ней нет. Поворот считает гироскоп, он понемногу сбивается, а после перезапуска Home Assistant поворот теряется. Если полоска на модели не там, где точка на крышке, положите крышку точкой от себя и нажмите эту кнопку. Калибровка останется.",
+      led: "<b>Диод</b> включает и выключает зелёный огонёк крышки. Крышка не сообщает, горит ли он, поэтому кнопка подсвечена, только пока Вы его включили и крышка не задремала. Он сажает батарейку, так что без нужды его не включайте.",
+      check: "<b>Проверка</b> шаг за шагом тестирует связь, крутилку, кнопку и включённые жесты и подсказывает, что поменять в настройках. Займёт несколько минут, любой шаг можно пропустить. Запустите её после установки или если жест срабатывает не так." },
+    cal: { find: "Найдите на зелёной стороне точку над буквой Z (на фото обведена). На модели этот край отмечен жёлтой полоской.", flat: "Положите крышку на стол любой стороной вверх, этим краем от себя, отпустите и нажмите «Готово».", heading: "Положите крышку на стол этим краем от себя и нажмите «Готово»: полоска на модели тоже уйдёт на дальний край.", turned: "Направление выровнено", logo: "Теперь логотип. Металл обжимают под любым углом, поэтому его подгоняют один раз для каждой крышки. Положите крышку зелёной стороной вверх, буквой Z прямо, точкой сверху, и переверните через правый край. Поверните логотип ниже ползунком, чтобы он выглядел как на вашей крышке.", resin: "Зелёная сторона", metal: "После переворота", next: "Готово", cancel: "Отмена", skip: "Пропустить", saved: "Откалибровано",
+      err: { moving: "Крышка двигается: замрите на секунду", not_flat: "Крышка лежит неровно", asleep: "Крышка спит: сначала разбудите её", no_data: "Данных пока нет: разбудите крышку" } },
     reset: "Выровнять направление",
-    led: "Диод", button: "Кнопка", rate: "Гц", history: "Последние 10 с",
+    glist: { title: "Что умеет крышка", hint: "Нажмите на название, чтобы узнать, как это сделать. Жест загорается, когда крышка его замечает.", off: "выключено в настройках интеграции",
+      knob: "Крутилка ↻ ↺", tilt: "Наклон ← →", how: { press: "Нажмите на крышку: она вся — кнопка.", double_press: "Два быстрых нажатия.", triple_press: "Три быстрых нажатия.",
+        long_press: "Нажмите и подержите.", knob: "Крутите её прямо на столе, как ручку.", tilt: "Возьмите в руку и наклоните вправо или влево.",
+        shake: "Резко встряхните несколько раз.", flip: "Переверните на другую сторону.", tap: "Стукните пальцем по столу рядом.", throw: "Подбросьте и поймайте." } },
+    led: "Диод", button: "Кнопка", rate: "Гц", linkq: "Дошло кадров за сеанс", history: "Последние 10 с",
     check: { title: "Проверка", open: "Проверка",
-      steps: { rest: "Покой", flat: "Исходное положение", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", lean: "Наклон в руке", press: "Кнопка", flip: "Переворот", tap: "Касание", shake: "Встряхивание", throw: "Бросок", drift: "Уход направления" },
+      steps: { rest: "Лежит спокойно", flat: "Исходное положение", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", handle: "Взять и положить", lean: "Наклон в руке", press: "Кнопка", flip: "Переворот", tap: "Стук", shake: "Встряхивание", throw: "Бросок", drift: "Уход направления", sleep: "Сон и пробуждение" },
       text: {
-        identify: "Выбери крышку ниже или нажми на ней кнопку.",
-        wake: "Нажми кнопку на крышке, чтобы разбудить её.",
-        rest: "Положи крышку на стол и не трогай 10 секунд. Так проверяется связь и шум датчика.",
-        flat: "Положи крышку на стол точкой от себя, отпусти и нажми «Готово». От этого положения модель отсчитывает наклоны и повороты.",
-        tilt: "Приподними край с точкой на 2–3 см и подержи. Модель должна наклониться так же, как полупрозрачная подсказка.",
-        turn_cw: "Поверни крышку на столе на четверть оборота по часовой: полоска уйдёт с дальнего края вправо. Отпусти, перехвати и поверни ещё на четверть. Потом нажми «Готово».",
-        turn_ccw: "То же против часовой: две четверти оборота, между ними можно отпустить. Потом нажми «Готово».",
-        tap: "Постучи пальцем по столу рядом с крышкой 2–3 раза, с паузой в секунду.",
-        shake: "Возьми крышку в руку и коротко встряхни 2–3 раза.",
-        lean: "Держи крышку в руке ровно, полосой к себе. Наклони вправо, пока не придёт шаг, выровняй, потом наклони влево.",
-        throw: "Подбрось крышку на 10–20 см и поймай. Этот шаг можно пропустить.",
-        press: "Нажми кнопку по порядку:",
-        flip: "Переверни крышку на другую сторону, подожди секунду и верни обратно.",
-        drift: "Оставь крышку лежать 30 секунд. Так меряется, насколько уплывает направление без движения.",
+        identify: "Выберите крышку ниже или нажмите на неё.",
+        wake: "Нажмите на крышку, чтобы её разбудить.",
+        rest: "Положите крышку на стол и 10 секунд не трогайте: так измеряются связь и шум датчика.",
+        flat: "Положите крышку на стол точкой от себя, отпустите и нажмите «Готово». От этого положения модель отсчитывает наклоны и повороты, и оно же сохранится как калибровка крышки.",
+        tilt: "Приподнимите край с точкой примерно на 1 см (на кончик пальца) и подержите секунду. Модель должна наклониться как полупрозрачная подсказка.",
+        turn_cw: "Поверните крышку на столе на четверть оборота по часовой: полоска уйдёт с дальнего края вправо. Отпустите, перехватите и поверните ещё на четверть. Потом нажмите «Готово».",
+        turn_ccw: "Теперь против часовой: две четверти оборота, между ними отпустите крышку. Потом нажмите «Готово».",
+        knobOff: "Крутилка выключена в настройках, поэтому шаг проверит только, что модель поворачивается вместе с крышкой.",
+        tap: "Стукните пальцем по столу рядом с крышкой 2–3 раза, с паузой в секунду.",
+        shake: "Возьмите крышку в руку и встряхните 3 раза с паузой в пару секунд — так, как будете делать потом.",
+        handle: "Возьмите крышку со стола, как перед жестом, подержите и положите обратно. 5 раз, каждый раз чуть по-разному. Специально не крутите и не наклоняйте: всё, что сработает, — ложная тревога. Подъём засчитывается, когда крышка снова спокойно лежит на столе.",
+        sleep: "Положите крышку и не трогайте. Сейчас Home Assistant отключит её, как после простоя: около 3 минут она засыпает, и нажатия в это время не доходят. Когда здесь появится «Спит», нажмите на крышку один раз. Шаг можно пропустить.",
+        lean: "Держите крышку в руке ровно, краем с точкой к себе. Наклоните вправо примерно на 30°, пока не появится «Наклон →», и выровняйте; потом так же влево. Так 3 раза.",
+        throw: "Подбросьте крышку на 10–20 см и поймайте. Шаг можно пропустить.",
+        press: "Нажимайте в таком порядке (долгое нажатие — держите около секунды):",
+        flip: "Переверните крышку, подождите секунду и верните обратно.",
+        drift: "Оставьте крышку лежать 30 секунд: так видно, насколько уплывает направление без движения.",
       },
-      start: "Начать", done: "Готово", redo: "Повторить", skip: "Пропустить", next: "Дальше", close: "Закрыть", report: "Текст отчёта",
-      paused: "Связь пропала. Шаг начнётся заново, когда крышка вернётся.",
+      start: "Начать", done: "Готово", redo: "Повторить", skip: "Пропустить", next: "Дальше", close: "Закрыть", report: "Текст для отчёта об ошибке",
+      paused: "Связь пропала. Шаг начнётся заново, когда крышка вернётся. Если не возвращается, дождитесь «Спит» и нажмите на крышку.",
       busy: "Эту крышку уже проверяют в другом окне.", other: "Идёт проверка",
-      stepOf: "Шаг {n} из {total}", count: "Шаги", times: "Раз", sec: "с", pick: "Какую крышку проверяем?", angle: "Поворот", wrong: "не в ту сторону",
-      status: { pass: "Хорошо", warn: "Есть замечания", fail: "Не прошло", skip: "Пропущено" },
-      summary: "Итог", flipStage: ["Сначала положи плашмя", "Переверни", "Теперь верни обратно", "Готово"],
-      values: { rest: "{rate} Гц из {asked}, потери {loss_pct}%, шум {noise_dps}°/с, через {via}", turn: "{steps} шагов за {angle}°", drift: "{drift_deg_min}°/мин" },
+      stepOf: "Шаг {n} из {total}", sleepStage: ["Отключаю…", "Засыпает: не трогайте, ещё ~{left} с", "Спит: нажмите на крышку один раз", "Проснулась"], lifts: "Подъёмы", recognised: "Распознано", tries: "Попыток: {n}", count: "Шаги", leans: "Наклоны", times: "Раз", sec: "с", pick: "Какую крышку проверяем?", angle: "Поворот", wrong: "не в ту сторону",
+      status: { pass: "В порядке", warn: "Есть замечания", fail: "Не прошло", skip: "Пропущено" },
+      summary: "Итог", flipStage: ["Сначала положите плашмя", "Переверните", "Теперь верните обратно", "Готово"],
+      sug: { title: "Что стоит поменять", apply: "Сохранить", err: "Не сохранилось: {e}",
+        note: "Сохранится в настройках интеграции; связь прервётся и восстановится.",
+        applied: "Сохранено. Крышка подключится с новыми настройками, а если спит — после следующего нажатия.",
+        invert_rotation: "Повороты пришли наоборот: переключить «Обратное направление крутилки».",
+        sample_rate: "Теряется {loss}% кадров: «Частота датчиков» — {value} Гц вместо {from}.",
+        multi_press_window: "Двойное нажатие пришло как два одиночных: «Окно двойного и тройного нажатия» — {value} с вместо {from} с.",
+        shake: "«Встряхивание» сработало само ×{count}: выключить его.",
+        tilt: "«Наклон в руке» сработал сам ×{count}: выключить его." },
+      values: { rest: "{rate} Гц из {asked}, потеряно {loss_pct}%, шум {noise_dps}°/с, через {via}", turn: "Шаги: {steps} за {angle}°", drift: "{drift_deg_min}°/мин", handle: "Подъёмов: {count}.", shake: "{count} из {tries}", sleep: "засыпала {doze_s} с" },
       reason: {
-        loss: "Теряется {loss_pct}% кадров. Поставь крышку ближе к приёмнику ({via}).",
+        loss: "Теряется {loss_pct}% кадров. Поставьте крышку ближе к приёмнику ({via}).",
         noise: "Датчик шумит: стол дрожит или крышку задели.",
-        moved: "Крышка двигалась. Повтори, не касаясь её.",
-        no_frames: "Нет данных от крышки.",
-        not_raised: "Край с точкой не поднялся.",
-        model_wrong: "Модель наклонилась не туда. Повтори калибровку.",
-        other_edge: "Это другой край. Подними край с точкой.",
+        moved: "Крышка сдвинулась. Повторите и не трогайте её.",
+        no_frames: "От крышки нет данных.",
+        not_raised: "Край с точкой не приподняли.",
+        model_wrong: "Модель наклонилась не туда. Повторите калибровку.",
+        other_edge: "Это не тот край. Приподнимите край с точкой.",
         model: "Модель наклоняется не так, как крышка.",
-        short: "Поворот {angle}°, нужен полный оборот.",
-        long: "Поворот {angle}°, больше одного оборота. Повтори.",
-        direction: "Повернул не в ту сторону.",
-        steps: "Шагов {steps}, ожидалось {expected}.",
-        wrong_way: "Шаги приходили в обратную сторону.",
-        knob_off: "Крутилка выключена в настройках, шаги не проверяются.",
-        lean_right: "Наклон вправо не дал шага.",
-        lean_left: "Наклон влево не дал шага.",
-        lean_wrong: "Пришёл шаг в другую сторону: держи крышку полосой к себе.",
-        missing: "Не дождались: {missing}.",
-        not_flat: "Положи крышку плашмя.",
-        not_flipped: "Крышку не перевернул.",
-        flip_events: "Сторона сменилась, но событий переворота {flips} из 2.",
+        short: "Поворот всего на {angle}°, а нужно две четверти оборота.",
+        long: "Поворот на {angle}° — больше двух четвертей. Повторите.",
+        direction: "Повернули не в ту сторону.",
+        steps: "Шагов {steps}, а ожидалось {expected}.",
+        wrong_way: "Шаги шли в обратную сторону.",
+        knob_off: "Модель повернулась вместе с крышкой. Шаги крутилки не проверялись: она выключена в настройках.",
+        lean_right: "На наклон вправо событие не пришло.",
+        lean_left: "На наклон влево событие не пришло.",
+        lean_wrong: "Пришёл наклон в другую сторону: держите крышку краем с точкой к себе.",
+        missing: "Не пришло: {missing}.",
+        not_flat: "Положите крышку плашмя.",
+        not_flipped: "Крышку не перевернули.",
+        flip_events: "Сторона сменилась, но событий переворота пришло {flips} из 2.",
         drift: "Направление уплывает на {drift_deg_min}°/мин.",
-        wrong_press: "Это было «{got}», сейчас нужно «{want}».",
+        wrong_press: "Это было «{got}», а сейчас нужно «{want}».",
         not_detected: "Жест не распознан.",
-        extra: "Сработало то, о чём не просили: {extra}.",
+        shake_missed: "Распознано встряхиваний: {count} из {tries}.",
+        handle_few: "Подъёмов {count} из 5.",
+        woke_dozing: "Крышка подключилась, не успев уснуть. Повторите и не трогайте её, пока не появится «Спит».",
+        no_drop: "Связь не прервалась. Повторите и не трогайте крышку, пока не появится «Спит».",
+        no_sleep: "Крышка не уснула вовремя. Может, на неё нажали, пока она засыпала? Каждое нажатие запускает 3 минуты заново.",
+        no_wake: "Нажатие не разбудило крышку.",
+        long_doze: "Засыпала {doze_s} с: на неё нажимали в это время?",
+        no_wake_press: "Крышка проснулась, но события нажатия не было.",
+        extra: "Сработало лишнее: {extra}.",
       } },
-    nodevice: "Трики не найден",
+    nodevice: "Крышка Triki не найдена",
     gestures: {
       press: "Нажатие", single_press: "Нажатие", double_press: "Двойное нажатие", triple_press: "Тройное нажатие",
-      long_press: "Долгое нажатие", tap: "Тап", double_tap: "Двойной тап", shake: "Встряхивание",
-      flip: "Переворот", rotate_cw: "Поворот ↻", rotate_ccw: "Поворот ↺", wake: "Проснулся",
+      long_press: "Долгое нажатие", tap: "Стук", double_tap: "Двойной стук", shake: "Встряхивание",
+      throw: "Бросок", flip: "Переворот", rotate_cw: "Крутилка ↻", rotate_ccw: "Крутилка ↺", tilt_left: "Наклон ←", tilt_right: "Наклон →", wake: "Проснулась",
       motion: "Движение",
     },
   },
   pl: {
     auto: "Auto", asleep: "Śpi", dozing: "Zasypia",
-    dozeHint: "Rozłączony po bezczynności. Odłóż kapsel: gdy zaśnie (do ~3 min), naciśnięcie znów go obudzi", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
-    wake: "Naciśnij lub potrząśnij kapslem, żeby go obudzić", gyro: "Żyroskop, °/s",
+    dozeHint: "Rozłączony po bezczynności. Przez ~{n} s naciśnięcia nie dotrą, a każde odlicza 3 minuty od nowa: odłóż kapsel i poczekaj",
+    dozeLate: "Rozłączony po bezczynności. Dopóki nie zaśnie, naciśnięcia nie dotrą, a każde odlicza 3 minuty od nowa: odłóż kapsel i poczekaj", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
+    wake: "Naciśnij kapsel, żeby go obudzić", heading: "Po restarcie kierunek jest nieznany: połóż kapsel kropką od siebie i naciśnij „Wyrównaj kierunek”.", gyro: "Żyroskop, °/s",
     accel: "Akcelerometr, g", roll: "Lewo-prawo", pitch: "Przód-tył", yaw: "Obrót wokół osi",
-    help: { mark: "Żółty pasek na modelu oznacza krawędź z kropką nad literą Z (zakreśloną na zdjęciu). Po niej widać, w którą stronę model jest obrócony.", cal: "<b>Kalibracja</b> raz na kapsel. Kapsel leży na stole kropką od ciebie: model zapamiętuje, jak dla tego kapsla wygląda „płasko”, potem dopasowujesz logo. Zapisuje się na stałe.", align: "<b>Wyrównaj kierunek</b> trzeba od czasu do czasu. Przechył kapsel czuje sam, z grawitacji, ale nie wie, w którą stronę jest obrócony: nie ma kompasu. Obrót liczy żyroskop, który powoli się myli, a restart Home Assistant go gubi. Gdy pasek na modelu jest na innej krawędzi niż kropka na kapslu, połóż kapsel kropką od siebie i naciśnij ten przycisk. Kalibracja zostaje." },
-    calibrate: "Kalibracja",
-    cal: { find: "Znajdź po zielonej stronie kropkę nad literą Z (zakreśloną na zdjęciu). Na modelu ta krawędź ma żółty pasek.", flat: "Połóż kapsel na stole dowolną stroną do góry tak, żeby ta krawędź była od ciebie, puść i naciśnij Gotowe.", heading: "Połóż kapsel na stole tą krawędzią od siebie i naciśnij Gotowe: pasek na modelu też przejdzie na daleką krawędź.", turned: "Kierunek wyrównany", logo: "Teraz logo (raz na kapsel: metal jest zaciśnięty pod dowolnym kątem). Połóż kapsel zieloną stroną do góry, literą Z prosto, kropką u góry, i odwróć go przez prawą krawędź. Obróć logo suwakiem, aż będzie wyglądać jak na kapslu.", resin: "Zielona strona", metal: "Po odwróceniu", next: "Gotowe", cancel: "Anuluj", skip: "Pomiń", saved: "Skalibrowano",
-      err: { moving: "Kapsel się rusza: przytrzymaj chwilę nieruchomo", not_flat: "Kapsel nie leży płasko", asleep: "Kapsel śpi: najpierw go obudź", no_data: "Brak danych: obudź kapsel" } },
-    reset: "Wyrównaj kierunek", led: "Dioda", button: "Przycisk", rate: "Hz", history: "Ostatnie 10 s",
+    editor: { title: "Tytuł", model: "Wygląd modelu", show_model: "Model 3D i kąty", chips: "Plakietki stanu", show_values: "Paski żyroskopu i akcelerometru",
+      show_history: "Wykres ostatnich 10 s", show_gestures: "Lista gestów", buttons: "Przyciski", show_help: "Pomoc pod przyciskami",
+      show_controls: "Przyciski i pomoc (stary przełącznik)", admin: "Przyciski Kalibruj i Test widzą tylko administratorzy.",
+      opt: { state: "Stan", rate: "Częstotliwość", signal: "Sygnał, dBm", battery: "Bateria", link: "Odebrane ramki, %", cap: "Triki (wbudowany)", glb: "Flopsstuff z teksturą" } },
+    help: { mark: "Żółty pasek na modelu to krawędź z kropką nad literą Z (zakreśloną na zdjęciu). Po nim poznasz, jak model jest obrócony.", cal: "<b>Kalibruj</b> raz na każdy kapsel. Kapsel leży na stole kropką od ciebie: model uczy się, jak u tego kapsla wygląda poziom, a potem dopasowujesz logo. Wynik zostaje na stałe.", align: "<b>Wyrównaj kierunek</b> przyda się co jakiś czas. Przechył kapsel wyczuwa sam, z grawitacji, ale nie wie, w którą stronę jest obrócony, bo nie ma kompasu. Obrót liczy żyroskop, który z czasem dryfuje, a restart Home Assistanta go kasuje. Gdy pasek na modelu jest przy innej krawędzi niż kropka na kapslu, połóż kapsel kropką od siebie i naciśnij ten przycisk. Kalibracja zostaje bez zmian.",
+      led: "<b>Dioda</b> włącza i wyłącza zielone światełko w kapslu. Kapsel nie zgłasza, czy świeci, więc przycisk jest podświetlony tylko po włączeniu, dopóki kapsel nie zaśnie. Zjada baterię, więc nie włączaj jej bez potrzeby.",
+      check: "<b>Test</b> sprawdza krok po kroku połączenie, pokrętło, przycisk i włączone gesty, a potem podpowiada, co zmienić w opcjach. Zajmuje kilka minut, każdy krok można pominąć. Zrób go po instalacji albo wtedy, gdy któryś gest szwankuje." },
+    calibrate: "Kalibruj",
+    cal: { find: "Znajdź na zielonej stronie kropkę nad literą Z (zakreśloną na zdjęciu). Na modelu tę krawędź oznacza żółty pasek.", flat: "Połóż kapsel na stole dowolną stroną do góry, tą krawędzią od siebie. Puść go i naciśnij Gotowe.", heading: "Połóż kapsel na stole tą krawędzią od siebie i naciśnij Gotowe: pasek na modelu też przejdzie na krawędź najdalej od ciebie.", turned: "Kierunek wyrównany", logo: "Teraz logo (raz na kapsel: metalową część zaciśnięto pod przypadkowym kątem). Połóż kapsel zieloną stroną do góry, z literą Z prosto i kropką na górze, a potem odwróć go przez prawą krawędź. Obracaj logo poniżej suwakiem, aż będzie wyglądać jak na twoim kapslu.", resin: "Zielona strona", metal: "Po odwróceniu", next: "Gotowe", cancel: "Anuluj", skip: "Pomiń", saved: "Skalibrowano",
+      err: { moving: "Kapsel się rusza: niech poleży chwilę bez ruchu", not_flat: "Kapsel nie leży płasko", asleep: "Kapsel śpi: najpierw go obudź", no_data: "Jeszcze brak danych: obudź kapsel" } },
+    glist: { title: "Co potrafi kapsel", hint: "Kliknij nazwę, żeby zobaczyć jak. Gest się podświetla, gdy kapsel go wykona.", off: "wyłączone w opcjach integracji",
+      knob: "Pokrętło ↻ ↺", tilt: "Przechył ← →", how: { press: "Naciśnij cały kapsel.", double_press: "Dwa szybkie naciśnięcia.", triple_press: "Trzy szybkie naciśnięcia.",
+        long_press: "Naciśnij i przytrzymaj.", knob: "Obracaj go płasko na stole jak pokrętło.", tilt: "Trzymaj go w dłoni i przechylaj w prawo lub w lewo.",
+        shake: "Potrząśnij nim energicznie kilka razy.", flip: "Odwróć go na drugą stronę.", tap: "Stuknij palcem w stół obok niego.", throw: "Podrzuć go i złap." } },
+    reset: "Wyrównaj kierunek", led: "Dioda", button: "Przycisk", rate: "Hz", linkq: "Odebrane ramki w sesji", history: "Ostatnie 10 s",
     check: { title: "Test", open: "Test",
-      steps: { rest: "Spoczynek", flat: "Pozycja wyjściowa", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", lean: "Przechył w dłoni", press: "Przycisk", flip: "Odwrócenie", tap: "Stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", drift: "Dryf kierunku" },
+      steps: { rest: "Spoczynek", flat: "Pozycja wyjściowa", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", handle: "Podnieś i odłóż", lean: "Przechył w dłoni", press: "Przycisk", flip: "Odwrócenie", tap: "Stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", drift: "Dryf kierunku", sleep: "Sen i pobudka" },
       text: {
-        identify: "Wybierz kapsel poniżej albo naciśnij na nim przycisk.",
-        wake: "Naciśnij przycisk na kapslu, żeby go obudzić.",
-        rest: "Połóż kapsel na stole i nie dotykaj przez 10 sekund. Mierzy to łącze i szum czujnika.",
-        flat: "Połóż kapsel na stole kropką od siebie, puść i naciśnij Gotowe. Od tej pozycji model liczy przechyły i obroty.",
-        tilt: "Unieś krawędź z kropką o 2–3 cm i przytrzymaj. Model powinien przechylić się jak półprzezroczysta podpowiedź.",
-        turn_cw: "Obróć kapsel na stole o ćwierć obrotu w prawo: pasek przejdzie z dalekiej krawędzi w prawo. Puść, przełóż palce i obróć o kolejną ćwiartkę. Potem naciśnij Gotowe.",
-        turn_ccw: "To samo w lewo: dwie ćwiartki obrotu, między nimi możesz puścić. Potem naciśnij Gotowe.",
+        identify: "Wybierz kapsel poniżej albo go naciśnij.",
+        wake: "Naciśnij kapsel, żeby go obudzić.",
+        rest: "Połóż kapsel na stole i nie dotykaj go przez 10 sekund. Ten krok mierzy łącze i szum czujnika.",
+        flat: "Połóż kapsel na stole kropką od siebie, puść i naciśnij Gotowe. Od tej pozycji model liczy przechyły i obroty; zapisze się ona też jako kalibracja kapsla.",
+        tilt: "Unieś krawędź z kropką o ok. 1 cm (na grubość opuszka) i przytrzymaj sekundę. Model powinien przechylić się tak jak półprzezroczysta podpowiedź.",
+        turn_cw: "Obróć kapsel na stole o ćwierć obrotu w prawo: pasek przejdzie z dalszej krawędzi na prawą. Puść, chwyć na nowo i obróć o kolejną ćwiartkę. Potem naciśnij Gotowe.",
+        turn_ccw: "To samo w lewo: dwie ćwiartki, a między nimi puść kapsel. Potem naciśnij Gotowe.",
+        knobOff: "Pokrętło jest wyłączone w opcjach, więc ten krok sprawdza tylko, czy model obraca się razem z kapslem.",
         tap: "Stuknij palcem w stół obok kapsla 2–3 razy, co sekundę.",
-        shake: "Weź kapsel do ręki i krótko potrząśnij 2–3 razy.",
-        lean: "Trzymaj kapsel poziomo w dłoni, paskiem do siebie. Przechyl w prawo, aż przyjdzie krok, wyrównaj, potem przechyl w lewo.",
+        shake: "Weź kapsel do ręki i potrząśnij nim 3 razy, co kilka sekund, tak jak będziesz to robić na co dzień.",
+        handle: "Podnieś kapsel ze stołu tak, jak robisz to przed gestem, potrzymaj i odłóż. 5 razy, za każdym razem trochę inaczej. Celowo go nie obracaj ani nie przechylaj: wszystko, co wtedy zadziała, to fałszywy alarm. Podniesienie się liczy, gdy kapsel znów leży nieruchomo na stole.",
+        sleep: "Odłóż kapsel i nie dotykaj go. Home Assistant rozłączy go teraz jak po bezczynności: przez około 3 minuty kapsel zasypia i naciśnięcia nie docierają. Gdy pojawi się tu „Śpi”, naciśnij kapsel raz. Ten krok możesz pominąć.",
+        lean: "Trzymaj kapsel poziomo w dłoni, krawędzią z kropką do siebie. Przechyl go w prawo o ok. 30°, aż pojawi się „Przechył →”, i wróć do poziomu; potem w lewo i znów do poziomu. Trzy razy.",
         throw: "Podrzuć kapsel na 10–20 cm i złap. Ten krok możesz pominąć.",
-        press: "Naciśnij przycisk po kolei:",
-        flip: "Odwróć kapsel na drugą stronę, poczekaj sekundę i odwróć z powrotem.",
-        drift: "Zostaw kapsel na 30 sekund. Mierzy to, jak bardzo kierunek ucieka bez ruchu.",
+        press: "Naciskaj w tej kolejności (długie naciśnięcie: przytrzymaj ok. sekundy):",
+        flip: "Odwróć kapsel na drugą stronę, odczekaj sekundę i odwróć z powrotem.",
+        drift: "Zostaw kapsel w spokoju na 30 sekund. Ten krok mierzy, jak mocno kierunek dryfuje bez ruchu.",
       },
-      start: "Start", done: "Gotowe", redo: "Powtórz", skip: "Pomiń", next: "Dalej", close: "Zamknij", report: "Tekst raportu",
-      paused: "Łącze zerwane. Krok zacznie się od nowa, gdy kapsel wróci.",
-      busy: "Ten kapsel jest już sprawdzany w innym oknie.", other: "Trwa test",
-      stepOf: "Krok {n} z {total}", count: "Kroki", times: "Razy", sec: "s", pick: "Który kapsel?", angle: "Obrót", wrong: "w złą stronę",
-      status: { pass: "Dobrze", warn: "Uwagi", fail: "Nie przeszło", skip: "Pominięto" },
-      summary: "Wynik", flipStage: ["Najpierw połóż płasko", "Odwróć", "Teraz odwróć z powrotem", "Gotowe"],
-      values: { rest: "{rate} Hz z {asked}, utrata {loss_pct}%, szum {noise_dps}°/s, przez {via}", turn: "{steps} kroków na {angle}°", drift: "{drift_deg_min}°/min" },
+      start: "Start", done: "Gotowe", redo: "Powtórz", skip: "Pomiń", next: "Dalej", close: "Zamknij", report: "Tekst do zgłoszenia błędu",
+      paused: "Łącze zerwane. Krok zacznie się od nowa, gdy kapsel wróci. Jeśli nie wraca, poczekaj na „Śpi” i naciśnij kapsel.",
+      busy: "Ten kapsel jest już testowany w innym oknie.", other: "Trwa test",
+      stepOf: "Krok {n} z {total}", sleepStage: ["Rozłączam…", "Zasypia: nie dotykaj, jeszcze ~{left} s", "Śpi: naciśnij kapsel raz", "Obudzony"], lifts: "Podniesienia", recognised: "Rozpoznane", tries: "Prób: {n}", count: "Kroki", leans: "Przechyły", times: "Razy", sec: "s", pick: "Który kapsel?", angle: "Obrót", wrong: "w złą stronę",
+      status: { pass: "Dobrze", warn: "Uwagi", fail: "Nie wyszło", skip: "Pominięto" },
+      summary: "Wynik", flipStage: ["Najpierw połóż płasko", "Odwróć", "Teraz z powrotem", "Gotowe"],
+      sug: { title: "Proponowane zmiany", apply: "Zapisz w opcjach", err: "Nie zapisano: {e}",
+        note: "Zapisze się w opcjach integracji; połączenie na chwilę się zerwie i wróci.",
+        applied: "Zapisano. Kapsel połączy się z nowymi ustawieniami, a jeśli śpi, to przy najbliższym naciśnięciu.",
+        invert_rotation: "Obroty wyszły w odwrotną stronę: przełącz „Odwróć kierunek pokrętła”.",
+        sample_rate: "Ginie {loss}% ramek: obniż częstotliwość czujników z {from} do {value} Hz.",
+        multi_press_window: "Twoje podwójne naciśnięcie doszło jako dwa pojedyncze: ustaw „Czas na podwójne/potrójne naciśnięcie” na {value} s (teraz {from} s).",
+        shake: "Potrząśnięcie zadziałało samo ×{count}: wyłącz je.",
+        tilt: "Przechył w dłoni zadziałał sam ×{count}: wyłącz go." },
+      values: { rest: "{rate} Hz z {asked}, utrata {loss_pct}%, szum {noise_dps}°/s, przez {via}", turn: "{steps} kroków na {angle}°", drift: "{drift_deg_min}°/min", handle: "Podniesień: {count}.", shake: "{count} z {tries}", sleep: "zasypiał {doze_s} s" },
       reason: {
         loss: "Ginie {loss_pct}% ramek. Przysuń kapsel bliżej odbiornika ({via}).",
-        noise: "Czujnik szumi: stół drży albo kapsel był dotknięty.",
-        moved: "Kapsel się ruszył. Powtórz bez dotykania.",
+        noise: "Czujnik szumi: stół drga albo ktoś dotknął kapsla.",
+        moved: "Kapsel się poruszył. Powtórz, nie dotykając go.",
         no_frames: "Brak danych z kapsla.",
-        not_raised: "Krawędź z kropką nie została uniesiona.",
-        model_wrong: "Model przechylił się w złą stronę. Powtórz kalibrację.",
-        other_edge: "To inna krawędź. Unieś tę z kropką.",
+        not_raised: "Krawędź z kropką się nie uniosła.",
+        model_wrong: "Model przechylił się w złą stronę. Skalibruj kapsel jeszcze raz.",
+        other_edge: "To nie ta krawędź. Unieś tę z kropką.",
         model: "Model przechyla się inaczej niż kapsel.",
-        short: "Obrót {angle}°: potrzebny pełny obrót.",
-        long: "Obrót {angle}°: więcej niż jeden obrót. Powtórz.",
-        direction: "Obrócono w drugą stronę.",
-        steps: "{steps} kroków, oczekiwano {expected}.",
+        short: "Obrót tylko o {angle}°: potrzeba dwóch ćwiartek.",
+        long: "Obrót o {angle}°, czyli więcej niż dwie ćwiartki. Powtórz.",
+        direction: "Obrót w drugą stronę.",
+        steps: "{steps} kroków, a powinno być {expected}.",
         wrong_way: "Kroki szły w przeciwną stronę.",
-        knob_off: "Pokrętło jest wyłączone w opcjach: kroki nie są sprawdzane.",
-        lean_right: "Przechył w prawo nie dał kroku.",
-        lean_left: "Przechył w lewo nie dał kroku.",
-        lean_wrong: "Przyszedł krok w drugą stronę: trzymaj kapsel paskiem do siebie.",
-        missing: "Nie odebrano: {missing}.",
+        knob_off: "Model obrócił się razem z kapslem. Kroków pokrętła nie sprawdzano, bo pokrętło jest wyłączone w opcjach.",
+        lean_right: "Przechył w prawo nic nie wywołał.",
+        lean_left: "Przechył w lewo nic nie wywołał.",
+        lean_wrong: "Wykryto przechył w drugą stronę: trzymaj kapsel krawędzią z kropką do siebie.",
+        missing: "Nie dotarło: {missing}.",
         not_flat: "Połóż kapsel płasko.",
         not_flipped: "Kapsel nie został odwrócony.",
-        flip_events: "Strona się zmieniła, ale przyszło {flips} z 2 zdarzeń odwrócenia.",
+        flip_events: "Strona się zmieniła, ale doszło {flips} z 2 zdarzeń odwrócenia.",
         drift: "Kierunek ucieka o {drift_deg_min}°/min.",
-        wrong_press: "To było „{got}”, teraz „{want}”.",
-        not_detected: "Gest nie został rozpoznany.",
-        extra: "Zadziałało coś, o co nie proszono: {extra}.",
+        wrong_press: "To było „{got}”, a teraz trzeba „{want}”.",
+        not_detected: "Nie rozpoznano gestu.",
+        shake_missed: "Rozpoznano {count} z {tries} potrząśnięć.",
+        handle_few: "Podniesień: {count} z 5.",
+        woke_dozing: "Połączył się w trakcie zasypiania, a powinien najpierw zasnąć. Powtórz i nie dotykaj kapsla, aż pojawi się „Śpi”.",
+        no_drop: "Łącze się nie zerwało. Powtórz i nie dotykaj kapsla, aż pojawi się „Śpi”.",
+        no_sleep: "Nie zasnął na czas. Czy był naciskany w trakcie zasypiania? Każde naciśnięcie odlicza 3 minuty od nowa.",
+        no_wake: "Naciśnięcie go nie obudziło.",
+        long_doze: "Zasypiał {doze_s} s: czy ktoś go w tym czasie naciskał?",
+        no_wake_press: "Obudził się, ale budzące naciśnięcie nie doszło jako „Naciśnięcie”.",
+        extra: "Zadziałało coś nieproszonego: {extra}.",
       } },
     nodevice: "Nie znaleziono kapsla Triki",
     gestures: {
       press: "Naciśnięcie", single_press: "Naciśnięcie", double_press: "Podwójne naciśnięcie",
       triple_press: "Potrójne naciśnięcie", long_press: "Długie naciśnięcie", tap: "Stuknięcie",
-      double_tap: "Podwójne stuknięcie", shake: "Potrząśnięcie", flip: "Obrót",
-      rotate_cw: "Pokrętło ↻", rotate_ccw: "Pokrętło ↺", wake: "Obudzony", motion: "Ruch",
+      double_tap: "Podwójne stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", flip: "Odwrócenie",
+      rotate_cw: "Pokrętło ↻", rotate_ccw: "Pokrętło ↺", tilt_left: "Przechył ←", tilt_right: "Przechył →", wake: "Pobudka", motion: "Ruch",
     },
   },
 };
@@ -245,6 +365,42 @@ function loadCheck() {
 }
 const CHECK_RENEW_MS = 10000; // the server lets a check lapse 30 s after the last renewal
 const GHOST_TILT = (20 * Math.PI) / 180;
+const DEG = Math.PI / 180;
+const smooth = (x) => (x <= 0 ? 0 : x >= 1 ? 1 : x * x * (3 - 2 * x));
+const between = (t, a, b) => smooth((t - a) / (b - a));
+// The hint's moves for the steps without a pose of their own: lift (scene units,
+// the cap is ~2.3 across), tilt and lean (radians), over one loop of `sec`.
+export function ghostMotion(type, sec) {
+  if (type === "lift") { // up off the table, held a moment, back down
+    const t = sec % 4;
+    const up = between(t, 0, 0.9) - between(t, 2.1, 3.1);
+    return { lift: 0.45 * up, tilt: 25 * DEG * up * (1 - 0.3 * Math.sin(t * 6) * (t > 0.9 && t < 2.1)) };
+  }
+  if (type === "lean") { // in the hand: lean right, back, lean left, back
+    const t = sec % 4;
+    const lean = 40 * DEG * (between(t, 0, 0.7) - between(t, 1.2, 1.9) - between(t, 2, 2.7) + between(t, 3.2, 3.9));
+    return { lift: 0.25, lean };
+  }
+  if (type === "press") { // pushed down once, then a pause
+    const t = sec % 2;
+    return { lift: -0.15 * (between(t, 0, 0.1) - between(t, 0.3, 0.4)) };
+  }
+  if (type === "shake") { // a quick burst back and forth, then a pause
+    const t = sec % 2.5;
+    return { lift: 0.25, tilt: t < 1.2 ? 35 * DEG * Math.sin(t * 2 * Math.PI * 4) * Math.sin(Math.PI * t / 1.2) : 0 };
+  }
+  if (type === "tap") { // a jolt: two quick knocks
+    const t = sec % 2;
+    const knock = (a) => 0.12 * Math.sin(Math.PI * Math.min(1, Math.max(0, (t - a) / 0.12)));
+    return { lift: knock(0) + knock(0.35) };
+  }
+  if (type === "throw") { // tossed up and caught
+    const t = sec % 3;
+    const f = t < 1 ? 4 * t * (1 - t) : 0;
+    return { lift: 0.25 + 0.4 * f, tilt: 2 * Math.PI * smooth(t) * (t < 1) };
+  }
+  return null;
+}
 function loadCap() {
   if (!capPromise) capPromise = import(asset("triki-cap.js"));
   return capPromise;
@@ -288,13 +444,16 @@ const CSS = `
   .checkpanel details.report textarea { width: 100%; box-sizing: border-box; margin-top: 6px; font: 12px monospace; background: transparent; color: inherit; border: 1px solid var(--divider-color, #444); border-radius: 6px; }
   .checkpanel .dot.on { background: #66bb6a; }
   @keyframes pulse { 50% { opacity: .3; } }
-  .stage { position: relative; aspect-ratio: 16 / 10; min-height: 260px; }
+  /* max-width, or the 260 px min-height widens it through the aspect ratio to
+     416 px and a phone-width card cuts off its right side (the Button light) */
+  .stage { position: relative; aspect-ratio: 16 / 10; min-height: 260px; max-width: 100%; }
   canvas.gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
     transition: opacity .5s, filter .5s; }
   .stage.bump { animation: bump .35s ease-out; }
   @keyframes bump { 30% { box-shadow: inset 0 0 0 3px rgba(var(--rgb-primary-color, 3,169,244), .55); } }
-  .angles { position: absolute; left: 12px; top: 8px; display: flex; gap: 14px; pointer-events: none; }
-  .angle { display: flex; flex-direction: column; }
+  /* clear of the Button indicator; on a narrow card the labels wrap */
+  .angles { position: absolute; left: 12px; right: 96px; top: 8px; display: flex; gap: 14px; pointer-events: none; }
+  .angle { display: flex; flex-direction: column; min-width: 0; }
   .angle small { font-size: .72em; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: .04em; }
   .angle b { font-size: 1.35em; font-variant-numeric: tabular-nums; min-width: 3.2em; }
   .btn-ind { position: absolute; right: 12px; top: 10px; display: flex; align-items: center; gap: 6px;
@@ -309,6 +468,9 @@ const CSS = `
   .sleep { position: absolute; inset: 0; display: none; align-items: flex-end; justify-content: center; text-align: center; padding-left: 24px; padding-right: 24px;
     padding-bottom: 16px; color: var(--secondary-text-color); font-size: .9em; pointer-events: none; }
   .asleep .sleep { display: flex; }
+  .headhint { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 24px 14px; text-align: center;
+    color: var(--warning-color, #ffa600); font-size: .9em; pointer-events: none; }
+  .checking .headhint { display: none; }
   .asleep canvas.gl { opacity: .45; filter: grayscale(.7); }
   .values { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; padding: 8px 16px 4px; }
   .values h4 { margin: 4px 0 2px; font-size: .78em; font-weight: 500; color: var(--secondary-text-color); }
@@ -320,10 +482,21 @@ const CSS = `
     transition: width .08s linear, left .08s linear; }
   .bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--secondary-text-color); opacity: .5; }
   .chart { padding: 4px 16px 0; }
+  .glist { padding: 8px 16px 0; }
+  .glist small { font-size: .72em; color: var(--secondary-text-color); }
+  .gitems { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .gitem { font: inherit; font-size: .8em; padding: 3px 10px; border-radius: 12px; cursor: pointer;
+    border: 1px solid var(--divider-color); background: none; color: var(--primary-text-color);
+    transition: background .4s, border-color .4s, color .4s; }
+  .gitem.sel { border-color: var(--primary-color); }
+  .gitem.off { color: var(--secondary-text-color); opacity: .55; text-decoration: line-through; }
+  .gitem.hit { background: var(--primary-color); border-color: var(--primary-color); color: #fff; transition: none; }
+  .ghow { margin: 4px 0 0; font-size: .78em; color: var(--secondary-text-color); min-height: 1.3em; }
   .chart small { font-size: .72em; color: var(--secondary-text-color); }
   canvas.hist { width: 100%; height: 70px; display: block; }
-  .actions { display: flex; gap: 10px; padding: 10px 16px 16px; }
-  .actions button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  /* two rows on a narrow card: four Russian labels need ~530 px in one */
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px 16px 16px; }
+  .actions button { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     font: inherit; font-size: 1em; font-weight: 500; min-height: 52px; padding: 10px 14px; border-radius: 12px; cursor: pointer;
     border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); }
   .actions button:disabled { opacity: .45; cursor: default; }
@@ -373,7 +546,8 @@ const CSS = `
   .wide .side .row { height: 22px; }
   .wide .side .chart { flex: 1; }
   .wide .side canvas.hist { height: 80px; }
-  .wide .side .actions { flex-direction: column; margin-top: auto; }
+  .wide .side .actions { flex-direction: column; flex-wrap: nowrap; margin-top: auto; }
+  .wide .side .actions button { flex: none; }
   /* guided check */
   .chip.check { background: rgba(255,193,7,.2); color: #ffc107; }
   .checkbar { position: absolute; left: 12px; right: 12px; bottom: 10px; display: none; flex-direction: column; gap: 4px; pointer-events: none; }
@@ -386,6 +560,14 @@ const CSS = `
   .checkpanel { display: none; flex-direction: column; gap: 10px; padding: 14px 16px 16px; }
   .checking .checkpanel { display: flex; }
   .checking .side > :not(.checkpanel) { display: none; }
+  /* show_model: false keeps the stage for a check or a calibration, which run on it */
+  .nomodel:not(.checking):not(.calibrating) .stage { display: none; }
+  .wide.nomodel:not(.checking):not(.calibrating) .body { display: block; }
+  .wide.nomodel:not(.checking):not(.calibrating) .side { border-left: none; }
+  .head .chip[data-off] { display: none !important; }
+  .actions [data-off] { display: none !important; }
+  .side { container-type: inline-size; }
+  @container (max-width: 600px) { ha-card:not(.wide) .actions button { flex-basis: calc(50% - 5px); } }
   .checkpanel small.of { color: var(--secondary-text-color); font-size: .8em; text-transform: uppercase; letter-spacing: .04em; }
   .checkpanel h3 { margin: 0; font-size: 1.2em; font-weight: 500; }
   .checkpanel p { margin: 0; line-height: 1.45; }
@@ -408,6 +590,11 @@ const CSS = `
   .checkpanel .btns button.pulse { animation: glow 1.4s ease-in-out infinite; }
   @keyframes glow { 50% { box-shadow: 0 0 0 6px rgba(var(--rgb-primary-color, 3,169,244), .25); } }
   .sum { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: .92em; }
+  .sug { margin-top: 12px; padding: 8px 12px; border-radius: 8px; background: var(--secondary-background-color); }
+  .sug h4 { margin: 0 0 4px; }
+  .sug ul { margin: 0; padding-left: 18px; }
+  .sug p { margin: 0; }
+  .sug .err { margin-top: 6px; color: var(--error-color, #db4437); }
   .sum span.v { grid-column: 1 / -1; color: var(--secondary-text-color); font-size: .88em; margin-top: -2px; }
   .empty { padding: 24px 16px; color: var(--secondary-text-color); }
 `;
@@ -417,7 +604,7 @@ class TrikiCard extends HTMLElement {
   static getConfigElement() { return document.createElement("triki-card-editor"); }
 
   setConfig(config) {
-    this._config = { show_values: true, show_history: true, show_controls: true, ...config };
+    this._config = cardConfig(config);
     if (this._built) this._build();
   }
 
@@ -425,10 +612,13 @@ class TrikiCard extends HTMLElement {
   getGridOptions() { return { columns: 12, min_columns: 6, rows: "auto" }; }
 
   set hass(hass) {
-    const first = !this._hass;
     this._hass = hass;
-    if (first) this._t = STRINGS[(hass.locale?.language || hass.language || "en").slice(0, 2)] || STRINGS.en;
-    if (!this._built) this._build();
+    // the profile language can change without a page reload: follow it, but
+    // not in the middle of a check, which a rebuild would cut short
+    const t = cardStrings(hass);
+    const relang = this._t && t !== this._t && !this._chk;
+    if (!this._t || relang) this._t = t;
+    if (!this._built || relang) this._build();
     else this._applyAdmin();
     if (this.isConnected && !this._unsub && !this._subscribing) this._subscribe();
   }
@@ -441,6 +631,8 @@ class TrikiCard extends HTMLElement {
   disconnectedCallback() {
     this._checkClose();
     this._unsubscribe();
+    clearInterval(this._dozeTimer);
+    this._dozeTimer = null;
     if (this._io) this._io.disconnect();
     this._visible = false;
   }
@@ -450,17 +642,20 @@ class TrikiCard extends HTMLElement {
     const t = this._t || STRINGS.en;
     const c = this._config || {};
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    const buttons = c.buttons || BUTTONS;
+    const off = (name) => (buttons.includes(name) ? "" : " data-off");
     const axisRows = (id) => ["x", "y", "z"].map((a, i) =>
       `<div class="row"><span style="color:${AXIS_COLORS[i]}">${a}</span><div class="bar"><i id="${id}${a}" style="background:${AXIS_COLORS[i]}"></i></div><output id="${id}${a}v">—</output></div>`).join("");
     this.shadowRoot.innerHTML = `<style>${CSS}</style>
       <ha-card>
         <div class="head">
           <div class="name" id="name">${c.title || "Triki"}</div>
-          <div class="chip" id="state"><div class="dot"></div><span id="stateText">${t.asleep}</span></div>
-          <div class="chip" id="rateChip" hidden><ha-icon icon="mdi:sine-wave" style="--mdc-icon-size:14px"></ha-icon><span id="rate"></span></div>
-          <div class="chip" id="rssiChip" hidden><ha-icon icon="mdi:bluetooth" style="--mdc-icon-size:14px"></ha-icon><span id="rssi"></span></div>
-          <div class="chip check" id="checkChip" hidden><ha-icon icon="mdi:clipboard-check-outline" style="--mdc-icon-size:14px"></ha-icon><span>${t.check.other}</span></div>
-          <div class="chip" id="battChip" hidden><ha-icon id="battIcon" icon="mdi:battery" style="--mdc-icon-size:14px"></ha-icon><span id="batt"></span></div>
+          <div class="chip" id="state" data-chip="state"><div class="dot"></div><span id="stateText">${t.asleep}</span></div>
+          <div class="chip" id="rateChip" data-chip="rate" hidden><ha-icon icon="mdi:sine-wave" style="--mdc-icon-size:14px"></ha-icon><span id="rate"></span></div>
+          <div class="chip" id="rssiChip" data-chip="signal" hidden><ha-icon icon="mdi:bluetooth" style="--mdc-icon-size:14px"></ha-icon><span id="rssi"></span></div>
+          <div class="chip check" id="checkChip" data-chip="state" hidden><ha-icon icon="mdi:clipboard-check-outline" style="--mdc-icon-size:14px"></ha-icon><span>${t.check.other}</span></div>
+          <div class="chip" id="battChip" data-chip="battery" hidden><ha-icon id="battIcon" icon="mdi:battery" style="--mdc-icon-size:14px"></ha-icon><span id="batt"></span></div>
+          <div class="chip" id="linkChip" data-chip="link" title="${t.linkq}" hidden><ha-icon icon="mdi:transfer" style="--mdc-icon-size:14px"></ha-icon><span id="link"></span></div>
         </div>
         <div class="tabs" id="tabs" hidden></div>
         <div class="body">
@@ -474,6 +669,7 @@ class TrikiCard extends HTMLElement {
           <div class="btn-ind" id="btnInd"><div class="led"></div>${t.button}</div>
           <div class="toast" id="toast"></div>
           <div class="sleep" id="sleepText">${t.wake}</div>
+          <div class="headhint" id="headHint" hidden>${t.heading}</div>
           <div class="checkbar" id="checkBar"><b id="checkBarText"></b><div class="time"><i id="checkTime"></i></div></div>
           <div class="wizard" id="wizard">
             <div class="find" id="wizFind" hidden><span class="pic"><img src="${asset("tex_resin.webp")}" alt=""><i></i></span><p id="wizFindText"></p></div>
@@ -497,26 +693,33 @@ class TrikiCard extends HTMLElement {
         <div class="checkpanel" id="checkPanel"></div>
         ${c.show_values ? `<div class="values"><div><h4>${t.gyro}</h4>${axisRows("g")}</div><div><h4>${t.accel}</h4>${axisRows("a")}</div></div>` : ""}
         ${c.show_history ? `<div class="chart"><small>${t.gyro} · ${t.history}</small><canvas class="hist" id="hist"></canvas></div>` : ""}
-        <div class="actions"${c.show_controls ? "" : ' style="display:none"'}>
-          <button id="cal" disabled><ha-icon icon="mdi:target"></ha-icon><span class="lbl">${t.calibrate}</span></button>
-          <button id="reset" disabled><ha-icon icon="mdi:compass-outline"></ha-icon><span class="lbl">${t.reset}</span></button>
-          <button id="led" disabled><ha-icon icon="mdi:led-on"></ha-icon><span class="lbl">${t.led}</span></button>
-          <button id="check"><ha-icon icon="mdi:clipboard-check-outline"></ha-icon><span class="lbl">${t.check.open}</span></button>
+        ${c.show_gestures ? `<div class="glist" id="glist"><small>${t.glist.title}</small><div class="gitems">${GESTURES.map(([id]) =>
+          `<button class="gitem" data-g="${id}">${t.glist[id] || t.gestures[id]}</button>`).join("")}</div><p class="ghow" id="ghow">${t.glist.hint}</p></div>` : ""}
+        <div class="actions"${c.buttons.length ? "" : ' style="display:none"'}>
+          <button id="cal" disabled${off("calibrate")}><ha-icon icon="mdi:target"></ha-icon><span class="lbl">${t.calibrate}</span></button>
+          <button id="reset" disabled${off("align")}><ha-icon icon="mdi:compass-outline"></ha-icon><span class="lbl">${t.reset}</span></button>
+          <button id="led" disabled${off("led")}><ha-icon icon="mdi:led-on"></ha-icon><span class="lbl">${t.led}</span></button>
+          <button id="check"${off("check")}><ha-icon icon="mdi:clipboard-check-outline"></ha-icon><span class="lbl">${t.check.open}</span></button>
         </div>
-        <div class="help"${c.show_controls ? "" : ' style="display:none"'}><div class="front"><span class="pic"><img src="${asset("tex_resin.webp")}" alt=""><i></i></span><p>${t.help.mark}</p></div><p>${t.help.cal}</p><p>${t.help.align}</p></div>
+        <div class="help"${c.show_help && (c.show_model || c.buttons.length) ? "" : ' style="display:none"'}>${c.show_model ? `<div class="front"><span class="pic"><img src="${asset("tex_resin.webp")}" alt=""><i></i></span><p>${t.help.mark}</p></div>` : ""}${[["calibrate", "cal"], ["align", "align"], ["led", "led"], ["check", "check"]]
+          .filter(([b]) => c.buttons.includes(b)).map(([b, k]) => `<p data-for="${b}">${t.help[k]}</p>`).join("")}</div>
         </div>
         </div>
       </ha-card>`;
     const $ = (id) => this.shadowRoot.getElementById(id);
     const card = this.shadowRoot.querySelector("ha-card");
+    card.classList.toggle("nomodel", c.show_model === false);
+    for (const chip of card.querySelectorAll(".head [data-chip]")) {
+      chip.toggleAttribute("data-off", !c.chips.includes(chip.dataset.chip));
+    }
     this._wideRo?.disconnect();
     this._wideRo = new ResizeObserver(() => card.classList.toggle("wide", this.clientWidth >= 760));
     this._wideRo.observe(this);
     this._el = {
       name: $("name"), state: $("state"), stateText: $("stateText"), rate: $("rate"), rateChip: $("rateChip"),
-      rssi: $("rssi"), rssiChip: $("rssiChip"), batt: $("batt"), battChip: $("battChip"), battIcon: $("battIcon"),
+      rssi: $("rssi"), rssiChip: $("rssiChip"), link: $("link"), linkChip: $("linkChip"), batt: $("batt"), battChip: $("battChip"), battIcon: $("battIcon"),
       stage: $("stage"), gl: $("gl"), roll: $("roll"), pitch: $("pitch"), yaw: $("yaw"), btnInd: $("btnInd"),
-      toast: $("toast"), tabs: $("tabs"), sleepText: $("sleepText"), hist: $("hist"), reset: $("reset"), led: $("led"),
+      toast: $("toast"), tabs: $("tabs"), sleepText: $("sleepText"), headHint: $("headHint"), hist: $("hist"), reset: $("reset"), led: $("led"),
       cal: $("cal"), wizard: $("wizard"), wizText: $("wizText"), wizFind: $("wizFind"), wizFindText: $("wizFindText"), wizErr: $("wizErr"),
       wizNext: $("wizNext"), wizCancel: $("wizCancel"),
       wizLogo: $("wizLogo"), wizSlider: $("wizSlider"), wizMetal: $("wizMetal"), wizAngle: $("wizAngle"),
@@ -527,6 +730,9 @@ class TrikiCard extends HTMLElement {
     for (const p of ["g", "a"]) for (const a of ["x", "y", "z"]) {
       this._el[`${p}${a}`] = $(`${p}${a}`);
       this._el[`${p}${a}v`] = $(`${p}${a}v`);
+    }
+    for (const b of this.shadowRoot.querySelectorAll(".gitem")) {
+      b.addEventListener("click", () => this._pickGesture(b.dataset.g));
     }
     this._el.reset.addEventListener("click", () => this._wizard("heading"));
     this._el.led.addEventListener("click", () => this._toggleLed());
@@ -584,6 +790,19 @@ class TrikiCard extends HTMLElement {
     if (this._unsub) { this._unsub().catch?.(() => {}); this._unsub = null; }
   }
 
+  // The integration reloaded (its options changed): subscribe to the new device
+  // objects once they are up, trying for a while.
+  _resubscribeSoon(tries = 10) {
+    if (this._reloadTimer) return;
+    this._unsubscribe();
+    this._reloadTimer = setTimeout(async () => {
+      this._reloadTimer = null;
+      if (!this.isConnected || this._unsub || this._subscribing) return;
+      await this._subscribe();
+      if (!this._unsub && tries > 1) this._resubscribeSoon(tries - 1);
+    }, 2000);
+  }
+
   _isLive(s) { return !!(s && s.connected && s.streaming); }
 
   // Follow the awake token: switch when the shown one is not live and another is.
@@ -635,6 +854,7 @@ class TrikiCard extends HTMLElement {
   }
 
   _onMessage(id, msg) {
+    if (msg.type === "reload") { this._resubscribeSoon(); return; }
     if (msg.type === "status") {
       const was = this._isLive(this._statuses[id]);
       this._statuses[id] = msg;
@@ -649,6 +869,13 @@ class TrikiCard extends HTMLElement {
     else if (msg.type === "event") this._showEvent(msg.event, msg.data);
   }
 
+  _showDoze() {
+    const t = this._t, el = this._el;
+    if (!el) return;
+    const left = this._dozeUntil == null ? 0 : Math.round((this._dozeUntil - Date.now()) / 1000);
+    el.sleepText.textContent = left > 0 ? t.dozeHint.replace("{n}", left) : t.dozeLate;
+  }
+
   _showStatus(s) {
     this._status = s;
     const t = this._t, el = this._el;
@@ -656,15 +883,24 @@ class TrikiCard extends HTMLElement {
     if (!this._config?.title && s.name) el.name.textContent = s.name;
     const live = s.connected && s.streaming;
     el.state.className = `chip ${live ? "live" : s.unresponsive ? "warn" : ""}`;
-    const dozing = !s.connected && s.waiting_for_sleep;
+    // readiness: since 0.3.0; waiting_for_sleep alone stayed true until the next wake
+    const dozing = s.readiness ? s.readiness === "dozing" : !s.connected && s.waiting_for_sleep;
     el.stateText.textContent = live ? t.streaming : s.connected ? t.connected
       : s.unresponsive ? t.unresponsive : dozing ? t.dozing : t.asleep;
-    el.sleepText.textContent = dozing ? t.dozeHint : t.wake;
+    this._dozeUntil = dozing && s.doze_left_s != null ? Date.now() + s.doze_left_s * 1000 : null;
+    clearInterval(this._dozeTimer);
+    this._dozeTimer = dozing ? setInterval(() => this._showDoze(), 1000) : null;
+    if (dozing) this._showDoze();
+    else el.sleepText.textContent = t.wake;
     el.stage.classList.toggle("asleep", !live);
+    // only with a way to fix it on the card: the Align direction button
+    el.headHint.hidden = !(live && s.heading_known === false && (this._config?.buttons || BUTTONS).includes("align"));
     el.rateChip.hidden = !live;
     if (live) el.rate.textContent = `${Math.round(s.measured_rate ?? s.rate ?? 0)} ${t.rate}`;
     el.rssiChip.hidden = s.rssi == null;
     if (s.rssi != null) el.rssi.textContent = `${s.rssi} dBm`;
+    el.linkChip.hidden = s.link_quality == null;
+    if (s.link_quality != null) el.link.textContent = `${Math.round(s.link_quality)}%`;
     el.battChip.hidden = s.battery == null;
     if (s.battery != null) {
       el.batt.textContent = `${s.battery}%`;
@@ -676,6 +912,7 @@ class TrikiCard extends HTMLElement {
     el.checkChip.hidden = !(s.checking && !this._chk);
     el.check.disabled = !!s.checking && !this._chk;
     if (!live && (this._wizStep === "flat" || this._wizStep === "heading")) this._wizard(null);
+    this._markGestures();
     el.led.disabled = !s.connected;
     el.led.classList.toggle("on", !!s.led);
     el.btnInd.classList.toggle("on", !!s.button);
@@ -686,12 +923,23 @@ class TrikiCard extends HTMLElement {
     }
   }
 
+  // Left-right from the side that is up: the integration measures it from the
+  // green side, so a cap lying metal up read ±180°. Past 100° the other side
+  // counts as up, and back below 80° (no flicker on the edge).
+  _faceRoll(roll) {
+    const a = Math.abs(roll);
+    if (a > 100) this._capUp = true;
+    else if (a < 80) this._capUp = false;
+    if (!this._capUp) return roll;
+    return roll > 0 ? roll - 180 : roll + 180;
+  }
+
   _showMotion(m) {
     const el = this._el;
     if (!el) return;
     const [w, x, y, z] = m.quaternion;
     this._target = [w, x, y, z];
-    el.roll.textContent = `${Math.round(m.euler[0])}°`;
+    el.roll.textContent = `${Math.round(this._faceRoll(m.euler[0]))}°`;
     el.pitch.textContent = `${Math.round(m.euler[1])}°`;
     el.yaw.textContent = `${Math.round(m.euler[2])}°`;
     el.btnInd.classList.toggle("on", !!m.button);
@@ -736,7 +984,42 @@ class TrikiCard extends HTMLElement {
     i.style.left = f < 0 ? `${50 + f * 50}%` : "50%";
   }
 
+  // ------------------------------------------------------------------ gesture list
+  _gestureOn(id) {
+    const opt = GESTURES.find((g) => g[0] === id)?.[2];
+    const o = this._status?.options;
+    return !opt || !o || o[opt] !== false; // an older integration sends no options
+  }
+
+  _pickGesture(id) {
+    const t = this._t.glist, how = this.shadowRoot.getElementById("ghow");
+    if (!how) return;
+    this._gSel = this._gSel === id ? null : id;
+    for (const b of this.shadowRoot.querySelectorAll(".gitem")) b.classList.toggle("sel", b.dataset.g === this._gSel);
+    how.textContent = !this._gSel ? t.hint
+      : t.how[id] + (this._gestureOn(id) ? "" : ` (${t.off})`);
+  }
+
+  _markGestures() {
+    for (const b of this.shadowRoot.querySelectorAll(".gitem")) {
+      const on = this._gestureOn(b.dataset.g);
+      b.classList.toggle("off", !on);
+      b.title = on ? this._t.glist.how[b.dataset.g] : this._t.glist.off;
+    }
+    if (this._gSel) { const id = this._gSel; this._gSel = null; this._pickGesture(id); }
+  }
+
+  _lightGesture(kind) {
+    const g = GESTURES.find((x) => x[1].includes(kind));
+    const b = g && this.shadowRoot.querySelector(`.gitem[data-g="${g[0]}"]`);
+    if (!b) return;
+    b.classList.add("hit");
+    clearTimeout(b._hit);
+    b._hit = setTimeout(() => b.classList.remove("hit"), 900);
+  }
+
   _showEvent(kind, data) {
+    this._lightGesture(kind);
     const names = this._t.gestures;
     let label = names[kind];
     if (!label) return;
@@ -760,6 +1043,7 @@ class TrikiCard extends HTMLElement {
     if (this._wizStep === "logo" && step !== "logo") this._setLogo(this._status?.logo_angle); // undo preview
     this._wizStep = step;
     el.wizard.classList.toggle("show", !!step);
+    el.card?.classList.toggle("calibrating", !!step);
     el.wizErr.textContent = "";
     if (!step) return;
     el.wizText.textContent = t[step];
@@ -833,6 +1117,7 @@ class TrikiCard extends HTMLElement {
     if (!this._el) return;
     this._el.check.hidden = !admin;
     this._el.cal.hidden = !admin;
+    for (const p of this.shadowRoot.querySelectorAll('.help [data-for="calibrate"], .help [data-for="check"]')) p.hidden = !admin;
   }
 
   _fmt(text, values = {}) {
@@ -926,10 +1211,34 @@ class TrikiCard extends HTMLElement {
     if (action.startsWith("pick:")) { this._checkChoose(action.slice(5)); return; }
     if (!run) return;
     const t = this._t.check;
+    if (action === "apply") {
+      // only what the check suggested, each with the options form's limits (server side)
+      const options = Object.fromEntries(run.suggestions().map((g) => [g.key, g.value]));
+      try {
+        await this._send({ type: "triki/apply", device_id: chk.id, options });
+        chk.applied = true;
+        chk.err = "";
+      } catch (err) {
+        const e = err?.error || err;
+        chk.err = this._fmt(t.sug.err, { e: e?.message || e?.code || "?" });
+      }
+      this._renderCheck(true);
+      return;
+    }
     if (action === "start") {
       if (run.start()) {
         chk.ref = this._target ? [...this._target] : null; // the hint moves from here
         chk.err = "";
+        if (run.step.id === "sleep") {
+          // the server drops the link as after idling; the step follows the status
+          try {
+            await this._send({ type: "triki/check", action: "sleep", device_id: chk.id, session: chk.session });
+          } catch (err) {
+            const e = err?.error || err;
+            chk.err = e?.message || e?.code || "?";
+            run.redo();
+          }
+        }
       }
     } else if (action === "done") {
       if (run.step.external) {
@@ -949,13 +1258,23 @@ class TrikiCard extends HTMLElement {
     this._renderCheck(true);
   }
 
+  // The summary measures nothing: let the token go back to automations and idle
+  // timers now, not when the card is closed (a background tab keeps it open).
+  _checkRelease(chk) {
+    chk.released = true;
+    clearInterval(chk.renew);
+    for (const id of chk.owned) {
+      this._send({ type: "triki/check", action: "stop", device_id: id, session: chk.session }).catch(() => {});
+    }
+  }
+
   _checkClose() {
     const chk = this._chk;
     if (!chk) return;
     this._chk = null;
     clearInterval(chk.renew);
     clearInterval(chk.timer);
-    for (const id of chk.owned) {
+    if (!chk.released) for (const id of chk.owned) {
       this._send({ type: "triki/check", action: "stop", device_id: id, session: chk.session }).catch(() => {});
     }
     this._el?.card.classList.remove("checking");
@@ -970,6 +1289,7 @@ class TrikiCard extends HTMLElement {
     const t = this._t.check;
     const run = chk.run;
     const v = run ? run.view() : null;
+    if (v?.finished && !chk.released) this._checkRelease(chk);
     const key = !run ? `pick|${chk.msg}|${[...chk.owned].map((id) => this._isLive(this._statuses?.[id])).join()}`
       : v.finished ? "summary" : `${v.id}|${v.phase}|${v.online}|${v.result?.status}|${chk.err}`;
     if (force || key !== chk.key) {
@@ -996,7 +1316,11 @@ class TrikiCard extends HTMLElement {
         el.checkPanel.querySelectorAll("li").forEach((li, i) => li.classList.toggle("ok", i < live.got));
       }
       if ((v.id === "rest" || v.id === "drift") && live.moved) set("cHint", t.reason.moved);
-      if (["tap", "shake", "throw", "lean"].includes(v.id)) set("cCount", `${live.count} / ${live.want}`);
+      if (["tap", "shake", "throw", "lean", "handle"].includes(v.id)) set("cCount", `${live.count} / ${live.want}`);
+      if (v.id === "shake") set("cHint", live.tries > live.count ? this._fmt(t.tries, { n: live.tries }) : "");
+      if (v.id === "sleep" && v.phase === "running") {
+        set("cHint", this._fmt(t.sleepStage[live.stage] || "", { left: live.left ?? "—" }));
+      }
       if (v.id === "lean") set("cHint", live.hint ? t.reason[live.hint] : "");
       if (v.extra && v.phase === "running") {
         const list = Object.entries(v.extra).map(([k, n]) => `${this._t.gestures[k] || k} ×${n}`).join(", ");
@@ -1008,7 +1332,8 @@ class TrikiCard extends HTMLElement {
       el.checkBarText.textContent = run ? t.summary : t.title;
       el.checkTime.style.width = "0";
     }
-    this._setGhost(v && !v.finished && v.phase === "running" ? v : null);
+    // shown before Start too, so the move is seen before it is asked for
+    this._setGhost(v && !v.finished && (v.phase === "running" || v.phase === "ready") ? v : null);
   }
 
   _checkHtml(v) {
@@ -1032,21 +1357,31 @@ class TrikiCard extends HTMLElement {
         const detail = this._resultText(s.id, r);
         return `<span>${t.steps[s.id]}</span><b class="${r.status}">${t.status[r.status]}</b>${detail ? `<span class="v">${detail}</span>` : ""}`;
       }).join("");
-      return `<small class="of">${t.title}</small><h3>${t.summary}</h3><div class="sum">${rows}</div>
+      const sugs = chk.applied ? [] : chk.run.suggestions();
+      let sug = "";
+      if (chk.applied) sug = `<div class="sug"><p>${t.sug.applied}</p></div>`;
+      else if (sugs.length) {
+        const items = sugs.map((g) => `<li>${this._fmt(t.sug[g.key], g)}</li>`).join("");
+        sug = `<div class="sug"><h4>${t.sug.title}</h4><ul>${items}</ul><p><small>${t.sug.note}</small></p>${chk.err ? `<p class="err">${chk.err}</p>` : ""}</div>`;
+      }
+      const btns = sugs.length ? btn("apply", t.sug.apply, "primary") + btn("close", t.close) : btn("close", t.close, "primary");
+      return `<small class="of">${t.title}</small><h3>${t.summary}</h3><div class="sum">${rows}</div>${sug}
         <details class="report"><summary>${t.report}</summary><textarea readonly rows="9">${this._fmt("{r}", { r: chk.run.report({ version: VERSION }) })}</textarea></details>
-        <div class="btns">${btn("close", t.close, "primary")}</div>`;
+        <div class="btns">${btns}</div>`;
     }
     const of = this._fmt(t.stepOf, { n: v.index + 1, total: v.total });
     let body = `<p>${t.text[v.id]}</p>`;
+    if ((v.id === "turn_cw" || v.id === "turn_ccw") && !chk.run.options.knob) body += `<p><small>${t.text.knobOff}</small></p>`;
     if (v.id === "press") {
       body = `<p>${t.text.press}</p><ol>${v.live.want.map((k) => `<li>${this._t.gestures[k] || k}</li>`).join("")}</ol>`;
     }
     let live = "";
     if (v.id === "turn_cw" || v.id === "turn_ccw") {
       live = `<div class="big"><div><small>${t.count}</small><b id="cSteps">0</b></div><div><small>${t.angle}</small><b id="cAngle">0°</b></div></div><div class="hint" id="cWrong"></div>`;
-    } else if (["tap", "shake", "throw", "lean"].includes(v.id)) {
-      live = `<div class="big"><div><small>${v.id === "lean" ? t.count : t.times}</small><b id="cCount">0 / ${v.live.want}</b></div></div><div class="hint" id="cHint"></div>`;
-    } else if (["tilt", "flip", "press", "rest", "drift"].includes(v.id)) {
+    } else if (["tap", "shake", "throw", "lean", "handle"].includes(v.id)) {
+      const label = { lean: t.leans, shake: t.recognised, handle: t.lifts }[v.id] || t.times;
+      live = `<div class="big"><div><small>${label}</small><b id="cCount">0 / ${v.live.want}</b></div></div><div class="hint" id="cHint"></div>`;
+    } else if (["tilt", "flip", "press", "rest", "drift", "sleep"].includes(v.id)) {
       live = `<div class="hint" id="cHint"></div>`;
     }
     let res = "", btns = "";
@@ -1054,7 +1389,11 @@ class TrikiCard extends HTMLElement {
       res = `<div class="res warn"><b>${t.paused}</b></div>`;
       btns = btn("skip", t.skip) + btn("close", t.close);
     } else if (v.phase === "ready" && !v.online) {
-      res = `<div class="res warn"><b>${t.text.wake}</b></div>`;
+      // a check opened while its own sleep step's doze runs: a press cannot wake it yet
+      const doze = this._status?.readiness === "dozing";
+      const left = this._dozeUntil == null ? 0 : Math.round((this._dozeUntil - Date.now()) / 1000);
+      const wake = doze ? (left > 0 ? this._fmt(this._t.dozeHint, { n: left }) : this._fmt(this._t.dozeLate)) : t.text.wake;
+      res = `<div class="res warn"><b>${wake}</b></div>`;
       btns = btn("skip", t.skip) + btn("close", t.close);
     } else if (v.phase === "ready" && v.external) {
       // the flat calibration measures nothing over time: lay the cap down and confirm
@@ -1083,18 +1422,22 @@ class TrikiCard extends HTMLElement {
     if (r.reason && t.reason[r.reason]) parts.push(this._fmt(t.reason[r.reason], vals));
     if (r.status !== "skip" || r.values) {
       if (id === "rest" && r.values) parts.push(this._fmt(t.values.rest, vals));
-      if ((id === "turn_cw" || id === "turn_ccw") && r.values && r.reason !== "steps") parts.push(this._fmt(t.values.turn, vals));
+      if ((id === "turn_cw" || id === "turn_ccw") && r.values && r.reason !== "steps" && r.reason !== "knob_off") parts.push(this._fmt(t.values.turn, vals));
       if (id === "drift" && r.values && r.reason !== "drift") parts.push(this._fmt(t.values.drift, vals));
+      if (id === "handle" && r.values) parts.push(this._fmt(t.values.handle, vals));
+      if (id === "shake" && r.values && r.reason !== "shake_missed") parts.push(this._fmt(t.values.shake, vals));
+      if (id === "sleep" && r.values?.doze_s != null && r.reason !== "long_doze") parts.push(this._fmt(t.values.sleep, vals));
     }
     return parts.join(" ");
   }
 
   // ------------------------------------------------------------------ hint model
-  // A faint copy of the cap showing where to move it: tilt the dot edge, a slow turn,
-  // or turning over, all from the pose the step started in.
+  // A faint copy of the cap showing what to do, from the pose the step started in:
+  // tilt the dot edge, a slow turn, turning over, a pick-up, leaning in the hand,
+  // a press, a shake, a tap, a toss. Built-in model only.
   _setGhost(v) {
     const kind = v?.ghost?.type || null;
-    if (!kind || !this._chk?.ref) {
+    if (!kind || !(this._chk?.ref || this._target)) {
       if (this._ghost) this._ghost.visible = false;
       this._ghostView = null;
       return;
@@ -1122,7 +1465,10 @@ class TrikiCard extends HTMLElement {
   }
 
   _ghostPose(T) {
-    const v = this._ghostView, ref = this._chk?.ref;
+    const v = this._ghostView;
+    const running = v?.phase === "running";
+    // before Start the hint moves from the live pose
+    const ref = (running && this._chk?.ref) || this._target;
     if (!v || !ref) return null;
     const q0 = new T.Quaternion(ref[1], ref[2], ref[3], ref[0]);
     const d = new T.Vector3(0, -1, 0).applyQuaternion(q0); // the dot edge in the world
@@ -1130,7 +1476,7 @@ class TrikiCard extends HTMLElement {
     if (h.lengthSq() < 1e-6) h.set(0, -1, 0);
     h.normalize();
     const up = new T.Vector3(0, 0, 1);
-    const sec = this._chk.run?._elapsed?.() ?? v.elapsed ?? 0; // live, not the 4 Hz panel tick
+    const sec = running ? this._chk.run?._elapsed?.() ?? v.elapsed ?? 0 : performance.now() / 1000; // live, not the 4 Hz panel tick
     let r;
     if (v.ghost.type === "tilt") {
       r = new T.Quaternion().setFromAxisAngle(new T.Vector3().crossVectors(h, up).normalize(), GHOST_TILT);
@@ -1141,7 +1487,19 @@ class TrikiCard extends HTMLElement {
     } else if (v.ghost.type === "flip") {
       const p = Math.min(1, (sec % 3) / 1.5);
       r = new T.Quaternion().setFromAxisAngle(h, Math.PI * p);
-    } else return null;
+    } else {
+      const m = ghostMotion(v.ghost.type, sec);
+      if (!m) return null;
+      // tilts lift the dot edge (about the sideways axis); leans roll the cap
+      // about its own dot axis, sensor y, which is what the tilt gesture reads
+      const side = new T.Vector3().crossVectors(h, up).normalize();
+      const lr = new T.Vector3(0, 1, 0).applyQuaternion(q0);
+      r = new T.Quaternion().setFromAxisAngle(side, m.tilt || 0)
+        .multiply(new T.Quaternion().setFromAxisAngle(lr, m.lean || 0));
+      this._ghost.position.z = m.lift || 0;
+      return r.multiply(q0);
+    }
+    this._ghost.position.z = 0;
     return r.multiply(q0);
   }
 
@@ -1299,27 +1657,36 @@ class TrikiCardEditor extends HTMLElement {
   set hass(hass) { this._hass = hass; this._render(); }
   _render() {
     if (!this._hass || !this._config) return;
+    const T = cardStrings(this._hass);
+    const e = T.editor;
     if (!this._form) {
       this._form = document.createElement("ha-form");
-      this._form.computeLabel = (s) => ({
-        device_id: "Triki", title: "Title", show_values: "Gyro and accelerometer bars",
-        show_history: "Gyro history", show_controls: "Buttons and help (calibrate, align, LED, check)", model: "3D model",
-      })[s.name] || s.name;
       this._form.addEventListener("value-changed", (ev) => {
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: ev.detail.value } }));
       });
       this.appendChild(this._form);
     }
+    this._form.computeLabel = (sc) => (sc.name === "device_id" ? "Triki" : e[sc.name] || sc.name);
+    this._form.computeHelper = (sc) => (sc.name === "buttons" ? e.admin : undefined);
     this._form.hass = this._hass;
-    this._form.data = this._config;
+    // the card's defaults filled in: an unset list means all of it, and the
+    // form must show it ticked, or ticking one item hides the rest
+    const { show_controls, show_status, ...data } = cardConfig(this._config);
+    this._form.data = data;
+    // top to bottom as on the card
+    const opts = (ids, label) => ids.map((value) => ({ value, label: label(value) }));
     this._form.schema = [
       { name: "device_id", selector: { device: { integration: "triki" } } },
       { name: "title", selector: { text: {} } },
+      { name: "chips", selector: { select: { multiple: true, mode: "list", options: opts(CHIPS, (v) => e.opt[v]) } } },
+      { name: "show_model", selector: { boolean: {} } },
+      { name: "model", selector: { select: { mode: "dropdown", options: opts(["cap", "glb"], (v) => e.opt[v]) } } },
       { name: "show_values", selector: { boolean: {} } },
       { name: "show_history", selector: { boolean: {} } },
-      { name: "show_controls", selector: { boolean: {} } },
-      { name: "model", selector: { select: { mode: "dropdown", options: [
-        { value: "cap", label: "Triki (built in)" }, { value: "glb", label: "Flopsstuff textured" }] } } },
+      { name: "show_gestures", selector: { boolean: {} } },
+      { name: "buttons", selector: { select: { multiple: true, mode: "list", options: opts(BUTTONS,
+        (v) => ({ calibrate: T.calibrate, align: T.reset, led: T.led, check: T.check.open })[v]) } } },
+      { name: "show_help", selector: { boolean: {} } },
     ];
   }
 }

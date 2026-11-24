@@ -22,11 +22,24 @@ async def test_bluetooth_discovery(hass: HomeAssistant, mock_bluetooth) -> None:
     )
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "bluetooth_confirm"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "gestures"
     with patch(SETUP, return_value=True):
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"gestures": ["knob", "tilt"]}
+        )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == NAME
     assert result["data"] == {CONF_ADDRESS: ADDRESS}
+    # the gestures picked are on, the others off; nothing else is set
+    assert result["options"] == {
+        "knob": True,
+        "multi_press": False,
+        "tilt": True,
+        "shake": False,
+        "motion_gestures": False,
+    }
 
     # second discovery of the same token aborts
     result = await hass.config_entries.flow.async_init(
@@ -59,12 +72,15 @@ async def test_user_pick(hass: HomeAssistant, mock_bluetooth) -> None:
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
     assert result["type"] is FlowResultType.FORM
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_ADDRESS: ADDRESS}
+    )
+    assert result["step_id"] == "gestures"
     with patch(SETUP, return_value=True):
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {CONF_ADDRESS: ADDRESS}
-        )
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == NAME
+    assert not any(result["options"].values())  # nothing picked: all off
 
 
 async def test_options(hass: HomeAssistant, mock_bluetooth) -> None:
@@ -72,12 +88,27 @@ async def test_options(hass: HomeAssistant, mock_bluetooth) -> None:
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] is FlowResultType.FORM
+    # the gestures come first, the rest folds away
+    keys = [str(k) for k in result["data_schema"].schema]
+    assert keys == ["knob", "multi_press", "tilt", "shake", "motion_gestures", "advanced"]
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {CONF_RATE: "52", CONF_IDLE_TIMEOUT: 60, "knob_step": 45, "invert_rotation": True},
+        {
+            "knob": True,
+            "advanced": {
+                CONF_RATE: "52",
+                CONF_IDLE_TIMEOUT: 60,
+                "knob_step": 45,
+                "invert_rotation": True,
+            },
+        },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
+    # stored flat: the section is only the form's layout
     assert entry.options[CONF_RATE] == 52
+    assert entry.options["knob"] is True
+    assert entry.options["knob_step"] == 45
+    assert "advanced" not in entry.options
     # the flow schedules a reload (here: a first setup); let it finish before
     # teardown, or a slow runner finds the setup still in flight
     await hass.async_block_till_done()
@@ -134,7 +165,14 @@ async def test_options_change_reloads_entry(hass: HomeAssistant, mock_bluetooth)
     result = await hass.config_entries.options.async_init(entry.entry_id)
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
-        {CONF_RATE: "26", CONF_IDLE_TIMEOUT: 60, "knob_step": 45, "invert_rotation": True},
+        {
+            "advanced": {
+                CONF_RATE: "26",
+                CONF_IDLE_TIMEOUT: 60,
+                "knob_step": 45,
+                "invert_rotation": True,
+            }
+        },
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     await hass.async_block_till_done()

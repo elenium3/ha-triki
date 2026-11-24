@@ -45,16 +45,18 @@ unzip triki.zip -d custom_components/triki
 
 ## Adding the token
 
-1. Press the green button on the token. It advertises for a few seconds after a
+1. Press the cap (the whole cap is the button). It advertises for a few seconds after a
    press, so do this right before the next step.
 2. Home Assistant discovers it as *Żabka Triki* under *Discovered* in
    [Settings → Devices & services](https://my.home-assistant.io/redirect/integrations/).
-   Confirm.
+   Confirm, then tick the gestures you want besides press and long press
+   (knob, double and triple press, tilt, shake, flip/tap/toss). Everything can
+   be changed later in *Configure*.
 3. If nothing is discovered:
    [Add integration → Żabka Triki](https://my.home-assistant.io/redirect/config_flow_start/?domain=triki),
    press the button again and pick the token from the list.
 
-The device is created immediately. Pitch and roll show as unavailable until the
+The device is created immediately. The tilt sensors show as unavailable until the
 first connection; the other entities have a state right away.
 
 ## First check

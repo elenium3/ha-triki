@@ -21,7 +21,7 @@ ignore = [
 [tool.codespell]
 skip = "./.venv,./.git,./captures,*.jsonl,*.svg,*.png,*.jpg,*.glb,triki-three.js"
 # hass: Home Assistant's own name for its core object; the rest are Polish words
-ignore-words-list = "hass,ser,nd,te,ans,retuned"
+ignore-words-list = "hass,ser,nd,te,ans,retuned,tekst"
 
 [tool.mypy]
 python_version = "3.14"

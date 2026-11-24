@@ -10,6 +10,7 @@ try:
     import probatio as vol
 except ImportError:  # pragma: no cover
     import voluptuous as vol  # type: ignore[no-redef]
+from homeassistant import data_entry_flow
 from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_discovered_service_info,
@@ -54,6 +55,12 @@ from .const import (
 )
 from .protocol import DEFAULT_RATE, SUPPORTED_RATES
 
+ADVANCED = "advanced"  # the folded section of the options form
+
+# the gestures offered when a cap is added: each turns one option on (press and
+# long press need none); the rest of the options stay at their defaults
+SETUP_GESTURES = (CONF_KNOB, CONF_MULTI_PRESS, CONF_TILT, CONF_SHAKE, CONF_MOTION_GESTURES)
+
 
 def _is_triki(info: BluetoothServiceInfoBleak) -> bool:
     name = (info.name or "").lower()
@@ -70,6 +77,8 @@ class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         self._discovery: BluetoothServiceInfoBleak | None = None
         self._found: dict[str, str] = {}
+        self._title = ""
+        self._address = ""
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
@@ -87,10 +96,8 @@ class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         assert self._discovery is not None  # noqa: S101  # set by async_step_bluetooth
         if user_input is not None:
-            return self.async_create_entry(
-                title=self._discovery.name,
-                data={CONF_ADDRESS: self._discovery.address},
-            )
+            self._title, self._address = self._discovery.name, self._discovery.address
+            return await self.async_step_gestures()
         self._set_confirm_only()
         return self.async_show_form(
             step_id="bluetooth_confirm",
@@ -102,10 +109,8 @@ class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
             address = user_input[CONF_ADDRESS]
             await self.async_set_unique_id(address, raise_on_progress=False)
             self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title=self._found.get(address, address),
-                data={CONF_ADDRESS: address},
-            )
+            self._title, self._address = self._found.get(address, address), address
+            return await self.async_step_gestures()
 
         current = self._async_current_ids(include_ignore=False)
         for info in async_discovered_service_info(self.hass, connectable=True):
@@ -125,6 +130,35 @@ class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
             ),
         )
 
+    async def async_step_gestures(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Which gestures to turn on: they are off until asked for, and the
+        options page is easy to miss."""
+        if user_input is not None:
+            chosen = set(user_input.get("gestures", []))
+            return self.async_create_entry(
+                title=self._title,
+                data={CONF_ADDRESS: self._address},
+                options={g: g in chosen for g in SETUP_GESTURES},
+            )
+        return self.async_show_form(
+            step_id="gestures",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional("gestures", default=[]): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=list(SETUP_GESTURES),
+                            multiple=True,
+                            mode=selector.SelectSelectorMode.LIST,
+                            translation_key="gestures",
+                        )
+                    )
+                }
+            ),
+            description_placeholders={"name": self._title},
+        )
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
@@ -136,12 +170,46 @@ class TrikiOptionsFlow(OptionsFlowWithReload):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
-            user_input[CONF_RATE] = int(user_input[CONF_RATE])
-            return self.async_create_entry(data=user_input)
+            # the options are stored flat; the section is only how the form looks
+            advanced = user_input.pop(ADVANCED, {})
+            data = {**user_input, **advanced}
+            data[CONF_RATE] = int(data[CONF_RATE])
+            return self.async_create_entry(data=data)
 
         o = self.config_entry.options
-        schema = vol.Schema(
+        advanced = vol.Schema(
             {
+                vol.Required(
+                    CONF_MULTI_PRESS_WINDOW,
+                    default=o.get(CONF_MULTI_PRESS_WINDOW, DEFAULT_MULTI_PRESS_WINDOW),
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=0.2,
+                        max=1.5,
+                        step=0.05,
+                        unit_of_measurement="s",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
+                vol.Required(
+                    CONF_KNOB_STEP, default=o.get(CONF_KNOB_STEP, DEFAULT_KNOB_STEP)
+                ): selector.NumberSelector(
+                    selector.NumberSelectorConfig(
+                        min=5,
+                        max=180,
+                        step=5,
+                        unit_of_measurement="°",
+                        mode=selector.NumberSelectorMode.SLIDER,
+                    )
+                ),
+                vol.Required(
+                    CONF_INVERT_ROTATION,
+                    default=o.get(CONF_INVERT_ROTATION, DEFAULT_INVERT_ROTATION),
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_WAKE_AS_PRESS,
+                    default=o.get(CONF_WAKE_AS_PRESS, DEFAULT_WAKE_AS_PRESS),
+                ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_RATE, default=str(o.get(CONF_RATE, DEFAULT_RATE))
                 ): selector.SelectSelector(
@@ -175,55 +243,30 @@ class TrikiOptionsFlow(OptionsFlowWithReload):
                     )
                 ),
                 vol.Required(
-                    CONF_KNOB_STEP, default=o.get(CONF_KNOB_STEP, DEFAULT_KNOB_STEP)
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=5,
-                        max=180,
-                        step=5,
-                        unit_of_measurement="°",
-                        mode=selector.NumberSelectorMode.SLIDER,
-                    )
-                ),
-                vol.Required(
-                    CONF_INVERT_ROTATION,
-                    default=o.get(CONF_INVERT_ROTATION, DEFAULT_INVERT_ROTATION),
+                    CONF_CAPTURE, default=o.get(CONF_CAPTURE, False)
                 ): selector.BooleanSelector(),
-                vol.Required(
-                    CONF_WAKE_AS_PRESS,
-                    default=o.get(CONF_WAKE_AS_PRESS, DEFAULT_WAKE_AS_PRESS),
-                ): selector.BooleanSelector(),
+            }
+        )
+        # the gestures up front; the link, timing and debug settings fold away
+        schema = vol.Schema(
+            {
                 vol.Required(
                     CONF_KNOB, default=o.get(CONF_KNOB, DEFAULT_KNOB)
-                ): selector.BooleanSelector(),
-                vol.Required(
-                    CONF_SHAKE, default=o.get(CONF_SHAKE, DEFAULT_SHAKE)
-                ): selector.BooleanSelector(),
-                vol.Required(
-                    CONF_TILT, default=o.get(CONF_TILT, DEFAULT_TILT)
-                ): selector.BooleanSelector(),
-                vol.Required(
-                    CONF_MOTION_GESTURES,
-                    default=o.get(CONF_MOTION_GESTURES, DEFAULT_MOTION_GESTURES),
                 ): selector.BooleanSelector(),
                 vol.Required(
                     CONF_MULTI_PRESS, default=o.get(CONF_MULTI_PRESS, DEFAULT_MULTI_PRESS)
                 ): selector.BooleanSelector(),
                 vol.Required(
-                    CONF_MULTI_PRESS_WINDOW,
-                    default=o.get(CONF_MULTI_PRESS_WINDOW, DEFAULT_MULTI_PRESS_WINDOW),
-                ): selector.NumberSelector(
-                    selector.NumberSelectorConfig(
-                        min=0.2,
-                        max=1.5,
-                        step=0.05,
-                        unit_of_measurement="s",
-                        mode=selector.NumberSelectorMode.SLIDER,
-                    )
-                ),
-                vol.Required(
-                    CONF_CAPTURE, default=o.get(CONF_CAPTURE, False)
+                    CONF_TILT, default=o.get(CONF_TILT, DEFAULT_TILT)
                 ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_SHAKE, default=o.get(CONF_SHAKE, DEFAULT_SHAKE)
+                ): selector.BooleanSelector(),
+                vol.Required(
+                    CONF_MOTION_GESTURES,
+                    default=o.get(CONF_MOTION_GESTURES, DEFAULT_MOTION_GESTURES),
+                ): selector.BooleanSelector(),
+                vol.Required(ADVANCED): data_entry_flow.section(advanced, {"collapsed": True}),
             }
         )
         return self.async_show_form(step_id="init", data_schema=schema)

@@ -21,7 +21,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import TrikiConfigEntry
-from .device import TrikiDevice
+from .device import READINESS, TrikiDevice
 from .entity import TrikiEntity
 from .gestures import FACES
 
@@ -54,6 +54,25 @@ DESCRIPTIONS = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         value_fn=lambda d: d.rssi,
+        requires_connection=False,
+    ),
+    TrikiSensorDescription(
+        key="link_quality",
+        translation_key="link_quality",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+        value_fn=lambda d: d.link_quality.last_pct,
+        requires_connection=False,
+        restore=True,
+    ),
+    TrikiSensorDescription(
+        key="readiness",
+        translation_key="readiness",
+        device_class=SensorDeviceClass.ENUM,
+        options=list(READINESS),
+        value_fn=lambda d: d.readiness,
         requires_connection=False,
     ),
     TrikiSensorDescription(

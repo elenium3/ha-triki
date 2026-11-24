@@ -114,6 +114,9 @@ class Orientation:
         self.beta = beta
         self.mount: Quat = (1.0, 0.0, 0.0, 0.0)  # cap frame -> sensor frame
         self._carry: float | None = None  # world angle of the front, kept over a reset
+        # whether heading 0 means "dot away from the viewer": set by an alignment,
+        # kept over a reconnect, lost when Home Assistant restarts
+        self.heading_known = False
         self.reset()
 
     def reset(self, keep_heading: bool = False) -> None:
@@ -124,7 +127,13 @@ class Orientation:
         again; the heading cannot be measured (no compass), so this assumes the
         token was not turned on the table in between, as when it dozes off.
         """
-        self._carry = self._front_angle() if keep_heading and self.ready else None
+        if not keep_heading:
+            self._carry = None
+        elif self.ready:
+            self._carry = self._front_angle()
+        # else: a link that streamed nothing; the carry from before it stands
+        if self._carry is None and (not keep_heading or self.ready):
+            self.heading_known = False
         self._q: Quat = (1.0, 0.0, 0.0, 0.0)
         self._heading: Quat = (1.0, 0.0, 0.0, 0.0)  # applied on output: zeroes yaw
         self._t: float | None = None
@@ -158,6 +167,7 @@ class Orientation:
         -y. With the front pointing up or down that is undefined; then the
         sensor's yaw is zeroed instead.
         """
+        self.heading_known = True
         pose = quat_mul(self._q, self.mount)
         wx, wy, _ = quat_rotate(pose, FRONT)
         if math.hypot(wx, wy) > 0.3:
@@ -218,6 +228,8 @@ class Orientation:
                     now = self._front_angle()
                     if now is not None:
                         self._heading = quat_about_z(self._carry - now)
+                    else:
+                        self.heading_known = False  # standing on its edge: nothing to carry
                     self._carry = None
             return
         dt = t - self._t

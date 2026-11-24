@@ -1,0 +1,113 @@
+blueprint:
+  name: "Triki: an action for each gesture"
+  description: >-
+    Pick what each gesture of the cap does; leave the rest empty. Gestures
+    other than press and long press work once they are turned on for the cap
+    (in *Configure*, or when the cap is added). In knob actions the variable
+    `steps` holds how many knob steps the turn made.
+  domain: automation
+  source_url: https://github.com/elenium3/ha-triki/blob/main/blueprints/automation/triki/triki_actions.yaml
+  input:
+    triki:
+      name: Triki
+      description: The cap's Action entity.
+      selector:
+        entity:
+          filter:
+            - integration: triki
+              domain: event
+    press:
+      name: Press
+      default: []
+      selector:
+        action: {}
+    double_press:
+      name: Double press
+      default: []
+      selector:
+        action: {}
+    triple_press:
+      name: Triple press
+      default: []
+      selector:
+        action: {}
+    long_press:
+      name: Long press
+      default: []
+      selector:
+        action: {}
+    rotate_cw:
+      name: Knob clockwise
+      default: []
+      selector:
+        action: {}
+    rotate_ccw:
+      name: Knob counter-clockwise
+      default: []
+      selector:
+        action: {}
+    tilt_right:
+      name: Tilt right
+      default: []
+      selector:
+        action: {}
+    tilt_left:
+      name: Tilt left
+      default: []
+      selector:
+        action: {}
+    shake:
+      name: Shake
+      default: []
+      selector:
+        action: {}
+    flip:
+      name: Flip
+      default: []
+      selector:
+        action: {}
+
+mode: queued
+max: 10
+max_exceeded: silent
+
+triggers:
+  - trigger: state
+    entity_id: !input triki
+
+variables:
+  # to_state is none when the entity is removed
+  event: "{{ trigger.to_state.attributes.event_type | default('') if trigger.to_state else '' }}"
+  steps: "{{ trigger.to_state.attributes.steps | default(1) | int if trigger.to_state else 1 }}"
+
+# a new event has a new timestamp; coming back from unavailable (a restart or a
+# reload of the integration) brings back the last one, which is not a gesture
+conditions:
+  - >-
+    {{ trigger.from_state is not none and trigger.to_state is not none
+       and trigger.from_state.state != 'unavailable'
+       and trigger.to_state.state not in ['unavailable', 'unknown']
+       and trigger.to_state.state != trigger.from_state.state }}
+
+actions:
+  - choose:
+      - conditions: "{{ event == 'press' }}"
+        sequence: !input press
+      - conditions: "{{ event == 'double_press' }}"
+        sequence: !input double_press
+      - conditions: "{{ event == 'triple_press' }}"
+        sequence: !input triple_press
+      - conditions: "{{ event == 'long_press' }}"
+        sequence: !input long_press
+      - conditions: "{{ event == 'rotate_cw' }}"
+        sequence: !input rotate_cw
+      - conditions: "{{ event == 'rotate_ccw' }}"
+        sequence: !input rotate_ccw
+      - conditions: "{{ event == 'tilt_right' }}"
+        sequence: !input tilt_right
+      - conditions: "{{ event == 'tilt_left' }}"
+        sequence: !input tilt_left
+      - conditions: "{{ event == 'shake' }}"
+        sequence: !input shake
+      - conditions: "{{ event == 'flip' }}"
+        sequence: !input flip

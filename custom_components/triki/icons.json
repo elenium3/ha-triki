@@ -19,6 +19,14 @@
       }
     },
     "sensor": {
+      "readiness": {
+        "default": "mdi:gesture-tap-button",
+        "state": {
+          "dozing": "mdi:sleep",
+          "asleep": "mdi:power-sleep",
+          "not_responding": "mdi:alert-circle-outline"
+        }
+      },
       "face": {
         "default": "mdi:flip-vertical",
         "state": {

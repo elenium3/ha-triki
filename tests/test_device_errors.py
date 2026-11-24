@@ -13,6 +13,7 @@ from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import async_capture_events
 
+from custom_components.triki import device as device_mod
 from custom_components.triki.const import BUS_EVENT
 from custom_components.triki.protocol import (
     BATTERY_LEVEL_UUID,
@@ -59,7 +60,7 @@ async def test_session_setup_failure_disconnects(hass: HomeAssistant, setup) -> 
 
 
 async def test_optional_reads_may_fail(hass: HomeAssistant, setup) -> None:
-    """Firmware, battery and LED reads failing must not abort the session."""
+    """Firmware and battery reads failing must not abort the session."""
     client = make_client()
 
     async def read(uuid):
@@ -73,7 +74,6 @@ async def test_optional_reads_may_fail(hass: HomeAssistant, setup) -> None:
     assert dev.connected is True
     assert dev.firmware is None
     assert dev.battery is None
-    assert dev.led_on is None
 
 
 async def test_hung_connect_does_not_swallow_next_wakeup(hass: HomeAssistant, setup) -> None:
@@ -198,6 +198,7 @@ async def test_no_instant_reconnect_after_idle_disconnect(hass: HomeAssistant, s
     # its advertisements stop for long enough: the token slept. The next poll with
     # no fresh advert clears the wait (but does not connect on the stale advert).
     dev._awake_seen -= 30
+    dev._doze_started -= device_mod._DOZE_S
     stale = service_info()
     stale.time -= 30
     assert (await poll(hass, setup, stale, make_client())).await_count == 0
@@ -473,7 +474,7 @@ async def test_led_write_error(hass: HomeAssistant, setup) -> None:
         pytest.raises(HomeAssistantError),
     ):
         await dev.async_set_led(True)
-    assert dev.led_on is False  # unchanged
+    assert dev.led_on is None  # unchanged: nothing set on this link
     assert client.write_gatt_char.await_count == 3  # all tries used
     assert dev.stats.led_write_retries == 2
 
@@ -529,22 +530,123 @@ async def test_idle_check_keeps_link_while_button_held(hass: HomeAssistant, setu
     assert dev._unsub_idle is not None  # re-armed
 
 
-async def test_wake_as_press_emits_press(hass: HomeAssistant, setup) -> None:
-    from pytest_homeassistant_custom_component.common import async_capture_events
+def _stream(client):
+    """The stream notification callback of a connected client."""
+    from custom_components.triki.protocol import NUS_TX_UUID
 
-    bus = async_capture_events(hass, "triki_event")
+    return next(c.args[1] for c in client.start_notify.await_args_list if c.args[0] == NUS_TX_UUID)
+
+
+async def _wake_from_sleep(hass: HomeAssistant, setup, *, button: bool = False, slept: float = 60):
+    """The token was silent for ``slept`` s, then a press woke it and it streams."""
+    from .helpers import frame
+
+    bus = async_capture_events(hass, BUS_EVENT)
     dev = setup.runtime_data
-    dev.options = replace(dev.options, wake_as_press=True)
-    await advertise(hass, setup, make_client())
+    dev._last_heard -= slept
+    client = make_client()
+    await advertise(hass, setup, client)
+    _stream(client)(None, bytearray(frame(button=button)))
+    await hass.async_block_till_done()
+    return bus
+
+
+async def test_a_wake_from_sleep_is_a_press(hass: HomeAssistant, setup) -> None:
+    """Only the button wakes the token: after a real sleep the wake is a press."""
+    bus = await _wake_from_sleep(hass, setup)
     assert [e.data["type"] for e in bus] == ["wake", "press"]
     assert bus[1].data["source"] == "wake"
+    assert bus[1].data["count"] == 1
 
 
-async def test_wake_alone_by_default(hass: HomeAssistant, setup) -> None:
-    from pytest_homeassistant_custom_component.common import async_capture_events
+async def test_no_press_without_a_silence_first(hass: HomeAssistant, setup) -> None:
+    """Right after Home Assistant starts the token may still be advertising from a
+    dropped link: it did not sleep, nobody pressed it."""
+    bus = await _wake_from_sleep(hass, setup, slept=0)
+    assert [e.data["type"] for e in bus] == ["wake"]
 
-    bus = async_capture_events(hass, "triki_event")
-    await advertise(hass, setup, make_client())
+
+async def test_no_press_on_a_reconnect_without_sleep(hass: HomeAssistant, setup) -> None:
+    """A drop, then adverts all along, then a link after the resume window: a wake
+    for the card, but the token never slept, so no press."""
+    from .helpers import frame
+
+    bus = await _wake_from_sleep(hass, setup)
+    dev = setup.runtime_data
+    dev._handle_disconnected()
+    await hass.async_block_till_done()
+    dev._last_drop -= 30  # the resume window is long over
+    dev._last_heard = dev._last_drop + 25  # it kept advertising meanwhile
+    dev._last_attempt = 0
+    client = make_client()
+    await advertise(hass, setup, client)
+    _stream(client)(None, bytearray(frame()))
+    await hass.async_block_till_done()
+    assert [e.data["type"] for e in bus] == ["wake", "press", "wake"]
+
+
+async def _drop_and_return(hass: HomeAssistant, setup, *, ago: float, heard: float) -> None:
+    """The link dropped ``ago`` s back; adverts were heard until ``heard`` s after
+    the drop, then nothing until the one now."""
+    from .helpers import frame
+
+    dev = setup.runtime_data
+    dev._handle_disconnected()
+    await hass.async_block_till_done()
+    dev._last_drop -= ago
+    dev._last_heard = dev._last_drop + heard
+    dev._last_attempt = 0
+    client = make_client()
+    await advertise(hass, setup, client)
+    _stream(client)(None, bytearray(frame()))
+    await hass.async_block_till_done()
+
+
+async def test_no_press_after_a_silence_too_soon_to_be_sleep(hass: HomeAssistant, setup) -> None:
+    """The token advertises for 3 minutes after a drop: a silence before that is
+    adverts Home Assistant missed (it was carried out of range, or the link is
+    weak), so nobody pressed it."""
+    bus = await _wake_from_sleep(hass, setup)
+    await _drop_and_return(hass, setup, ago=60, heard=0)
+    assert [e.data["type"] for e in bus] == ["wake", "press", "wake"]
+
+
+async def test_a_wake_after_the_doze_is_a_press(hass: HomeAssistant, setup) -> None:
+    """Heard into the end of the doze, then silence: it slept, the wake is a press."""
+    bus = await _wake_from_sleep(hass, setup)
+    await _drop_and_return(hass, setup, ago=300, heard=170)
+    assert [e.data["type"] for e in bus] == ["wake", "press", "wake", "press"]
+
+
+async def test_no_extra_press_while_the_waking_press_is_held(hass: HomeAssistant, setup) -> None:
+    """Still held when the stream starts: the stream reports the press itself."""
+    bus = await _wake_from_sleep(hass, setup, button=True)
+    assert [e.data["type"] for e in bus] == ["wake"]
+
+
+async def test_no_press_when_the_link_came_much_later(hass: HomeAssistant, setup) -> None:
+    """A press that woke the token 30 s ago is stale by the time the link is up."""
+    from .helpers import frame
+
+    bus = async_capture_events(hass, BUS_EVENT)
+    dev = setup.runtime_data
+    dev._last_heard -= 60
+    with patch(ESTABLISH, AsyncMock(side_effect=BleakError("busy"))):
+        dev._on_advertisement(service_info(), None)  # the waking advert, no link
+        await hass.async_block_till_done()
+    dev._slept_until -= 30
+    dev._last_attempt = 0
+    client = make_client()
+    await advertise(hass, setup, client)
+    _stream(client)(None, bytearray(frame()))
+    await hass.async_block_till_done()
+    assert [e.data["type"] for e in bus] == ["wake"]
+
+
+async def test_wake_as_press_off(hass: HomeAssistant, setup) -> None:
+    dev = setup.runtime_data
+    dev.options = replace(dev.options, wake_as_press=False)
+    bus = await _wake_from_sleep(hass, setup)
     assert [e.data["type"] for e in bus] == ["wake"]
 
 
@@ -838,6 +940,7 @@ async def test_sleep_gate_clears_on_the_first_advert_after_the_gap(
         assert dev._await_sleep is True
 
         dev._awake_seen -= 30  # silence: the token slept
+        dev._doze_started -= device_mod._DOZE_S
         dev._on_every_advertisement(service_info())  # a press: the next wake-up
         await hass.async_block_till_done()
     assert est.await_count == 1
@@ -973,3 +1076,14 @@ async def test_battery_pause_keeps_the_last_value_of_a_quiet_spell(
         await settle(hass, dev)
     assert hass.states.get(BATTERY).state == "82"
     assert not dev._battery_pause
+
+
+async def test_a_wake_soon_after_the_host_booted_is_a_press(hass: HomeAssistant, setup) -> None:
+    """Host monotonic time counts from boot. With Home Assistant up less than the
+    doze time after a boot (a power cut), the first wake lost its press: a token
+    never dropped was taken for one dropped at time 0."""
+    dev = setup.runtime_data
+    assert dev._last_drop == 0.0
+    dev._last_heard = 40.0
+    dev._heard(100.0)  # 60 s of silence, 100 s after boot
+    assert dev._slept_until == 100.0

@@ -57,10 +57,12 @@ from .const import (
     DOMAIN,
     IDLE_RATE,
     ISSUE_BATTERY_LOW,
+    ISSUE_LINK_LOSSY,
     ISSUE_NOT_RESPONDING,
     TILT_PUBLISH_INTERVAL,
 )
 from .gestures import GestureDetector
+from .linkquality import LinkQuality
 from .models import TrikiOptions
 from .orientation import CalibrationError, Orientation
 from .protocol import (
@@ -117,6 +119,23 @@ _WAKE_GAP_S = 5.0
 # for the next wake-up. Must outlast the few seconds it keeps advertising after we
 # drop the link, or we would reconnect to the same still-awake token.
 _SLEEP_GAP_S = 15.0
+# The token advertises this long after a dropped link before it sleeps, and a
+# press meanwhile starts it over (firmware 3.2.1-A, 2026-11-23: neither the rate
+# nor the payload of its adverts changes, so the press itself is not seen).
+_DOZE_S = 180.0
+# It never sleeps sooner than this after a drop (the doze measured 181 s): a
+# silence before it is adverts Home Assistant missed (a weak link, or the token
+# out of range for a while), not sleep. Taking such a silence for sleep made a
+# press nobody pressed, and reconnected to a dozing token.
+_DOZE_MIN_S = 165.0
+# Readiness states, see TrikiDevice.readiness.
+READINESS = ("connected", "dozing", "asleep", "not_responding")
+# Only the button wakes the token (firmware 3.2.1-A: picking it up, shaking it or
+# knocking the table did not, 2026-11-23), so a wake from real sleep is a press.
+# "Real sleep" means we heard nothing from it for _SLEEP_GAP_S before the advert:
+# after a Home Assistant start or a dropped link it keeps advertising instead.
+# A press is reported only if the link came up this soon after that advert.
+_WAKE_PRESS_MAX_S = 10.0
 # The LED write fails now and then with a GATT error on a fresh link (seen by
 # other clients too); a short retry is enough.
 _LED_WRITE_TIMEOUT_S = 5.0
@@ -141,6 +160,10 @@ _BATTERY_CHECK_S = 60.0  # how often to look for an idle moment once a refresh i
 _SILENT_AFTER_DROP_S = 60.0
 CALIBRATION_KEY = "calibration"
 _CHECK_TTL_S = 30.0  # a guided check ends unless its card renews it this often
+# The sleep step waits out the doze with nothing to do in the card, often in a
+# background tab whose timers the browser slows to one a minute: hold the check
+# for the whole step from here.
+_CHECK_SLEEP_TTL_S = 420.0
 _BATTERY_IDLE_FOR_REFRESH_S = 30.0  # no presses or motion for this long before pausing
 # Live motion for the card: at most this often, and only while someone listens.
 LIVE_INTERVAL_S = 1 / 30
@@ -173,6 +196,13 @@ class LinkStats:
     last_source: str | None = None  # scanner the last link went through (the advert's until known)
     last_link_s: float | None = None  # time to establish the last link
     last_session_s: float | None = None  # how long the last link lasted
+
+
+def _doze_memory(hass: HomeAssistant) -> dict[str, tuple[float, float]]:
+    """Dozing tokens by address, kept across an entry reload (not a restart)."""
+    data: dict[str, Any] = hass.data.setdefault(DOMAIN, {})
+    memory: dict[str, tuple[float, float]] = data.setdefault("doze", {})
+    return memory
 
 
 class TrikiDevice:
@@ -226,6 +256,12 @@ class TrikiDevice:
         self._no_connect_until = 0.0
         self._await_sleep = False
         self._awake_seen = 0.0
+        self._doze_started = 0.0  # the idle disconnect that started the doze
+        # the last time the token was heard (advert) or known silent (link drop),
+        # host monotonic seconds; a long gap before an advert means it had slept
+        self._last_heard = 0.0
+        self._slept_until: float | None = None  # the advert that ended a sleep
+        self._wake_press_pending = False
         self._connect_task: asyncio.Task[Any] | None = None
         self._last_drop = 0.0
         self._last_skip: str | None = None
@@ -250,14 +286,21 @@ class TrikiDevice:
         self._unsub_battery: CALLBACK_TYPE | None = None
         self._unsub_watchdog: CALLBACK_TYPE | None = None
         self._unsub_silence: CALLBACK_TYPE | None = None
+        self._unsub_doze: CALLBACK_TYPE | None = None
         self._streaming = False
 
         self._state_listeners: list[Callable[[], None]] = []
+        # told when this device object goes away (entry reload or unload), so a
+        # live card subscribes again to the new one instead of freezing
+        self._gone_listeners: list[Callable[[], None]] = []
         # (callback, also while a guided check runs)
         self._event_listeners: list[tuple[Callable[[str, dict[str, Any]], None], bool]] = []
         # a guided check from the card: gestures reach only that card, the stream
         # stays at full rate and the link is not dropped as idle
         self._check_owner: str | None = None
+        # the check's sleep step: the link was dropped as after idling, and this
+        # check must not skip the wait for sleep that it is there to test
+        self._check_sleeping = False
         self._check_until = 0.0
         self._unsub_check: CALLBACK_TYPE | None = None
         # live motion (the Lovelace card): called at most every LIVE_INTERVAL_S
@@ -265,6 +308,7 @@ class TrikiDevice:
         self._orientation = Orientation()
         self._clk_t: float | None = None  # sample-clock time of the last frame
         self._odr_scale = 1.0
+        self.link_quality = LinkQuality()
         self._odr_anchor: tuple[float, int, int] | None = None  # (arrival, frames, rate)
         self._logo_angle: float | None = None
         self._load_calibration()
@@ -276,6 +320,8 @@ class TrikiDevice:
         # the link dropped on its own and the token has not been heard since
         self.unresponsive = False
         self.button = False
+        # what Home Assistant last set during the current link, else unknown: the
+        # token's CTRL reads back ff whatever the LED does (firmware 3.2.1-A)
         self.led_on: bool | None = None
         self.battery: int | None = None
         # the last level measured during a stream pause in this process; the
@@ -358,9 +404,7 @@ class TrikiDevice:
             return False
         started = not self.checking
         self._check_owner = owner
-        self._check_until = time.monotonic() + _CHECK_TTL_S
-        self._cancel_timer("_unsub_check")
-        self._unsub_check = async_call_later(self.hass, _CHECK_TTL_S, self._check_expired)
+        self._hold_check(_CHECK_TTL_S)
         if started:
             _LOGGER.debug("%s: guided check started", self.name)
             self._last_activity = time.monotonic()
@@ -387,8 +431,34 @@ class TrikiDevice:
             self._end_check()
 
     @callback
+    def check_sleep(self, owner: str) -> bool:
+        """The check's sleep step: drop the link now, as after idling."""
+        if not self.checking or self._check_owner != owner or not self.connected:
+            return False
+        _LOGGER.debug("%s: the check asks it to sleep", self.name)
+        self._check_sleeping = True
+        self._hold_check(_CHECK_SLEEP_TTL_S)
+        self._sleep_now()
+        return True
+
+    @callback
+    def _hold_check(self, ttl: float, *, shorten: bool = False) -> None:
+        """Keep the check for ``ttl`` more, never less than it already has
+        unless ``shorten``."""
+        until = time.monotonic() + ttl
+        if not shorten:
+            until = max(self._check_until, until)
+        self._check_until = until
+        self._cancel_timer("_unsub_check")
+        self._unsub_check = async_call_later(
+            self.hass, until - time.monotonic(), self._check_expired
+        )
+
+    @callback
     def _end_check(self) -> None:
         self._cancel_timer("_unsub_check")
+        # _check_sleeping stays until the next link: a check that ends or lapses
+        # mid-doze and starts again must not skip the wait it was testing
         self._check_owner = None
         self._check_until = 0.0
         self._last_activity = time.monotonic()  # idle timers count from the end of the check
@@ -486,6 +556,59 @@ class TrikiDevice:
         return self._await_sleep and not self.connected
 
     @property
+    def readiness(self) -> str:
+        """Whether a press reaches Home Assistant now.
+
+        connected: on the link, a press is an event. dozing: dropped on idle and
+        still advertising; a press is not seen, it only starts the doze over.
+        asleep: a press wakes it. not_responding: the link dropped by itself and
+        the token has not been heard since.
+        """
+        if self.connected:
+            return "connected"
+        if self.unresponsive:
+            return "not_responding"
+        if self._await_sleep and not self._slept_now() and not self._check_wakes_it:
+            return "dozing"
+        return "asleep"
+
+    @property
+    def _check_wakes_it(self) -> bool:
+        """An open check reconnects on a press while dozing (the owner presses it
+        to wake it), except in its own sleep step, which waits for sleep."""
+        return self.checking and not self._check_sleeping
+
+    def _slept_now(self) -> bool:
+        """Dropped on idle: the adverts stopped, and late enough to be sleep."""
+        now = time.monotonic()
+        return now - self._awake_seen >= _SLEEP_GAP_S and now - self._doze_started >= _DOZE_MIN_S
+
+    @property
+    def doze_left_s(self) -> int | None:
+        """While dozing, seconds until it sleeps if nobody presses it (0 once
+        overdue: a press made it doze on)."""
+        if self.readiness != "dozing":
+            return None
+        return max(0, round(_DOZE_S - (time.monotonic() - self._doze_started)))
+
+    @callback
+    def _arm_doze_check(self) -> None:
+        """Dozing turns into asleep with no event of its own: the adverts stop."""
+        self._cancel_timer("_unsub_doze")
+        now = time.monotonic()
+        delay = max(
+            _SLEEP_GAP_S - (now - self._awake_seen), _DOZE_MIN_S - (now - self._doze_started)
+        )
+        self._unsub_doze = async_call_later(self.hass, max(0.0, delay) + 0.5, self._doze_check)
+
+    @callback
+    def _doze_check(self, _now: Any) -> None:
+        self._cancel_timer("_unsub_doze")
+        if self._await_sleep and not self.connected and not self._slept_now():
+            self._arm_doze_check()  # the gap is there, the doze is not over yet
+        self._notify()
+
+    @property
     def streaming(self) -> bool:
         """Frames are arriving on the current link."""
         return self._streaming
@@ -494,6 +617,12 @@ class TrikiDevice:
     def reset_heading(self) -> None:
         """Make the token's current heading yaw 0 (it drifts: there is no compass)."""
         self._orientation.reset_heading()
+        self._notify()  # the card drops its "direction unknown" hint
+
+    @property
+    def heading_known(self) -> bool:
+        """Whether the model points the way the cap lies (see Orientation)."""
+        return self._orientation.heading_known
 
     @callback
     def _notify(self) -> None:
@@ -542,6 +671,11 @@ class TrikiDevice:
         # Home Assistant 2026.10 delivers every advertisement of an address;
         # older versions only changed ones (the token's payload never changes),
         # which is why they also need the 1 s poll of the last advertisement.
+        self._last_heard = bluetooth.MONOTONIC_TIME()  # a start is not a silence
+        if (doze := _doze_memory(self.hass).pop(self.address, None)) is not None:
+            self._await_sleep = True
+            self._awake_seen, self._doze_started = doze
+            self._arm_doze_check()
         register_every = getattr(bluetooth, "async_register_advertisement_callback", None)
         if register_every is not None:
             self.every_advertisement = True
@@ -566,13 +700,32 @@ class TrikiDevice:
         scanner = bluetooth.async_scanner_by_source(self.hass, source)
         return scanner is not None and not isinstance(scanner, BaseHaRemoteScanner)
 
+    @callback
+    def async_add_gone_listener(self, cb: Callable[[], None]) -> CALLBACK_TYPE:
+        """Called once when this device object stops (the entry reloads or unloads)."""
+        self._gone_listeners.append(cb)
+
+        def remove() -> None:
+            if cb in self._gone_listeners:
+                self._gone_listeners.remove(cb)
+
+        return remove
+
     async def async_stop(self) -> None:
         self._stopping = True
+        for cb in list(self._gone_listeners):
+            cb()
+        self._gone_listeners.clear()
         if self._unsub_started is not None:
             self._unsub_started()
             self._unsub_started = None
         self._cancel_timer("_unsub_check")
         self._cancel_timer("_unsub_silence")
+        self._cancel_timer("_unsub_doze")
+        if self._await_sleep and not self.connected:
+            # an entry reload (new options, Apply in the card) must not connect
+            # the new instance to a token that is still dozing off
+            _doze_memory(self.hass)[self.address] = (self._awake_seen, self._doze_started)
         for attr in ("_unsub_adv", "_unsub_poll"):
             unsub = getattr(self, attr)
             if unsub:
@@ -594,7 +747,19 @@ class TrikiDevice:
             return
         info = bluetooth.async_last_service_info(self.hass, self.address, connectable=True)
         if info is not None:
+            self._heard(info.time)
             self._maybe_connect(info, _POLL_FRESH_S)
+
+    @callback
+    def _heard(self, t: float) -> None:
+        """An advert at ``t``: after a silence of _SLEEP_GAP_S it ended a sleep,
+        unless the token cannot have slept yet (see _DOZE_MIN_S)."""
+        # _last_drop is 0 until the first drop; host monotonic time starts at boot,
+        # so on a host up for less than _DOZE_MIN_S "0" must not read as a drop
+        dozing = self._last_drop and t - self._last_drop < _DOZE_MIN_S
+        if t - self._last_heard >= _SLEEP_GAP_S and not dozing:
+            self._slept_until = t
+        self._last_heard = max(self._last_heard, t)
 
     @callback
     def _on_every_advertisement(self, service_info: bluetooth.BluetoothServiceInfoBleak) -> None:
@@ -611,6 +776,7 @@ class TrikiDevice:
         now = time.monotonic()
         self.stats.adverts += 1
         self._advert_times.append(service_info.time)
+        self._heard(service_info.time)
         rssi_changed = service_info.rssi != self.rssi
         self.rssi = service_info.rssi
         # an awake token advertises several times a second: one state write and
@@ -666,7 +832,7 @@ class TrikiDevice:
         now = time.monotonic()
         age = bluetooth.MONOTONIC_TIME() - service_info.time
         reason = None
-        if self._await_sleep and self.checking:
+        if self._await_sleep and self._check_wakes_it:
             # a card is checking this token: the owner is pressing it to wake it
             _LOGGER.debug("%s: a check is open, reconnecting", self.name)
             self._await_sleep = False
@@ -680,9 +846,11 @@ class TrikiDevice:
             # The gap is judged before this advert refreshes the mark: with the
             # per-advertisement callback this call only ever sees fresh adverts,
             # and the first one after the gap *is* the wake-up to connect on.
-            slept = now - self._awake_seen >= _SLEEP_GAP_S
+            slept = self._slept_now()
             if age < max_age:
                 self._awake_seen = now
+                if not slept:
+                    self._arm_doze_check()
             if slept:
                 self._await_sleep = False
                 self._notify()
@@ -790,6 +958,11 @@ class TrikiDevice:
             if isinstance(source, str):
                 self.stats.last_source = source
             self.connected = True
+            if self._check_sleeping and self.checking:
+                # it slept and woke: the sleep step is over, and so is the long
+                # hold; a card that is gone must not keep the token from automations
+                self._hold_check(_CHECK_TTL_S, shorten=True)
+            self._check_sleeping = False
             self._last_activity = self._session_t0 = time.monotonic()
             self.stats.connects += 1
             self.stats.last_link_s = round(t_link - t0, 2)
@@ -820,11 +993,18 @@ class TrikiDevice:
             # Measured from the start of this attempt: a slow link must not turn a
             # resume into a wake.
             resumed = self._last_drop and t0 - self._last_drop < _WAKE_GAP_S
+            slept_until, self._slept_until = self._slept_until, None
             if not resumed:
                 self._emit("wake")
-                if self.options.wake_as_press:
-                    # the press that woke the token is over before the link is up
-                    self._emit("press", {"count": 1, "source": "wake"})
+                if (
+                    self.options.wake_as_press
+                    and slept_until is not None
+                    and bluetooth.MONOTONIC_TIME() - slept_until <= _WAKE_PRESS_MAX_S
+                ):
+                    # the press that woke the token is over before the link is up;
+                    # reported on the first frame, unless the button is still held
+                    # (then the stream reports the press itself)
+                    self._wake_press_pending = True
             self._notify()
             self._create_task(self._async_read_info(client), "info")
 
@@ -860,11 +1040,6 @@ class TrikiDevice:
                 # taken under load right after the connect, so a low number; the
                 # first stream pause replaces it. Better than nothing until then.
                 await self._read_battery(client)
-            try:
-                ctrl = await client.read_gatt_char(CTRL_UUID)
-                self.led_on = bool(ctrl and ctrl[0] & 0x01)
-            except BleakError:
-                self.led_on = None
             # the measured value arrives by notification after a stream pause
             try:
                 await client.start_notify(
@@ -924,6 +1099,7 @@ class TrikiDevice:
         self._odr_anchor = None
         self._streaming = False
         self.stream_rate = self.options.rate
+        self.link_quality.start(self.stream_rate * self._odr_scale)
         await client.start_notify(
             NUS_TX_UUID, lambda char, data: self._on_notify_from(client, char, data)
         )
@@ -1006,6 +1182,7 @@ class TrikiDevice:
             _LOGGER.debug("%s: link dropped (token asleep?)", self.name)
         if self.connected:
             self.stats.last_session_s = round(time.monotonic() - self._session_t0, 1)
+        self._settle_link_quality()
         if self._stale_notifs or self._dup_notifs:
             _LOGGER.debug(
                 "%s: dropped %d notifications from other clients, %d repeats",
@@ -1015,12 +1192,16 @@ class TrikiDevice:
             )
         self._client = None
         self._last_drop = bluetooth.MONOTONIC_TIME()
+        # no adverts while linked: the silence before the next one counts from here
+        self._last_heard = max(self._last_heard, self._last_drop)
+        self._wake_press_pending = False
         self._battery_event.set()  # do not keep a stream pause waiting on a dead link
         was_connected = self.connected
         self.connected = False
         # the next link takes tilt from the accelerometer again; the heading is
         # carried over (a dozing token lies where it was), so a calibration lasts
         self._orientation.reset(keep_heading=True)
+        self.led_on = None  # what the LED does while the token dozes and sleeps is not known
         self._last_sample = None
         for attr in ("_unsub_idle", "_unsub_battery", "_unsub_watchdog"):
             self._cancel_timer(attr)
@@ -1054,6 +1235,7 @@ class TrikiDevice:
         if unresponsive == self.unresponsive:
             return
         self.unresponsive = unresponsive
+        self._notify()  # readiness and the card's chip
         issue_id = f"{ISSUE_NOT_RESPONDING}_{self.entry.entry_id}"
         if not unresponsive:
             _LOGGER.info("%s: heard again", self.name)
@@ -1078,6 +1260,34 @@ class TrikiDevice:
             translation_placeholders={
                 "name": self.name,
                 "level": f"{level} %" if level is not None else "?",
+            },
+        )
+
+    @callback
+    def _settle_link_quality(self) -> None:
+        """The session ended: keep its frame share; tell the owner when several
+        in a row lost much of the stream, and take it back after a clean one."""
+        pct = self.link_quality.end_session()
+        if pct is None:
+            return
+        _LOGGER.debug("%s: %.1f %% of the frames arrived this session", self.name, pct)
+        issue_id = f"{ISSUE_LINK_LOSSY}_{self.entry.entry_id}"
+        if not self.link_quality.lossy:
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+            return
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=ISSUE_LINK_LOSSY,
+            translation_placeholders={
+                "name": self.name,
+                "pct": f"{pct:.0f}",
+                "sessions": str(self.link_quality.lossy_in_a_row),
+                "via": self.link_source_name or "?",
+                "rate": str(self.options.rate),
             },
         )
 
@@ -1132,10 +1342,16 @@ class TrikiDevice:
         dt = self._detector.frame_period
         for i, frame in enumerate(frames):
             self.stats.frames += 1
+            self.link_quality.frame(now)
             if not self._streaming:
                 self._streaming = True
                 self._cancel_timer("_unsub_watchdog")
             sample = Sample.from_frame(frame)
+            if self._wake_press_pending:
+                self._wake_press_pending = False
+                if not sample.button:
+                    self._emit("press", {"count": 1, "source": "wake"})
+                    active = True
             # frames of one notification arrived together: spread them one
             # sample period apart, ending at the arrival time
             t_frame = now - (len(frames) - 1 - i) * dt
@@ -1228,6 +1444,15 @@ class TrikiDevice:
         self._unsub_idle = async_call_later(self.hass, _IDLE_CHECK_S, self._idle_check)
 
     @callback
+    def _sleep_now(self) -> None:
+        """Drop the link and let the token doze off and sleep before reconnecting."""
+        self._await_sleep = True
+        self._awake_seen = self._doze_started = time.monotonic()
+        self._arm_doze_check()
+        self._no_connect_until = time.monotonic() + _IDLE_COOLDOWN_S
+        self._create_task(self.async_disconnect(), "idle")
+
+    @callback
     def _idle_check(self, _now: Any) -> None:
         self._cancel_timer("_unsub_idle")
         if not self.connected:
@@ -1236,10 +1461,7 @@ class TrikiDevice:
         sleep_timeout, idle_timeout = self.sleep_timeout, self.options.idle_timeout
         if 0 < sleep_timeout <= idle:
             _LOGGER.debug("%s: idle for %ss, disconnecting", self.name, sleep_timeout)
-            self._await_sleep = True
-            self._awake_seen = time.monotonic()
-            self._no_connect_until = time.monotonic() + _IDLE_COOLDOWN_S
-            self._create_task(self.async_disconnect(), "idle")
+            self._sleep_now()
             return
         if (
             0 < idle_timeout <= idle
@@ -1308,6 +1530,7 @@ class TrikiDevice:
         self._battery_event.clear()
         self._pause_level = None
         self._battery_pause = True
+        self.link_quality.stop()
         try:
             async with asyncio.timeout(_STOP_TIMEOUT_S):
                 await client.write_gatt_char(NUS_RX_UUID, stop_command(), response=True)
@@ -1385,6 +1608,7 @@ class TrikiDevice:
                 if self._client is not client:
                     return  # the link went away meanwhile
                 self.stream_rate = rate
+                self.link_quality.start(rate * self._odr_scale)
                 self.stats.rate_switches += 1
                 self._detector.set_rate(rate)
                 if self._capture:

@@ -113,7 +113,7 @@ def _shake(d: GestureDetector) -> list:
     for i in range(30):
         t += 1 / 52
         s = 1500.0 if i % 4 < 2 else -1500.0
-        out += d.update(Sample.from_frame(frame(gx=s, ax=3.0 if s > 0 else -3.0)), t)
+        out += d.update(Sample.from_frame(frame(gx=s, ax=5.0 if s > 0 else -5.0)), t)
     return out
 
 

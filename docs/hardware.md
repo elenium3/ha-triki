@@ -79,8 +79,9 @@ Also: a KiCad schematic in [DISKIMG/Triki-PCB](https://github.com/DISKIMG/Triki-
 ## Behaviour
 
 - **Sleep.** The token sleeps whenever it is still and not connected. It wakes
-  on a button press or on motion, advertises for a few seconds, and goes back to
-  sleep if nobody connects.
+  only on a button press, advertises for a few seconds, and goes back to sleep if
+  nobody connects. Picking it up, shaking it hard or knocking the table next to it
+  did not wake it (firmware 3.2.1-A, 2026-11-23).
 - **One connection at a time.** While the Żappka app (or anything else) is
   connected, Home Assistant cannot see it, and vice versa.
 - **After a link is dropped** it advertises for about three minutes before

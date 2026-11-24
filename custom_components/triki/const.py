@@ -30,7 +30,9 @@ DEFAULT_SLEEP_TIMEOUT = 300  # s without motion/button -> drop the link (0 = nev
 IDLE_RATE = 26
 DEFAULT_KNOB_STEP = 30
 DEFAULT_INVERT_ROTATION = False
-DEFAULT_WAKE_AS_PRESS = False
+DEFAULT_WAKE_AS_PRESS = True
+# set in the entry data once the 0.3.0 default of wake_as_press has been applied
+WAKE_PRESS_MARK = "wake_press_on"
 DEFAULT_MOTION_GESTURES = False
 DEFAULT_MULTI_PRESS = False
 DEFAULT_KNOB = False
@@ -48,6 +50,8 @@ EVENT_TYPES = [
     "long_press",
     "rotate_cw",
     "rotate_ccw",
+    "tilt_left",
+    "tilt_right",
     "shake",
     "tap",
     "throw",
@@ -80,3 +84,4 @@ BATTERY_LOW_CLEAR_MARGIN = 10
 ISSUE_SLEEP_NEVER = "sleep_timeout_never"
 ISSUE_BATTERY_LOW = "battery_low"
 ISSUE_NOT_RESPONDING = "not_responding"
+ISSUE_LINK_LOSSY = "link_lossy"

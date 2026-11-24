@@ -20,6 +20,43 @@ const TURN_MIN_DEG = 140;
 const TURN_MAX_DEG = 250;
 
 // Gestures a step does not ask for are false alarms worth reporting.
+// Suggestions: a double press whose two presses came further apart than this was
+// two presses; the window is not stretched past WINDOW_MAX_S (a single press
+// waits that long); a gesture that fired by itself this often is better off.
+const DOUBLE_GAP_MAX_S = 1.2;
+const WINDOW_MAX_S = 0.8;
+const LOSS_SUGGEST_PCT = 30;
+const FALSE_ALARMS = 2;
+const TILT = ["tilt_left", "tilt_right"];
+
+// Picking the cap up and putting it back: every gesture that fires meanwhile is a
+// false one. A handling is motion that ends with the cap still again.
+export const HANDLE_WANT = 5;
+const HANDLE_MOVE_DPS = 40;
+const HANDLE_MOVE_G = 0.15;
+const HANDLE_STILL_S = 0.8; // lying still this long: put down, one pick-up over
+// Lying on the table, not held: a hand trembles at 30-110 deg/s (the 2026-11-23
+// check), the table reads 0.1. Held still in the hand is not a put-down.
+const HANDLE_REST_DPS = 10;
+const HANDLE_REST_G = 0.05;
+const HANDLE_MIN_S = 0.4; // shorter motion is a nudge, not a pick-up
+const HANDLE_END_S = 1.5; // the last one put down and still this long: the step is over
+
+// Shake: a try is a burst of fast rotation; a try with no shake event is a miss.
+export const SHAKE_WANT = 3;
+const SHAKE_TRY_DPS = 400;
+const SHAKE_TRY_FRAMES = 3; // motion messages above SHAKE_TRY_DPS in one burst
+const SHAKE_TRY_QUIET_S = 1.0; // below SHAKE_TRY_QUIET_DPS this long ends the burst
+const SHAKE_TRY_QUIET_DPS = 100;
+const SHAKE_TRIES_MAX = 6; // the step ends after this many tries even with misses
+
+// Lean in the hand: right, left, three times.
+export const LEAN_TARGETS = ["tilt_right", "tilt_left", "tilt_right", "tilt_left", "tilt_right", "tilt_left"];
+
+// Sleep and wake: Home Assistant drops the link as after idling, the token dozes
+// (~3 min, presses not seen) and sleeps, then a press must wake it.
+const SLEEP_DOZE_MAX_S = 240; // longer means a press while dozing, or no sleep at all
+const SLEEP_PRESS_WAIT_S = 3; // the wake press follows the wake within this
 const GESTURES = ["shake", "tap", "throw", "flip", "rotate_cw", "rotate_ccw"];
 const EXPECTED = {
   turn_cw: ["rotate_cw", "rotate_ccw"], turn_ccw: ["rotate_cw", "rotate_ccw"],
@@ -33,13 +70,15 @@ export function buildSteps(options = {}) {
     { id: "tilt", timeout: 30 },
     { id: "turn_cw", manual: true, timeout: 60, dir: -1 },
     { id: "turn_ccw", manual: true, timeout: 60, dir: 1 },
-    { id: "lean", timeout: 40, need: "tilt" },
+    { id: "handle", timeout: 90 },
+    { id: "lean", timeout: 60, need: "tilt" },
     { id: "press", timeout: 60 },
     { id: "flip", timeout: 60 },
     { id: "tap", timeout: 30, need: "motion_gestures" },
-    { id: "shake", timeout: 30, need: "shake" },
+    { id: "shake", timeout: 60, need: "shake" },
     { id: "throw", timeout: 40, need: "motion_gestures", optional: true },
     { id: "drift", auto: 30 },
+    { id: "sleep", timeout: 360, optional: true, link: true },
   ];
   return steps.filter((s) => !s.need || options[s.need]).map((s) => ({ ...s, options }));
 }
@@ -94,6 +133,10 @@ export class CheckRun {
       }
     }
     const live = this._live(s);
+    if (this.step?.link && this.phase === "running") {
+      this._onStatus(s); // the sleep step drops the link on purpose
+      return;
+    }
     if (!live && was && this.phase === "running") {
       this.phase = "paused";
       this._st = this._fresh();
@@ -115,7 +158,10 @@ export class CheckRun {
   tick() {
     if (this.phase !== "running" || this.finished) return;
     const s = this.step, el = this._elapsed();
-    if (s.auto && el >= s.auto) this._finish(this._judge());
+    if (s.id === "sleep" && this._st.woke && !this._st.done && this.now() / 1000 - this._st.wokeAt > SLEEP_PRESS_WAIT_S) {
+      this._st.done = true; // woke, but no press came with it
+      this._finish(this._judge());
+    } else if (s.auto && el >= s.auto) this._finish(this._judge());
     else if (s.timeout && el >= s.timeout) this._finish(this._judge(true));
   }
 
@@ -165,7 +211,8 @@ export class CheckRun {
       id: s.id, index: this.index, total: this.steps.length, phase: this.phase,
       manual: !!s.manual, external: !!s.external, result: this.results[s.id] || null,
       elapsed: this.phase === "running" ? this._elapsed() : 0,
-      limit: s.auto || s.timeout || null, live: {}, ghost: null,
+      // the sleep step's limit is only a backstop: the doze has its own countdown
+      limit: s.id === "sleep" ? null : s.auto || s.timeout || null, live: {}, ghost: null,
       online: this._live(this.status),
     };
     if (s.id === "turn_cw" || s.id === "turn_ccw") {
@@ -179,13 +226,24 @@ export class CheckRun {
       v.ghost = { type: "flip" };
       v.live = { stage: st.stage || 0, face: this.status?.face || null };
     } else if (s.id === "press") {
+      v.ghost = { type: "press" };
       v.live = { want: this._pressTargets(), got: st.got || 0, hint: st.hint || null };
     } else if (s.id === "rest" || s.id === "drift") {
       v.live = { moved: !!st.moved };
-    } else if (s.id === "tap" || s.id === "shake" || s.id === "throw") {
+    } else if (s.id === "tap" || s.id === "throw") {
+      v.ghost = { type: s.id };
       v.live = { count: st[s.id] || 0, want: s.id === "tap" ? 2 : 1 };
+    } else if (s.id === "shake") {
+      v.ghost = { type: "shake" };
+      v.live = { count: st.shake || 0, want: SHAKE_WANT, tries: st.tries || 0 };
     } else if (s.id === "lean") {
-      v.live = { count: st.got || 0, want: 2, hint: st.hint || null };
+      v.ghost = { type: "lean" };
+      v.live = { count: st.got || 0, want: LEAN_TARGETS.length, hint: st.hint || null };
+    } else if (s.id === "handle") {
+      v.ghost = { type: "lift" };
+      v.live = { count: st.count || 0, want: HANDLE_WANT };
+    } else if (s.id === "sleep") {
+      v.live = { stage: st.stage || 0, left: this.status?.doze_left_s ?? null };
     }
     v.optional = !!s.optional;
     v.extra = st.extra || null;
@@ -196,6 +254,37 @@ export class CheckRun {
     const counts = { pass: 0, warn: 0, fail: 0, skip: 0 };
     for (const r of Object.values(this.results)) counts[r.status] = (counts[r.status] || 0) + 1;
     return counts;
+  }
+
+  // Settings the results point to, each with what it was. Only clear cases: the
+  // owner applies them with one button, so a guess here would be a wrong setting.
+  suggestions() {
+    const o = this.options, r = this.results, out = [];
+    const cw = r.turn_cw?.values, ccw = r.turn_ccw?.values;
+    // turned the right way (by the model) both times, the events said the opposite
+    const backwards = (v, dir) => v && Math.sign(v.angle) === dir && v.wrong >= 2 && v.wrong > (v.steps || 0);
+    if (o.knob && backwards(cw, -1) && backwards(ccw, 1)) {
+      out.push({ key: "invert_rotation", value: !o.invert_rotation, from: !!o.invert_rotation });
+    }
+    const rest = r.rest?.values;
+    if (rest && rest.loss_pct > LOSS_SUGGEST_PCT && rest.asked > 26) {
+      out.push({ key: "sample_rate", value: 26, from: rest.asked, loss: rest.loss_pct });
+    }
+    const gap = r.press?.values?.double_gap;
+    const win = +(o.multi_press_window ?? 0.5);
+    if (o.multi_press && gap != null) {
+      // the gap between the two press events is the pause plus the second press
+      const want = Math.min(WINDOW_MAX_S, Math.ceil((gap + 0.05) * 20) / 20);
+      if (want > win) out.push({ key: "multi_press_window", value: want, from: win });
+    }
+    const extra = {};
+    for (const res of Object.values(r)) {
+      for (const [k, n] of Object.entries(res.extraCounts || {})) extra[k] = (extra[k] || 0) + n;
+    }
+    if (o.shake && (extra.shake || 0) >= FALSE_ALARMS) out.push({ key: "shake", value: false, from: true, count: extra.shake });
+    const tilts = (extra.tilt_left || 0) + (extra.tilt_right || 0);
+    if (o.tilt && tilts >= FALSE_ALARMS) out.push({ key: "tilt", value: false, from: true, count: tilts });
+    return out;
   }
 
   // A plain-text report for a bug report: numbers only, no address or name.
@@ -211,6 +300,7 @@ export class CheckRun {
       const vals = Object.entries(r.values || {}).map(([k, v]) => `${k}=${v}`).join(" ");
       lines.push(`${s.id}: ${r.status}${r.reason ? ` (${r.reason})` : ""}${vals ? ` ${vals}` : ""}`);
     }
+    for (const g of this.suggestions()) lines.push(`suggest ${g.key}: ${g.from} -> ${g.value}`);
     return lines.join("\n");
   }
 
@@ -231,7 +321,8 @@ export class CheckRun {
   }
 
   _finish(result) {
-    this.results[this.step.id] = result;
+    // what fired unasked during this step, kept for suggestions (a redo replaces it)
+    this.results[this.step.id] = { ...result, extraCounts: { ...(this._st?.extra || {}) } };
     this.phase = "done";
   }
 
@@ -239,9 +330,22 @@ export class CheckRun {
     return this.options.multi_press ? ["press", "double_press", "long_press"] : ["press", "long_press"];
   }
 
-  _onStatus(_s) {
+  _onStatus(status) {
     const s = this.step, st = this._st;
     if (s.id === "flip") this._flipProgress(st);
+    else if (s.id === "sleep") this._sleepProgress(st, status);
+  }
+
+  // stage 0: asked to drop the link; 1: dozing; 2: asleep, press now; 3: woke
+  _sleepProgress(st, status) {
+    const t = this.now() / 1000, r = status?.readiness;
+    const stage = st.stage || 0;
+    if (stage === 0 && !status?.connected) { st.stage = 1; st.dropAt = t; }
+    else if (stage === 1 && status?.connected) {
+      st.stage = 3; // back without having slept: it connected while dozing
+      this._finish(this._judge());
+    } else if (stage === 1 && r === "asleep") { st.stage = 2; st.sleptAt = t; }
+    else if (stage === 2 && status?.connected) { st.stage = 3; st.wokeAt = t; }
   }
 
   _onMotion(m) {
@@ -271,6 +375,46 @@ export class CheckRun {
       }
     } else if (s.id === "turn_cw" || s.id === "turn_ccw") {
       st.angle = this._unwrap(st, m.euler[2]);
+    } else if (s.id === "handle") {
+      this._handleMotion(st, m, gyro);
+    } else if (s.id === "shake") {
+      this._shakeMotion(st, gyro);
+    }
+  }
+
+  _handleMotion(st, m, gyro) {
+    const t = this.now() / 1000;
+    const a = Math.hypot(...(m.accel || [0, 0, 1]));
+    const moving = gyro > HANDLE_MOVE_DPS || Math.abs(a - 1) > HANDLE_MOVE_G;
+    const resting = gyro < HANDLE_REST_DPS && Math.abs(a - 1) < HANDLE_REST_G;
+    if (moving) {
+      st.moveFrom ??= t;
+      st.lastMove = t;
+    } else if (!resting) {
+      if (st.moveFrom != null) st.lastMove = t; // held in the hand: still picked up
+    } else if (st.moveFrom != null && t - st.lastMove >= HANDLE_STILL_S) {
+      if (st.lastMove - st.moveFrom >= HANDLE_MIN_S) st.count = (st.count || 0) + 1;
+      st.moveFrom = null;
+    }
+    if ((st.count || 0) >= HANDLE_WANT && st.moveFrom == null && t - (st.lastMove ?? t) >= HANDLE_END_S) {
+      this._finish(this._judge());
+    }
+  }
+
+  _shakeMotion(st, gyro) {
+    const t = this.now() / 1000;
+    if (gyro > SHAKE_TRY_DPS) {
+      st.fast = (st.fast || 0) + 1;
+      st.burstLast = t;
+      if (st.fast === SHAKE_TRY_FRAMES) {
+        st.tries = (st.tries || 0) + 1;
+        st.shakesAtTry = st.shake || 0;
+      }
+    } else if (gyro > SHAKE_TRY_QUIET_DPS) {
+      st.burstLast = t;
+    } else if (st.fast && t - st.burstLast >= SHAKE_TRY_QUIET_S) {
+      st.fast = 0; // the burst is over
+      if ((st.tries || 0) >= SHAKE_TRIES_MAX || (st.shake || 0) >= SHAKE_WANT) this._finish(this._judge());
     }
   }
 
@@ -286,8 +430,14 @@ export class CheckRun {
 
   _onEvent(kind, data) {
     const s = this.step, st = this._st;
-    if (s.id === "lean" && data.source === "tilt") {
+    if (s.id === "lean" && TILT.includes(kind)) {
       this._leanEvent(kind);
+      return;
+    }
+    if (TILT.includes(kind)) {
+      // a lean step outside the lean step: tilt in the hand fired by itself
+      st.extra ??= {};
+      st.extra[kind] = (st.extra[kind] || 0) + 1;
       return;
     }
     if (GESTURES.includes(kind) && !(EXPECTED[s.id] || []).includes(kind)) {
@@ -295,10 +445,27 @@ export class CheckRun {
       st.extra[kind] = (st.extra[kind] || 0) + 1;
       return;
     }
-    if (s.id === "tap" || s.id === "shake" || s.id === "throw") {
+    if (s.id === "tap" || s.id === "throw") {
       if (kind !== s.id) return;
       st[kind] = (st[kind] || 0) + 1;
       if (st[kind] >= (s.id === "tap" ? 2 : 1)) this._finish(this._judge());
+      return;
+    }
+    if (s.id === "shake") {
+      // judged when the burst is over: the try that brought it is counted first
+      if (kind === "shake") st.shake = (st.shake || 0) + 1;
+      return;
+    }
+    if (s.id === "sleep") {
+      if ((st.stage || 0) < 2 || st.done) return;
+      if (kind === "press") st.pressed = true;
+      else if (kind === "wake") { st.woke = true; st.wokeAt ??= this.now() / 1000; }
+      else return;
+      // with "wake as press" the press follows the wake at once: wait for it
+      if (st.pressed || !this.options.wake_as_press) {
+        st.done = true;
+        this._finish(this._judge());
+      }
       return;
     }
     if (s.id === "turn_cw" || s.id === "turn_ccw") {
@@ -314,6 +481,14 @@ export class CheckRun {
       if (!["press", "double_press", "triple_press", "long_press"].includes(kind)) return;
       if (data.source === "wake") return; // the press that woke it, not the one asked for
       const want = targets[st.got || 0];
+      if (want === "double_press" && kind === "press") {
+        // a double press that came as two: how far apart, to fit the window
+        const t = this.now() / 1000;
+        if (st.lastPress != null && t - st.lastPress <= DOUBLE_GAP_MAX_S) {
+          st.doubleGap = Math.min(st.doubleGap ?? Infinity, t - st.lastPress);
+        }
+        st.lastPress = t;
+      }
       if (kind === want) {
         st.got = (st.got || 0) + 1;
         st.hint = null;
@@ -329,10 +504,7 @@ export class CheckRun {
   // Right, then left. A lean held on one side repeats its step: those are counted,
   // not held against it. A step for the side not asked for means the cap is held
   // the other way round, or the sides are wired backwards.
-  _leanTargets() {
-    const cw = this.options.invert_rotation ? "rotate_ccw" : "rotate_cw";
-    return [cw, cw === "rotate_cw" ? "rotate_ccw" : "rotate_cw"];
-  }
+  _leanTargets() { return LEAN_TARGETS; }
 
   _leanEvent(kind) {
     const st = this._st, targets = this._leanTargets(), got = st.got || 0;
@@ -374,8 +546,22 @@ export class CheckRun {
   _judgeStep(timedOut = false) {
     const s = this.step, st = this._st || {};
     switch (s.id) {
+      case "shake": {
+        const n = st.shake || 0;
+        // a burst too short to count as a try may still have shaken
+        const tries = Math.max(st.tries || 0, n);
+        const values = { count: n, tries };
+        if (!n) return { status: "fail", reason: "not_detected", values };
+        if (n < tries) return { status: "warn", reason: "shake_missed", values };
+        return { status: "pass", values };
+      }
+      case "handle": {
+        const values = { count: st.count || 0 };
+        if (timedOut && (st.count || 0) < HANDLE_WANT) return { status: "fail", reason: "handle_few", values };
+        return { status: "pass", values };
+      }
+      case "sleep": return this._judgeSleep(st, timedOut);
       case "tap":
-      case "shake":
       case "throw": {
         const n = st[s.id] || 0, want = s.id === "tap" ? 2 : 1;
         return n >= want ? { status: "pass", values: { count: n } }
@@ -384,7 +570,11 @@ export class CheckRun {
       case "lean": {
         const got = st.got || 0;
         const values = { repeats: st.repeats || 0, wrong: st.wrong || 0 };
-        if (got < 2) return { status: "fail", reason: st.wrong ? "lean_wrong" : got ? "lean_left" : "lean_right", values };
+        values.count = got;
+        if (got < LEAN_TARGETS.length) {
+          const next = LEAN_TARGETS[got];
+          return { status: "fail", reason: st.wrong ? "lean_wrong" : next === "tilt_left" ? "lean_left" : "lean_right", values };
+        }
         return st.wrong ? { status: "warn", reason: "lean_wrong", values } : { status: "pass", values };
       }
       case "rest": return this._judgeRest(st);
@@ -400,9 +590,12 @@ export class CheckRun {
       case "press": {
         const targets = this._pressTargets();
         const got = st.got || 0;
+        // a double press that came as two presses at first still tunes the
+        // window when a retry made it: the gap is kept on a pass too
+        const gap = st.doubleGap != null ? { double_gap: +st.doubleGap.toFixed(2) } : {};
         return got >= targets.length
-          ? { status: "pass" }
-          : { status: "fail", reason: "missing", values: { missing: targets.slice(got).join(",") } };
+          ? { status: "pass", values: gap }
+          : { status: "fail", reason: "missing", values: { missing: targets.slice(got).join(","), ...gap } };
       }
       case "flip": {
         if ((st.stage || 0) < 3) return { status: "fail", reason: st.start == null ? "not_flat" : "not_flipped" };
@@ -438,13 +631,28 @@ export class CheckRun {
     if (Math.abs(angle) < TURN_MIN_DEG) return { status: "fail", reason: "short", values };
     if (Math.sign(angle) !== s.dir) return { status: "fail", reason: "direction", values };
     if (Math.abs(angle) > TURN_MAX_DEG) return { status: "fail", reason: "long", values };
-    if (!this.options.knob) return { status: "skip", reason: "knob_off", values };
+    if (!this.options.knob) return { status: "pass", reason: "knob_off", values };
     const expected = Math.abs(angle) / this._knobStep();
     values.expected = +expected.toFixed(1);
     const off = Math.abs((st.steps || 0) - expected);
     if ((st.wrong || 0) === 0 && off <= 1) return { status: "pass", values };
     if ((st.wrong || 0) <= 1 && off <= 2) return { status: "warn", reason: "steps", values };
     return { status: "fail", reason: (st.wrong || 0) > 1 ? "wrong_way" : "steps", values };
+  }
+
+  _judgeSleep(st, timedOut) {
+    const stage = st.stage || 0;
+    const values = {};
+    if (st.dropAt != null && st.sleptAt != null) values.doze_s = Math.round(st.sleptAt - st.dropAt);
+    if (stage === 3 && st.sleptAt == null) return { status: "fail", reason: "woke_dozing", values };
+    if (stage <= 1) {
+      // still dozing at the time limit: a press meanwhile starts the doze over
+      return { status: "fail", reason: stage === 0 ? "no_drop" : "no_sleep", values };
+    }
+    if (timedOut || !st.done) return { status: "fail", reason: "no_wake", values };
+    if (values.doze_s > SLEEP_DOZE_MAX_S) return { status: "warn", reason: "long_doze", values };
+    if (!st.pressed && this.options.wake_as_press) return { status: "warn", reason: "no_wake_press", values };
+    return { status: "pass", values };
   }
 
   _judgeDrift(st) {

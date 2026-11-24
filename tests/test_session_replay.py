@@ -33,9 +33,11 @@ SEGMENTS = [
     ("picked up x3, no turn", 90, 115, {"*": (0, 0)}),
     ("finger taps x5", 163, 176, {"tap": (4, 5), "rotate": (0, 1), "shake": (0, 0)}),
     ("knocked edge-on x5", 265, 285, {"shake": (0, 0), "throw": (0, 0), "rotate": (0, 0)}),
-    # 0.75: frames tilted past 40° are skipped (the knocks above made steps at 60°);
-    # the table spin wobbles past that now and then and loses 5 % of its ccw steps
-    ("spun on the table", 689, 752, {"yaw": 0.75, "shake": (0, 0), "tap": (0, 0), "throw": (0, 0)}),
+    # This spin tips onto its edge 17 times (4 % of the frames past 60°), and each
+    # tip waits for the cap to lie still before the knob counts again (a pick-up
+    # that swings it on its edge is not a turn): 0.25, not 0.75. Turns the way
+    # the owner turns it, flat, keep every step (test_handling_replay).
+    ("spun on the table", 689, 752, {"yaw": 0.25, "shake": (0, 0), "tap": (0, 0), "throw": (0, 0)}),
     ("picked up and turned", 921, 927.5, {"tap": (0, 0), "shake": (0, 0)}),
     (
         "shaken x4",
@@ -77,7 +79,7 @@ def test_hardware_session():
     # nothing in this session is a lean in the hand: knocks and the handling
     # around them made 4 tilt steps while the lean was read from the lagging
     # gravity estimate
-    leans = [(t, k) for t, k, d in events if d.get("source") == gestures.TILT_SOURCE]
+    leans = [(t, k) for t, k, d in events if k in gestures.TILT_EVENTS]
     assert leans == []
     problems = []
     for label, lo, hi, expected in SEGMENTS:
