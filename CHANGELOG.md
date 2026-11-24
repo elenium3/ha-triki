@@ -106,6 +106,10 @@ All notable changes to this project are documented here. The format follows
   timing (multi-press window, long press).
 
 ### Fixed
+
+- The live card's left-right angle is read from the side that is up: a cap
+  lying flat metal side up showed ±180°, now 0°. The *Tilt left-right* sensor
+  and the card's `euler` keep their values.
 - A wake is a press only after real sleep. A silence sooner than ~3 minutes
   after a dropped link is adverts Home Assistant missed (a weak link, or the
   cap carried out of range and back): it no longer makes a press nobody

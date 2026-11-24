@@ -113,7 +113,10 @@ while the button is held. `model: glb` uses Flopsstuff's textured model.
   dozing token keeps its heading over the reconnect; a Home Assistant restart
   loses it. The calibration itself is stored and never resets; the help under
   the buttons says when to use each. The angles are labelled left-right
-  (roll), forward-back (pitch) and turn about the axis (yaw).
+  (roll), forward-back (pitch) and turn about the axis (yaw). Left-right is
+  read from the side that is up, so a cap lying flat shows 0° either side up
+  (the `euler` the card receives, like the *Tilt left-right* sensor, reads
+  ±180° metal side up).
 - **Data path:** the card subscribes over Home Assistant's websocket
   (`triki/subscribe`). The integration sends the pose and the last frame at up
   to 30 messages per second while a card is open, and nothing when none is.

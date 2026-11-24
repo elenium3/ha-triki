@@ -805,12 +805,23 @@ class TrikiCard extends HTMLElement {
     }
   }
 
+  // Left-right from the side that is up: the integration measures it from the
+  // green side, so a cap lying metal up read ±180°. Past 100° the other side
+  // counts as up, and back below 80° (no flicker on the edge).
+  _faceRoll(roll) {
+    const a = Math.abs(roll);
+    if (a > 100) this._capUp = true;
+    else if (a < 80) this._capUp = false;
+    if (!this._capUp) return roll;
+    return roll > 0 ? roll - 180 : roll + 180;
+  }
+
   _showMotion(m) {
     const el = this._el;
     if (!el) return;
     const [w, x, y, z] = m.quaternion;
     this._target = [w, x, y, z];
-    el.roll.textContent = `${Math.round(m.euler[0])}°`;
+    el.roll.textContent = `${Math.round(this._faceRoll(m.euler[0]))}°`;
     el.pitch.textContent = `${Math.round(m.euler[1])}°`;
     el.yaw.textContent = `${Math.round(m.euler[2])}°`;
     el.btnInd.classList.toggle("on", !!m.button);
