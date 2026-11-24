@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- The live card lists what the cap can do (`show_gestures`): tap a gesture to
+  read how to make it, each lights up when it fires, and the ones turned off in
+  the options are struck through.
+
 - The guided check shows every move it asks for on the model: the faint hint
   cap now also picks itself up, leans in the hand, presses, shakes, knocks and
   is tossed, next to the tilt, turn and flip it showed, and it plays before
@@ -111,6 +115,11 @@ All notable changes to this project are documented here. The format follows
   timing (multi-press window, long press).
 
 ### Fixed
+
+- The live card on a phone: the model's view no longer grows past a card
+  narrower than 416 px (its right side, with the Button light, was cut off),
+  the angle labels wrap instead of running into the Button light, and the
+  buttons go to two rows when one does not fit (Russian needs ~530 px).
 
 - The live card's left-right angle is read from the side that is up: a cap
   lying flat metal side up showed ±180°, now 0°. The *Tilt left-right* sensor

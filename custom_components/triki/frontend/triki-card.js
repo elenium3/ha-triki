@@ -23,6 +23,14 @@ const asset = (name) => `${BASE}${name}${VERSION ? `?v=${VERSION}` : ""}`;
 const BUTTONS = ["calibrate", "align", "led", "check"];
 // status chips; "state" also carries the chip of a check open elsewhere
 const CHIPS = ["state", "rate", "signal", "battery", "link"];
+// the gesture list: [item, events that light it, option that turns it on]
+const GESTURES = [
+  ["press", ["press", "single_press"], null], ["double_press", ["double_press"], "multi_press"],
+  ["triple_press", ["triple_press"], "multi_press"], ["long_press", ["long_press"], null],
+  ["knob", ["rotate_cw", "rotate_ccw"], "knob"], ["tilt", ["tilt_left", "tilt_right"], "tilt"],
+  ["shake", ["shake"], "shake"], ["flip", ["flip"], "motion_gestures"],
+  ["tap", ["tap", "double_tap"], "motion_gestures"], ["throw", ["throw"], "motion_gestures"],
+];
 
 const STRINGS = {
   en: {
@@ -34,6 +42,10 @@ const STRINGS = {
     help: { mark: "The yellow stripe on the model marks the edge with the dot above the letter Z (circled in the photo). It shows which way the model is turned.", cal: "<b>Calibrate</b> once per cap. The cap lies on the table, dot away from you: the model learns what level looks like for this cap, then you match the logo. It is saved for good.", align: "<b>Align direction</b> is needed from time to time. The cap senses tilt by itself, from gravity, but not which way it is turned: it has no compass. The gyroscope counts the turn and slowly drifts, and a Home Assistant restart loses it. When the stripe on the model is at a different edge than the dot on the cap, lay the cap dot away from you and press this button. The calibration stays." },
     cal: { find: "Find the dot above the letter Z on the green side (circled in the photo). On the model that edge has the yellow stripe.", flat: "Lay the cap on the table, either side up, with that edge away from you, let go and press Done.", heading: "Lay the cap on the table with that edge away from you and press Done: the stripe on the model moves to the far edge too.", turned: "Direction aligned", logo: "Now the logo (once per cap: it is crimped on at any angle). Lay the cap green side up with the Z upright, dot at the top, then turn it over across its right edge. Turn the logo below with the slider until it looks like the one on your cap.", resin: "Green side", metal: "After turning over", next: "Done", cancel: "Cancel", skip: "Skip", saved: "Calibrated",
       err: { moving: "It is moving: hold still for a second", not_flat: "It is not lying flat", asleep: "The cap is asleep: wake it first", no_data: "No data yet: wake the cap" } },
+    glist: { title: "What the cap can do", hint: "Tap a name to see how. Each lights up when the cap does it.", off: "off in the integration options",
+      knob: "Knob ↻ ↺", tilt: "Tilt ← →", how: { press: "Press the whole cap.", double_press: "Two quick presses.", triple_press: "Three quick presses.",
+        long_press: "Press and hold.", knob: "Turn it flat on the table, like a knob.", tilt: "Hold it in the hand and lean it right or left.",
+        shake: "Shake it sharply a few times.", flip: "Turn it over onto the other side.", tap: "Tap the table next to it with a finger.", throw: "Toss it up and catch it." } },
     button: "Button", rate: "Hz", linkq: "Frames received in the session", history: "Last 10 s", nodevice: "No Triki token found",
     check: { title: "Check", open: "Check",
       steps: { rest: "Lying still", flat: "Starting position", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", handle: "Pick up and put down", lean: "Lean in the hand", press: "Button", flip: "Turn over", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift", sleep: "Sleep and wake" },
@@ -122,6 +134,10 @@ const STRINGS = {
     cal: { find: "Найдите на зелёной стороне точку над буквой Z (на фото обведена). На модели этот край отмечен жёлтой полоской.", flat: "Положите крышку на стол любой стороной вверх так, чтобы этот край был от вас, отпустите и нажмите «Готово».", heading: "Положите крышку на стол этим краем от себя и нажмите «Готово»: полоска на модели тоже уйдёт на дальний край.", turned: "Направление выровнено", logo: "Теперь логотип (один раз для каждой крышки: металл обжат под любым углом). Положите крышку зелёной стороной вверх, буквой Z ровно, точкой сверху, и переверните через правый край. Поверните логотип ползунком, чтобы он выглядел как на крышке.", resin: "Зелёная сторона", metal: "После переворота", next: "Готово", cancel: "Отмена", skip: "Пропустить", saved: "Откалибровано",
       err: { moving: "Крышка двигается: подержите её секунду неподвижно", not_flat: "Крышка лежит не ровно", asleep: "Крышка спит: сначала разбудите её", no_data: "Нет данных: разбудите крышку" } },
     reset: "Выровнять направление",
+    glist: { title: "Что умеет крышка", hint: "Нажмите на название, чтобы увидеть, как это сделать. Жест подсвечивается, когда крышка его замечает.", off: "выключено в настройках интеграции",
+      knob: "Крутилка ↻ ↺", tilt: "Наклон ← →", how: { press: "Нажмите на крышку целиком.", double_press: "Два быстрых нажатия.", triple_press: "Три быстрых нажатия.",
+        long_press: "Нажмите и держите.", knob: "Поворачивайте её на столе, как ручку.", tilt: "Держите в руке и наклоняйте вправо или влево.",
+        shake: "Резко встряхните несколько раз.", flip: "Переверните на другую сторону.", tap: "Постучите пальцем по столу рядом с ней.", throw: "Подбросьте и поймайте." } },
     led: "Диод", button: "Кнопка", rate: "Гц", linkq: "Дошло кадров за сеанс", history: "Последние 10 с",
     check: { title: "Проверка", open: "Проверка",
       steps: { rest: "Покой", flat: "Исходное положение", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", handle: "Взять и положить", lean: "Наклон в руке", press: "Кнопка", flip: "Переворот", tap: "Касание", shake: "Встряхивание", throw: "Бросок", drift: "Уход направления", sleep: "Сон и пробуждение" },
@@ -212,6 +228,10 @@ const STRINGS = {
     calibrate: "Kalibracja",
     cal: { find: "Znajdź po zielonej stronie kropkę nad literą Z (zakreśloną na zdjęciu). Na modelu ta krawędź ma żółty pasek.", flat: "Połóż kapsel na stole dowolną stroną do góry tak, żeby ta krawędź była od ciebie, puść i naciśnij Gotowe.", heading: "Połóż kapsel na stole tą krawędzią od siebie i naciśnij Gotowe: pasek na modelu też przejdzie na daleką krawędź.", turned: "Kierunek wyrównany", logo: "Teraz logo (raz na kapsel: metal jest zaciśnięty pod dowolnym kątem). Połóż kapsel zieloną stroną do góry, literą Z prosto, kropką u góry, i odwróć go przez prawą krawędź. Obróć logo suwakiem, aż będzie wyglądać jak na kapslu.", resin: "Zielona strona", metal: "Po odwróceniu", next: "Gotowe", cancel: "Anuluj", skip: "Pomiń", saved: "Skalibrowano",
       err: { moving: "Kapsel się rusza: przytrzymaj chwilę nieruchomo", not_flat: "Kapsel nie leży płasko", asleep: "Kapsel śpi: najpierw go obudź", no_data: "Brak danych: obudź kapsel" } },
+    glist: { title: "Co potrafi kapsel", hint: "Kliknij nazwę, żeby zobaczyć jak. Gest podświetla się, gdy kapsel go wykona.", off: "wyłączone w opcjach integracji",
+      knob: "Pokrętło ↻ ↺", tilt: "Przechył ← →", how: { press: "Naciśnij cały kapsel.", double_press: "Dwa szybkie naciśnięcia.", triple_press: "Trzy szybkie naciśnięcia.",
+        long_press: "Naciśnij i przytrzymaj.", knob: "Obracaj go płasko na stole jak pokrętło.", tilt: "Trzymaj w dłoni i przechylaj w prawo lub w lewo.",
+        shake: "Potrząśnij nim mocno kilka razy.", flip: "Odwróć go na drugą stronę.", tap: "Stuknij palcem w stół obok niego.", throw: "Podrzuć go i złap." } },
     reset: "Wyrównaj kierunek", led: "Dioda", button: "Przycisk", rate: "Hz", linkq: "Odebrane ramki w sesji", history: "Ostatnie 10 s",
     check: { title: "Test", open: "Test",
       steps: { rest: "Spoczynek", flat: "Pozycja wyjściowa", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", handle: "Podnieś i odłóż", lean: "Przechył w dłoni", press: "Przycisk", flip: "Odwrócenie", tap: "Stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", drift: "Dryf kierunku", sleep: "Sen i wybudzenie" },
@@ -389,13 +409,16 @@ const CSS = `
   .checkpanel details.report textarea { width: 100%; box-sizing: border-box; margin-top: 6px; font: 12px monospace; background: transparent; color: inherit; border: 1px solid var(--divider-color, #444); border-radius: 6px; }
   .checkpanel .dot.on { background: #66bb6a; }
   @keyframes pulse { 50% { opacity: .3; } }
-  .stage { position: relative; aspect-ratio: 16 / 10; min-height: 260px; }
+  /* max-width, or the 260 px min-height widens it through the aspect ratio to
+     416 px and a phone-width card cuts off its right side (the Button light) */
+  .stage { position: relative; aspect-ratio: 16 / 10; min-height: 260px; max-width: 100%; }
   canvas.gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block;
     transition: opacity .5s, filter .5s; }
   .stage.bump { animation: bump .35s ease-out; }
   @keyframes bump { 30% { box-shadow: inset 0 0 0 3px rgba(var(--rgb-primary-color, 3,169,244), .55); } }
-  .angles { position: absolute; left: 12px; top: 8px; display: flex; gap: 14px; pointer-events: none; }
-  .angle { display: flex; flex-direction: column; }
+  /* clear of the Button indicator; on a narrow card the labels wrap */
+  .angles { position: absolute; left: 12px; right: 96px; top: 8px; display: flex; gap: 14px; pointer-events: none; }
+  .angle { display: flex; flex-direction: column; min-width: 0; }
   .angle small { font-size: .72em; color: var(--secondary-text-color); text-transform: uppercase; letter-spacing: .04em; }
   .angle b { font-size: 1.35em; font-variant-numeric: tabular-nums; min-width: 3.2em; }
   .btn-ind { position: absolute; right: 12px; top: 10px; display: flex; align-items: center; gap: 6px;
@@ -421,10 +444,21 @@ const CSS = `
     transition: width .08s linear, left .08s linear; }
   .bar::after { content: ""; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--secondary-text-color); opacity: .5; }
   .chart { padding: 4px 16px 0; }
+  .glist { padding: 8px 16px 0; }
+  .glist small { font-size: .72em; color: var(--secondary-text-color); }
+  .gitems { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+  .gitem { font: inherit; font-size: .8em; padding: 3px 10px; border-radius: 12px; cursor: pointer;
+    border: 1px solid var(--divider-color); background: none; color: var(--primary-text-color);
+    transition: background .4s, border-color .4s, color .4s; }
+  .gitem.sel { border-color: var(--primary-color); }
+  .gitem.off { color: var(--secondary-text-color); opacity: .55; text-decoration: line-through; }
+  .gitem.hit { background: var(--primary-color); border-color: var(--primary-color); color: #fff; transition: none; }
+  .ghow { margin: 4px 0 0; font-size: .78em; color: var(--secondary-text-color); min-height: 1.3em; }
   .chart small { font-size: .72em; color: var(--secondary-text-color); }
   canvas.hist { width: 100%; height: 70px; display: block; }
-  .actions { display: flex; gap: 10px; padding: 10px 16px 16px; }
-  .actions button { flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  /* two rows on a narrow card: four Russian labels need ~530 px in one */
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; padding: 10px 16px 16px; }
+  .actions button { flex: 1 1 0; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
     font: inherit; font-size: 1em; font-weight: 500; min-height: 52px; padding: 10px 14px; border-radius: 12px; cursor: pointer;
     border: 1px solid var(--divider-color); background: var(--secondary-background-color); color: var(--primary-text-color); }
   .actions button:disabled { opacity: .45; cursor: default; }
@@ -474,7 +508,8 @@ const CSS = `
   .wide .side .row { height: 22px; }
   .wide .side .chart { flex: 1; }
   .wide .side canvas.hist { height: 80px; }
-  .wide .side .actions { flex-direction: column; margin-top: auto; }
+  .wide .side .actions { flex-direction: column; flex-wrap: nowrap; margin-top: auto; }
+  .wide .side .actions button { flex: none; }
   /* guided check */
   .chip.check { background: rgba(255,193,7,.2); color: #ffc107; }
   .checkbar { position: absolute; left: 12px; right: 12px; bottom: 10px; display: none; flex-direction: column; gap: 4px; pointer-events: none; }
@@ -493,6 +528,8 @@ const CSS = `
   .wide.nomodel:not(.checking):not(.calibrating) .side { border-left: none; }
   .head .chip[data-off] { display: none !important; }
   .actions [data-off] { display: none !important; }
+  .side { container-type: inline-size; }
+  @container (max-width: 600px) { ha-card:not(.wide) .actions button { flex-basis: calc(50% - 5px); } }
   .checkpanel small.of { color: var(--secondary-text-color); font-size: .8em; text-transform: uppercase; letter-spacing: .04em; }
   .checkpanel h3 { margin: 0; font-size: 1.2em; font-weight: 500; }
   .checkpanel p { margin: 0; line-height: 1.45; }
@@ -529,7 +566,7 @@ class TrikiCard extends HTMLElement {
   static getConfigElement() { return document.createElement("triki-card-editor"); }
 
   setConfig(config) {
-    const c = { show_values: true, show_history: true, show_controls: true, show_model: true, show_status: true, ...config };
+    const c = { show_values: true, show_history: true, show_controls: true, show_model: true, show_status: true, show_gestures: true, ...config };
     // show_controls: false is the old way to hide every button and the help
     c.buttons = Array.isArray(c.buttons) ? c.buttons : (c.show_controls ? [...BUTTONS] : []);
     c.show_help ??= !!c.show_controls;
@@ -620,6 +657,8 @@ class TrikiCard extends HTMLElement {
         <div class="checkpanel" id="checkPanel"></div>
         ${c.show_values ? `<div class="values"><div><h4>${t.gyro}</h4>${axisRows("g")}</div><div><h4>${t.accel}</h4>${axisRows("a")}</div></div>` : ""}
         ${c.show_history ? `<div class="chart"><small>${t.gyro} · ${t.history}</small><canvas class="hist" id="hist"></canvas></div>` : ""}
+        ${c.show_gestures ? `<div class="glist" id="glist"><small>${t.glist.title}</small><div class="gitems">${GESTURES.map(([id]) =>
+          `<button class="gitem" data-g="${id}">${t.glist[id] || t.gestures[id]}</button>`).join("")}</div><p class="ghow" id="ghow">${t.glist.hint}</p></div>` : ""}
         <div class="actions"${c.buttons.length ? "" : ' style="display:none"'}>
           <button id="cal" disabled${off("calibrate")}><ha-icon icon="mdi:target"></ha-icon><span class="lbl">${t.calibrate}</span></button>
           <button id="reset" disabled${off("align")}><ha-icon icon="mdi:compass-outline"></ha-icon><span class="lbl">${t.reset}</span></button>
@@ -654,6 +693,9 @@ class TrikiCard extends HTMLElement {
     for (const p of ["g", "a"]) for (const a of ["x", "y", "z"]) {
       this._el[`${p}${a}`] = $(`${p}${a}`);
       this._el[`${p}${a}v`] = $(`${p}${a}v`);
+    }
+    for (const b of this.shadowRoot.querySelectorAll(".gitem")) {
+      b.addEventListener("click", () => this._pickGesture(b.dataset.g));
     }
     this._el.reset.addEventListener("click", () => this._wizard("heading"));
     this._el.led.addEventListener("click", () => this._toggleLed());
@@ -831,6 +873,7 @@ class TrikiCard extends HTMLElement {
     el.checkChip.hidden = !(s.checking && !this._chk);
     el.check.disabled = !!s.checking && !this._chk;
     if (!live && (this._wizStep === "flat" || this._wizStep === "heading")) this._wizard(null);
+    this._markGestures();
     el.led.disabled = !s.connected;
     el.led.classList.toggle("on", !!s.led);
     el.btnInd.classList.toggle("on", !!s.button);
@@ -902,7 +945,42 @@ class TrikiCard extends HTMLElement {
     i.style.left = f < 0 ? `${50 + f * 50}%` : "50%";
   }
 
+  // ------------------------------------------------------------------ gesture list
+  _gestureOn(id) {
+    const opt = GESTURES.find((g) => g[0] === id)?.[2];
+    const o = this._status?.options;
+    return !opt || !o || o[opt] !== false; // an older integration sends no options
+  }
+
+  _pickGesture(id) {
+    const t = this._t.glist, how = this.shadowRoot.getElementById("ghow");
+    if (!how) return;
+    this._gSel = this._gSel === id ? null : id;
+    for (const b of this.shadowRoot.querySelectorAll(".gitem")) b.classList.toggle("sel", b.dataset.g === this._gSel);
+    how.textContent = !this._gSel ? t.hint
+      : t.how[id] + (this._gestureOn(id) ? "" : ` (${t.off})`);
+  }
+
+  _markGestures() {
+    for (const b of this.shadowRoot.querySelectorAll(".gitem")) {
+      const on = this._gestureOn(b.dataset.g);
+      b.classList.toggle("off", !on);
+      b.title = on ? this._t.glist.how[b.dataset.g] : this._t.glist.off;
+    }
+    if (this._gSel) { const id = this._gSel; this._gSel = null; this._pickGesture(id); }
+  }
+
+  _lightGesture(kind) {
+    const g = GESTURES.find((x) => x[1].includes(kind));
+    const b = g && this.shadowRoot.querySelector(`.gitem[data-g="${g[0]}"]`);
+    if (!b) return;
+    b.classList.add("hit");
+    clearTimeout(b._hit);
+    b._hit = setTimeout(() => b.classList.remove("hit"), 900);
+  }
+
   _showEvent(kind, data) {
+    this._lightGesture(kind);
     const names = this._t.gestures;
     let label = names[kind];
     if (!label) return;
@@ -1545,7 +1623,7 @@ class TrikiCardEditor extends HTMLElement {
         device_id: "Triki", title: "Title", show_values: "Gyro and accelerometer bars",
         show_history: "Gyro history", show_controls: "Buttons and help (old switch: use the two below)", model: "3D model",
         show_model: "3D model and angles", chips: "Status chips",
-        buttons: "Buttons", show_help: "Help under the buttons",
+        buttons: "Buttons", show_help: "Help under the buttons", show_gestures: "Gesture list",
       })[s.name] || s.name;
       this._form.addEventListener("value-changed", (ev) => {
         this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: ev.detail.value } }));
@@ -1567,6 +1645,7 @@ class TrikiCardEditor extends HTMLElement {
       { name: "buttons", selector: { select: { multiple: true, mode: "list", options: [
         { value: "calibrate", label: "Calibrate" }, { value: "align", label: "Align direction" },
         { value: "led", label: "LED" }, { value: "check", label: "Check" }] } } },
+      { name: "show_gestures", selector: { boolean: {} } },
       { name: "show_help", selector: { boolean: {} } },
       { name: "model", selector: { select: { mode: "dropdown", options: [
         { value: "cap", label: "Triki (built in)" }, { value: "glb", label: "Flopsstuff textured" }] } } },

@@ -23,10 +23,15 @@ show_model: true                              # the 3D model and its angles
 chips: [state, rate, signal, battery, link]   # which status chips; [] hides them
 show_values: true                             # gyro and accelerometer bars
 show_history: true                            # 10 s gyro graph
+show_gestures: true                           # the list of gestures, lit as they fire
 buttons: [calibrate, align, led, check]       # which buttons; [] hides the row
 show_help: true                               # the help under the buttons
 model: cap                                    # cap (built in) or glb (textured)
 ```
+
+The gesture list names everything the cap can do: tap a name to read how, and
+each one lights up when the cap does it. Gestures turned off in the
+integration's options are struck through.
 
 Every part can be hidden on its own. A card with only the LED switch:
 
@@ -36,6 +41,7 @@ show_model: false
 chips: []
 show_values: false
 show_history: false
+show_gestures: false
 buttons: [led]
 show_help: false
 ```
