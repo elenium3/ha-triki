@@ -44,7 +44,8 @@ a scene. It sleeps when left alone and wakes on a press.
 1. Find *Żabka Triki* in [HACS](https://www.hacs.xyz/docs/use/), download it and
    [restart Home Assistant](https://www.home-assistant.io/docs/configuration/#reloading-changes).
 2. Press the cap. It appears under *Discovered* in
-   [Settings → Devices & services](https://my.home-assistant.io/redirect/integrations/): confirm.
+   [Settings → Devices & services](https://my.home-assistant.io/redirect/integrations/): confirm
+   and tick the gestures you want besides press and long press.
 3. Add the **Triki live 3D** card to a dashboard and press **Check** on it (as an admin). It
    walks you through the button, the knob and the gestures in a few minutes and
    offers the option changes your cap needs in one tap.

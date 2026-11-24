@@ -13,6 +13,13 @@
       },
       "bluetooth_confirm": {
         "description": "Set up {name}?"
+      },
+      "gestures": {
+        "title": "Gestures",
+        "description": "Press and long press already work. Turn on anything else you'll use with {name}: you can change it later in *Configure*, or let the card's *Check* suggest it.",
+        "data": {
+          "gestures": "Also turn on"
+        }
       }
     },
     "abort": {
@@ -156,6 +163,17 @@
     "link_lossy": {
       "title": "{name} loses a lot of its stream",
       "description": "Over the last {sessions} sessions in a row, {name} got less than 70 % of its motion frames through (last one: {pct} %, via {via}). On a link like this, gestures, the knob and tilt miss steps; presses suffer less.\n\nMove the cap or the receiver closer, add an ESPHome Bluetooth proxy near where you use the cap, or lower *Sensor rate* in the options (now {rate} Hz) to 26. The card's **Check** measures the link and suggests a rate.\n\nThis clears after a session in which 90 % or more gets through."
+    }
+  },
+  "selector": {
+    "gestures": {
+      "options": {
+        "knob": "Knob: turn it flat on the table",
+        "multi_press": "Double and triple press (a single press then waits half a second)",
+        "tilt": "Tilt: hold it level, lean right or left",
+        "shake": "Shake",
+        "motion_gestures": "Flip, tap and toss (experimental)"
+      }
     }
   }
 }

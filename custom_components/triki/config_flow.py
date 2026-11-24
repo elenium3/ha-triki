@@ -54,6 +54,10 @@ from .const import (
 )
 from .protocol import DEFAULT_RATE, SUPPORTED_RATES
 
+# the gestures offered when a cap is added: each turns one option on (press and
+# long press need none); the rest of the options stay at their defaults
+SETUP_GESTURES = (CONF_KNOB, CONF_MULTI_PRESS, CONF_TILT, CONF_SHAKE, CONF_MOTION_GESTURES)
+
 
 def _is_triki(info: BluetoothServiceInfoBleak) -> bool:
     name = (info.name or "").lower()
@@ -70,6 +74,8 @@ class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         self._discovery: BluetoothServiceInfoBleak | None = None
         self._found: dict[str, str] = {}
+        self._title = ""
+        self._address = ""
 
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfoBleak
@@ -87,10 +93,8 @@ class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
     ) -> ConfigFlowResult:
         assert self._discovery is not None  # noqa: S101  # set by async_step_bluetooth
         if user_input is not None:
-            return self.async_create_entry(
-                title=self._discovery.name,
-                data={CONF_ADDRESS: self._discovery.address},
-            )
+            self._title, self._address = self._discovery.name, self._discovery.address
+            return await self.async_step_gestures()
         self._set_confirm_only()
         return self.async_show_form(
             step_id="bluetooth_confirm",
@@ -102,10 +106,8 @@ class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
             address = user_input[CONF_ADDRESS]
             await self.async_set_unique_id(address, raise_on_progress=False)
             self._abort_if_unique_id_configured()
-            return self.async_create_entry(
-                title=self._found.get(address, address),
-                data={CONF_ADDRESS: address},
-            )
+            self._title, self._address = self._found.get(address, address), address
+            return await self.async_step_gestures()
 
         current = self._async_current_ids(include_ignore=False)
         for info in async_discovered_service_info(self.hass, connectable=True):
@@ -123,6 +125,35 @@ class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
                     )
                 }
             ),
+        )
+
+    async def async_step_gestures(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Which gestures to turn on: they are off until asked for, and the
+        options page is easy to miss."""
+        if user_input is not None:
+            chosen = set(user_input.get("gestures", []))
+            return self.async_create_entry(
+                title=self._title,
+                data={CONF_ADDRESS: self._address},
+                options={g: g in chosen for g in SETUP_GESTURES},
+            )
+        return self.async_show_form(
+            step_id="gestures",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional("gestures", default=[]): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=list(SETUP_GESTURES),
+                            multiple=True,
+                            mode=selector.SelectSelectorMode.LIST,
+                            translation_key="gestures",
+                        )
+                    )
+                }
+            ),
+            description_placeholders={"name": self._title},
         )
 
     @staticmethod

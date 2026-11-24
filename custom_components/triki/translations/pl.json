@@ -13,6 +13,13 @@
       },
       "bluetooth_confirm": {
         "description": "Dodać {name}?"
+      },
+      "gestures": {
+        "title": "Gesty",
+        "description": "Naciśnięcie i długie naciśnięcie już działają. Zaznacz, czego jeszcze użyjesz z {name}. Zmienisz to później w „Konfiguruj” albo podpowie to *Test* na karcie.",
+        "data": {
+          "gestures": "Włącz też"
+        }
       }
     },
     "abort": {
@@ -156,6 +163,17 @@
     "link_lossy": {
       "title": "{name} gubi sporą część strumienia",
       "description": "W ostatnich {sessions} sesjach z rzędu od {name} dotarło mniej niż 70 % ramek ruchu (w ostatniej {pct} %, przez {via}). Przy takim połączeniu gesty, pokrętło i przechył gubią kroki; naciśnięcia mniej.\n\nPrzysuń kapsel lub odbiornik bliżej, dodaj proxy Bluetooth ESPHome tam, gdzie używasz kapsla, albo obniż w opcjach *Częstotliwość czujników* (teraz {rate} Hz) do 26. **Test** w karcie zmierzy połączenie i podpowie częstotliwość.\n\nKomunikat zniknie po sesji, w której dotrze 90 % ramek lub więcej."
+    }
+  },
+  "selector": {
+    "gestures": {
+      "options": {
+        "knob": "Pokrętło: obracanie na stole",
+        "multi_press": "Podwójne i potrójne naciśnięcie (pojedyncze czeka wtedy pół sekundy)",
+        "tilt": "Przechył: trzymaj poziomo i przechylaj w prawo lub w lewo",
+        "shake": "Potrząśnięcie",
+        "motion_gestures": "Odwrócenie, stuknięcie i podrzut (eksperymentalne)"
+      }
     }
   }
 }

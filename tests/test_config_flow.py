@@ -22,11 +22,24 @@ async def test_bluetooth_discovery(hass: HomeAssistant, mock_bluetooth) -> None:
     )
     assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "bluetooth_confirm"
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "gestures"
     with patch(SETUP, return_value=True):
-        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"gestures": ["knob", "tilt"]}
+        )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == NAME
     assert result["data"] == {CONF_ADDRESS: ADDRESS}
+    # the gestures picked are on, the others off; nothing else is set
+    assert result["options"] == {
+        "knob": True,
+        "multi_press": False,
+        "tilt": True,
+        "shake": False,
+        "motion_gestures": False,
+    }
 
     # second discovery of the same token aborts
     result = await hass.config_entries.flow.async_init(
@@ -59,12 +72,15 @@ async def test_user_pick(hass: HomeAssistant, mock_bluetooth) -> None:
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
     assert result["type"] is FlowResultType.FORM
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {CONF_ADDRESS: ADDRESS}
+    )
+    assert result["step_id"] == "gestures"
     with patch(SETUP, return_value=True):
-        result = await hass.config_entries.flow.async_configure(
-            result["flow_id"], {CONF_ADDRESS: ADDRESS}
-        )
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["title"] == NAME
+    assert not any(result["options"].values())  # nothing picked: all off
 
 
 async def test_options(hass: HomeAssistant, mock_bluetooth) -> None:

@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Adding a cap asks which gestures to turn on (knob, double and triple press,
+  tilt, shake, flip/tap/toss) instead of leaving them all off until someone
+  finds *Configure*.
+
 - The live card's help explains the LED and Check buttons too, and only the
   buttons that are shown. The card editor is translated (English, Russian,
   Polish) and lists the parts in the order they sit on the card.
