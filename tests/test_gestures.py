@@ -252,7 +252,7 @@ def test_long_shake_is_one_event_and_next_shake_fires_again():
     assert types(ev).count("shake") == 1
 
 
-def test_swings_without_a_jolt_are_not_a_shake():
+def test_swings_without_a_jolt_are_not_a_shake(caplog):
     """A pick-up that swings the wrist fast (1230 deg/s on hardware) but without
     the jolt of a shake (1.0-2.1 g) fired shake on 2026-11-23 and 2026-11-24."""
     d = det()
@@ -262,6 +262,8 @@ def test_swings_without_a_jolt_are_not_a_shake():
             d, secs(0.08), gx=1500.0 if i % 2 else -1500.0, ax=1.5 if i % 2 else -1.5, az=1.0
         )
     assert "shake" not in types(ev)
+    # said once in the debug log, for a bug report
+    assert caplog.text.count("without a jolt") == 1, caplog.text
 
 
 def test_hand_motion_is_not_a_shake():

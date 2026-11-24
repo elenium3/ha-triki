@@ -19,12 +19,15 @@ tune them via the constants or the integration options.
 
 from __future__ import annotations
 
+import logging
 import math
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
 from .protocol import Sample
+
+_LOGGER = logging.getLogger(__name__)
 
 # --- button ---
 LONG_PRESS_S = 0.8
@@ -332,6 +335,7 @@ class GestureDetector:
         # shake: (t, active, sign of the dominant gyro axis) per frame in the window
         self._shake_frames: list[tuple[float, bool, int, float]] = []
         self._shake_latched = False
+        self._shake_nojolt_logged = False
         self._last_active_t = 0.0
         self._last: dict[str, float] = {}
         # (detector time, arrival time, |a|, |gyro|, button) of the recent frames
@@ -706,7 +710,9 @@ class GestureDetector:
             frames.pop(0)
         if active:
             self._last_active_t = self.t
-        elif self._shake_latched and self.t - self._last_active_t >= SHAKE_QUIET_S:
+        elif self.t - self._last_active_t >= SHAKE_QUIET_S:
+            self._shake_nojolt_logged = False
+        if not active and self._shake_latched and self.t - self._last_active_t >= SHAKE_QUIET_S:
             # the episode is over: the next one is judged on its own frames
             self._shake_latched = False
             frames.clear()
@@ -722,13 +728,20 @@ class GestureDetector:
                 reversals += 1
             if sg:
                 last_sign = sg
-        shaking = (
+        swinging = (
             active
             and len(episode) >= SHAKE_MIN_FRAMES
             and n_active >= SHAKE_ACTIVE_FRACTION * len(episode)
             and reversals >= SHAKE_REVERSALS
-            and max(f[3] for f in episode) >= SHAKE_JOLT_G
         )
+        jolt = max((f[3] for f in episode), default=0.0)
+        shaking = swinging and jolt >= SHAKE_JOLT_G
+        if swinging and not shaking and not self._shake_latched and not self._shake_nojolt_logged:
+            # for a bug report: a shake that was not counted, and how hard it was
+            self._shake_nojolt_logged = True
+            _LOGGER.debug(
+                "shake-like swing without a jolt (%.1f g of %.1f), not a shake", jolt, SHAKE_JOLT_G
+            )
         if shaking and not self._shake_latched:
             # one event per episode: a 2 s shake must not fire two or three times
             self._shake_latched = True
