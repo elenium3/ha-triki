@@ -33,34 +33,44 @@
     "step": {
       "init": {
         "data": {
-          "sample_rate": "Częstotliwość czujników (Hz)",
-          "idle_timeout": "Wolniejszy strumień po bezczynności (s, 0 = nigdy)",
-          "sleep_timeout": "Rozłączenie po bezczynności (s, 0 = nigdy)",
-          "knob_step": "Krok pokrętła (stopnie na zdarzenie)",
-          "invert_rotation": "Odwróć kierunek pokrętła",
-          "wake_as_press": "Pobudka jako naciśnięcie",
           "knob": "Pokrętło (rotate_cw / rotate_ccw)",
           "shake": "Potrząśnięcie",
           "tilt": "Przechył w dłoni (tilt_right / tilt_left)",
           "motion_gestures": "Gesty ruchu (stuknięcie, podrzut, odwrócenie)",
-          "multi_press": "Podwójne i potrójne naciśnięcie",
-          "multi_press_window": "Czas na podwójne/potrójne naciśnięcie",
-          "capture": "Zapis surowych sesji do /config/triki_captures (debug)"
+          "multi_press": "Podwójne i potrójne naciśnięcie"
         },
         "data_description": {
-          "sample_rate": "Więcej Hz to żwawsze gesty, ale szybciej pada bateria. Powyżej 104 Hz BLE często nie nadąża.",
-          "idle_timeout": "Po tym czasie bez ruchu i naciśnięć strumień zwalnia do 26 Hz, ale połączenie trwa, więc przycisk dalej działa. Każdy ruch lub naciśnięcie przywraca ustawioną częstotliwość.",
-          "sleep_timeout": "Po tym czasie bez aktywności połączenie zostaje zerwane. Kapsel nadaje potem jeszcze około 3 minut, zanim zaśnie, i do tego czasu naciśnięcia nie docierają; każde naciśnięcie w tym czasie odlicza 3 minuty od nowa (widać to na czujniku Gotowość). 0 nie pozwala kapslowi zasnąć, a wtedy CR2032 pada po mniej więcej tygodniu; przy baterii 30 % lub niżej 0 działa jak 300.",
-          "knob_step": "O ile trzeba obrócić kapsel na stole, żeby powstało jedno zdarzenie. 30° daje 12 zdarzeń na pełny obrót; przy mniejszym kroku wolne lampy nie nadążą za zdarzeniami.",
-          "invert_rotation": "Zamienia rotate_cw i rotate_ccw, gdy kapsel leży do góry nogami albo ściemniacz kręci się odwrotnie.",
-          "wake_as_press": "Domyślnie włączone. Kapsel budzi tylko przycisk, więc naciśnięcie, które go obudziło, przychodzi jako press (z source: wake) zaraz po wake. Integracja je pomija, gdy kapsel tak naprawdę nie spał, na przykład po restarcie Home Assistanta albo zerwaniu połączenia, żeby nic nie przełączyło się samo. Wyłącz, jeśli twoje automatyzacje już łapią pierwsze naciśnięcie przez wake.",
           "shake": "Domyślnie wyłączone. Kilka szybkich ruchów nadgarstkiem tam i z powrotem. Test w karcie pokaże, czy potrząśnięcie nie włącza się też przy podnoszeniu kapsla.",
           "tilt": "Domyślnie wyłączone. Trzymaj kapsel poziomo, kropką nad Z do siebie (żółty pasek na modelu w karcie), i przechyl go w prawo (tilt_right) lub w lewo (tilt_left) o 25–80°: jedno zdarzenie, potem kolejne co 0,4 s, dopóki jest przechylony (repeat: true). Przed następnym przechyłem wróć do poziomu. Działa niezależnie od pokrętła, więc podniesienie kapsla nie rusza ściemniacza sterowanego pokrętłem.",
           "knob": "Domyślnie wyłączone. Obracanie kapsla leżącego na stole daje rotate_cw / rotate_ccw, jedno zdarzenie na krok pokrętła.",
           "motion_gestures": "Domyślnie wyłączone. Stuknięcie, podrzut i odwrócenie; progi dobrane na podstawie jednej sesji na sprzęcie.",
-          "multi_press": "Wyłączone: press przychodzi od razu po puszczeniu przycisku. Włączone: naciśnięcie czeka o czas ustawiony niżej, żeby odróżnić pojedyncze, podwójne i potrójne.",
-          "multi_press_window": "Najdłuższa przerwa między puszczeniem przycisku a kolejnym naciśnięciem, która jeszcze liczy się jako podwójne lub potrójne. O tyle po puszczeniu przychodzą pojedyncze naciśnięcia.",
-          "capture": "Każde połączenie zapisuje plik .jsonl z surowymi powiadomieniami BLE i wykrytymi zdarzeniami. Wyłącz, gdy skończysz."
+          "multi_press": "Wyłączone: press przychodzi od razu po puszczeniu przycisku. Włączone: naciśnięcie czeka o czas ustawiony niżej, żeby odróżnić pojedyncze, podwójne i potrójne."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Zaawansowane",
+            "description": "Czasy, łączność i debugowanie. Domyślne wartości pasują do większości kapsli; *Test* na karcie podpowie, gdy warto coś zmienić.",
+            "data": {
+              "multi_press_window": "Czas na podwójne/potrójne naciśnięcie",
+              "knob_step": "Krok pokrętła (stopnie na zdarzenie)",
+              "invert_rotation": "Odwróć kierunek pokrętła",
+              "wake_as_press": "Pobudka jako naciśnięcie",
+              "sample_rate": "Częstotliwość czujników (Hz)",
+              "idle_timeout": "Wolniejszy strumień po bezczynności (s, 0 = nigdy)",
+              "sleep_timeout": "Rozłączenie po bezczynności (s, 0 = nigdy)",
+              "capture": "Zapis surowych sesji do /config/triki_captures (debug)"
+            },
+            "data_description": {
+              "multi_press_window": "Najdłuższa przerwa między puszczeniem przycisku a kolejnym naciśnięciem, która jeszcze liczy się jako podwójne lub potrójne. O tyle po puszczeniu przychodzą pojedyncze naciśnięcia.",
+              "knob_step": "O ile trzeba obrócić kapsel na stole, żeby powstało jedno zdarzenie. 30° daje 12 zdarzeń na pełny obrót; przy mniejszym kroku wolne lampy nie nadążą za zdarzeniami.",
+              "invert_rotation": "Zamienia rotate_cw i rotate_ccw, gdy kapsel leży do góry nogami albo ściemniacz kręci się odwrotnie.",
+              "wake_as_press": "Domyślnie włączone. Kapsel budzi tylko przycisk, więc naciśnięcie, które go obudziło, przychodzi jako press (z source: wake) zaraz po wake. Integracja je pomija, gdy kapsel tak naprawdę nie spał, na przykład po restarcie Home Assistanta albo zerwaniu połączenia, żeby nic nie przełączyło się samo. Wyłącz, jeśli twoje automatyzacje już łapią pierwsze naciśnięcie przez wake.",
+              "sample_rate": "Więcej Hz to żwawsze gesty, ale szybciej pada bateria. Powyżej 104 Hz BLE często nie nadąża.",
+              "idle_timeout": "Po tym czasie bez ruchu i naciśnięć strumień zwalnia do 26 Hz, ale połączenie trwa, więc przycisk dalej działa. Każdy ruch lub naciśnięcie przywraca ustawioną częstotliwość.",
+              "sleep_timeout": "Po tym czasie bez aktywności połączenie zostaje zerwane. Kapsel nadaje potem jeszcze około 3 minut, zanim zaśnie, i do tego czasu naciśnięcia nie docierają; każde naciśnięcie w tym czasie odlicza 3 minuty od nowa (widać to na czujniku Gotowość). 0 nie pozwala kapslowi zasnąć, a wtedy CR2032 pada po mniej więcej tygodniu; przy baterii 30 % lub niżej 0 działa jak 300.",
+              "capture": "Każde połączenie zapisuje plik .jsonl z surowymi powiadomieniami BLE i wykrytymi zdarzeniami. Wyłącz, gdy skończysz."
+            }
+          }
         }
       }
     }
@@ -162,7 +172,7 @@
     },
     "link_lossy": {
       "title": "{name} gubi sporą część strumienia",
-      "description": "W ostatnich {sessions} sesjach z rzędu od {name} dotarło mniej niż 70 % ramek ruchu (w ostatniej {pct} %, przez {via}). Przy takim połączeniu gesty, pokrętło i przechył gubią kroki; naciśnięcia mniej.\n\nPrzysuń kapsel lub odbiornik bliżej, dodaj proxy Bluetooth ESPHome tam, gdzie używasz kapsla, albo obniż w opcjach *Częstotliwość czujników* (teraz {rate} Hz) do 26. **Test** w karcie zmierzy połączenie i podpowie częstotliwość.\n\nKomunikat zniknie po sesji, w której dotrze 90 % ramek lub więcej."
+      "description": "W ostatnich {sessions} sesjach z rzędu od {name} dotarło mniej niż 70 % ramek ruchu (w ostatniej {pct} %, przez {via}). Przy takim połączeniu gesty, pokrętło i przechył gubią kroki; naciśnięcia mniej.\n\nPrzysuń kapsel lub odbiornik bliżej, dodaj proxy Bluetooth ESPHome tam, gdzie używasz kapsla, albo obniż w opcjach, w sekcji *Zaawansowane*, *Częstotliwość czujników* (teraz {rate} Hz) do 26. **Test** w karcie zmierzy połączenie i podpowie częstotliwość.\n\nKomunikat zniknie po sesji, w której dotrze 90 % ramek lub więcej."
     }
   },
   "selector": {
@@ -174,6 +184,23 @@
         "shake": "Potrząśnięcie",
         "motion_gestures": "Odwrócenie, stuknięcie i podrzut (eksperymentalne)"
       }
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "wake": "Pobudka",
+      "press": "Naciśnięcie",
+      "double_press": "Podwójne naciśnięcie",
+      "triple_press": "Potrójne naciśnięcie",
+      "long_press": "Długie naciśnięcie",
+      "rotate_cw": "Pokrętło w prawo",
+      "rotate_ccw": "Pokrętło w lewo",
+      "tilt_left": "Przechył w lewo",
+      "tilt_right": "Przechył w prawo",
+      "shake": "Potrząśnięcie",
+      "tap": "Stuknięcie",
+      "throw": "Podrzut",
+      "flip": "Odwrócenie"
     }
   }
 }

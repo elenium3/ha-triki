@@ -2,8 +2,9 @@
 
 All options live in Settings → Devices & services → Żabka Triki → *Configure*.
 Changing any option reloads the entry, which drops and re-establishes the link.
-The gesture options (knob, multi-press, tilt, shake, motion gestures) are also
-offered as a list when a cap is added; the rest start at their defaults.
+The gestures (knob, multi-press, tilt, shake, motion gestures) are at the top
+and are also offered when a cap is added; the rest are under *Advanced*,
+folded, and start at their defaults.
 
 ## Options
 

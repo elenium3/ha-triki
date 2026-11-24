@@ -615,6 +615,12 @@ class TrikiDevice:
     def reset_heading(self) -> None:
         """Make the token's current heading yaw 0 (it drifts: there is no compass)."""
         self._orientation.reset_heading()
+        self._notify()  # the card drops its "direction unknown" hint
+
+    @property
+    def heading_known(self) -> bool:
+        """Whether the model points the way the cap lies (see Orientation)."""
+        return self._orientation.heading_known
 
     @callback
     def _notify(self) -> None:

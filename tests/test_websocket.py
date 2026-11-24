@@ -265,3 +265,12 @@ async def test_status_carries_the_link_quality(hass: HomeAssistant, setup) -> No
     assert status(dev)["link_quality"] is None
     dev.link_quality.last_pct = 0.0
     assert status(dev)["link_quality"] == 0.0
+
+
+async def test_status_says_whether_the_heading_is_known(hass: HomeAssistant, setup) -> None:
+    from custom_components.triki.websocket import status
+
+    dev = setup.runtime_data
+    assert status(dev)["heading_known"] is False  # a fresh start
+    dev.reset_heading()
+    assert status(dev)["heading_known"] is True

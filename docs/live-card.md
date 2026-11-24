@@ -125,7 +125,8 @@ while the button is held. `model: glb` uses Flopsstuff's textured model.
 - **Heading drifts.** There is no compass, so yaw is only the integrated gyro.
   **Align direction** on the card opens a step with a picture of the green side, the dot above the Z circled: lay the cap with that edge away and press Done. A
   dozing token keeps its heading over the reconnect; a Home Assistant restart
-  loses it. The calibration itself is stored and never resets; the help under
+  loses it, and until the next alignment the card says so under the model
+  (status field `heading_known`). The calibration itself is stored and never resets; the help under
   the buttons says when to use each. The angles are labelled left-right
   (roll), forward-back (pitch) and turn about the axis (yaw). Left-right is
   read from the side that is up, so a cap lying flat shows 0° either side up

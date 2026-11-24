@@ -54,7 +54,7 @@ const STRINGS = {
     auto: "Auto", asleep: "Asleep", dozing: "Dozing off",
     dozeHint: "Dropped after idle. Presses won't register for ~{n} s more, and each one restarts the 3-minute wait: put the cap down and leave it",
     dozeLate: "Dropped after idle. Presses won't register until it falls asleep, and each one restarts the 3-minute wait: put the cap down and leave it", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
-    wake: "Press the cap to wake it", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
+    wake: "Press the cap to wake it", heading: "Direction unknown after a restart: lay the cap dot away from you and press Align direction.", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
     roll: "Left-right", pitch: "Forward-back", yaw: "Turn", reset: "Align direction", led: "LED", calibrate: "Calibrate",
     editor: { title: "Title", model: "Model style", show_model: "3D model and angles", chips: "Status chips", show_values: "Gyro and accelerometer bars",
       show_history: "Last 10 s graph", show_gestures: "Gesture list", buttons: "Buttons", show_help: "Help under the buttons",
@@ -151,7 +151,7 @@ const STRINGS = {
     auto: "Авто", asleep: "Спит", dozing: "Засыпает",
     dozeHint: "Связь отключена после простоя. Ещё ~{n} с нажатия не дойдут, а каждое запускает 3 минуты заново: положите крышку и подождите",
     dozeLate: "Связь отключена после простоя. Пока крышка не уснёт, нажатия не дойдут, а каждое запускает 3 минуты заново: положите её и подождите", connected: "Подключена", streaming: "Данные идут", unresponsive: "Не отвечает",
-    wake: "Нажмите на крышку, чтобы её разбудить", gyro: "Гироскоп, °/с",
+    wake: "Нажмите на крышку, чтобы её разбудить", heading: "После перезапуска направление неизвестно: положите крышку точкой от себя и нажмите «Выровнять направление».", gyro: "Гироскоп, °/с",
     accel: "Акселерометр, g", roll: "Влево-вправо", pitch: "Вперёд-назад", yaw: "Поворот", calibrate: "Калибровка",
     editor: { title: "Заголовок", model: "Вид модели", show_model: "3D-модель и углы", chips: "Плашки состояния", show_values: "Полоски гироскопа и акселерометра",
       show_history: "График за последние 10 с", show_gestures: "Список жестов", buttons: "Кнопки", show_help: "Подсказки под кнопками",
@@ -251,7 +251,7 @@ const STRINGS = {
     auto: "Auto", asleep: "Śpi", dozing: "Zasypia",
     dozeHint: "Rozłączony po bezczynności. Przez ~{n} s naciśnięcia nie dotrą, a każde odlicza 3 minuty od nowa: odłóż kapsel i poczekaj",
     dozeLate: "Rozłączony po bezczynności. Dopóki nie zaśnie, naciśnięcia nie dotrą, a każde odlicza 3 minuty od nowa: odłóż kapsel i poczekaj", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
-    wake: "Naciśnij kapsel, żeby go obudzić", gyro: "Żyroskop, °/s",
+    wake: "Naciśnij kapsel, żeby go obudzić", heading: "Po restarcie kierunek jest nieznany: połóż kapsel kropką od siebie i naciśnij „Wyrównaj kierunek”.", gyro: "Żyroskop, °/s",
     accel: "Akcelerometr, g", roll: "Lewo-prawo", pitch: "Przód-tył", yaw: "Obrót wokół osi",
     editor: { title: "Tytuł", model: "Wygląd modelu", show_model: "Model 3D i kąty", chips: "Plakietki stanu", show_values: "Paski żyroskopu i akcelerometru",
       show_history: "Wykres ostatnich 10 s", show_gestures: "Lista gestów", buttons: "Przyciski", show_help: "Pomoc pod przyciskami",
@@ -468,6 +468,9 @@ const CSS = `
   .sleep { position: absolute; inset: 0; display: none; align-items: flex-end; justify-content: center; text-align: center; padding-left: 24px; padding-right: 24px;
     padding-bottom: 16px; color: var(--secondary-text-color); font-size: .9em; pointer-events: none; }
   .asleep .sleep { display: flex; }
+  .headhint { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 24px 14px; text-align: center;
+    color: var(--warning-color, #ffa600); font-size: .9em; pointer-events: none; }
+  .checking .headhint { display: none; }
   .asleep canvas.gl { opacity: .45; filter: grayscale(.7); }
   .values { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; padding: 8px 16px 4px; }
   .values h4 { margin: 4px 0 2px; font-size: .78em; font-weight: 500; color: var(--secondary-text-color); }
@@ -666,6 +669,7 @@ class TrikiCard extends HTMLElement {
           <div class="btn-ind" id="btnInd"><div class="led"></div>${t.button}</div>
           <div class="toast" id="toast"></div>
           <div class="sleep" id="sleepText">${t.wake}</div>
+          <div class="headhint" id="headHint" hidden>${t.heading}</div>
           <div class="checkbar" id="checkBar"><b id="checkBarText"></b><div class="time"><i id="checkTime"></i></div></div>
           <div class="wizard" id="wizard">
             <div class="find" id="wizFind" hidden><span class="pic"><img src="${asset("tex_resin.webp")}" alt=""><i></i></span><p id="wizFindText"></p></div>
@@ -715,7 +719,7 @@ class TrikiCard extends HTMLElement {
       name: $("name"), state: $("state"), stateText: $("stateText"), rate: $("rate"), rateChip: $("rateChip"),
       rssi: $("rssi"), rssiChip: $("rssiChip"), link: $("link"), linkChip: $("linkChip"), batt: $("batt"), battChip: $("battChip"), battIcon: $("battIcon"),
       stage: $("stage"), gl: $("gl"), roll: $("roll"), pitch: $("pitch"), yaw: $("yaw"), btnInd: $("btnInd"),
-      toast: $("toast"), tabs: $("tabs"), sleepText: $("sleepText"), hist: $("hist"), reset: $("reset"), led: $("led"),
+      toast: $("toast"), tabs: $("tabs"), sleepText: $("sleepText"), headHint: $("headHint"), hist: $("hist"), reset: $("reset"), led: $("led"),
       cal: $("cal"), wizard: $("wizard"), wizText: $("wizText"), wizFind: $("wizFind"), wizFindText: $("wizFindText"), wizErr: $("wizErr"),
       wizNext: $("wizNext"), wizCancel: $("wizCancel"),
       wizLogo: $("wizLogo"), wizSlider: $("wizSlider"), wizMetal: $("wizMetal"), wizAngle: $("wizAngle"),
@@ -889,6 +893,8 @@ class TrikiCard extends HTMLElement {
     if (dozing) this._showDoze();
     else el.sleepText.textContent = t.wake;
     el.stage.classList.toggle("asleep", !live);
+    // only with a way to fix it on the card: the Align direction button
+    el.headHint.hidden = !(live && s.heading_known === false && (this._config?.buttons || BUTTONS).includes("align"));
     el.rateChip.hidden = !live;
     if (live) el.rate.textContent = `${Math.round(s.measured_rate ?? s.rate ?? 0)} ${t.rate}`;
     el.rssiChip.hidden = s.rssi == null;

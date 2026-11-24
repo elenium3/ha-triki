@@ -87,6 +87,7 @@ def status(dev: TrikiDevice) -> dict[str, Any]:
         "face": dev.face,
         "via": dev.link_source_name,
         "checking": dev.checking,
+        "heading_known": dev.heading_known,
         "options": {
             "knob": dev.options.knob,
             "knob_step": dev.options.knob_step,

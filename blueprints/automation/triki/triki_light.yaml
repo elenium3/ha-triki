@@ -1,9 +1,10 @@
 blueprint:
   name: "Triki: light remote"
   description: >-
-    Press toggles the light, the knob dims it, a long press sets full
-    brightness. The knob needs *Knob* turned on for the cap (in *Configure*,
-    or when the cap is added).
+    Press toggles the light, the knob dims it, a long press sets a brightness.
+    The knob needs *Knob* turned on for the cap (when the cap is added, or in
+    *Configure*) and only dims a light that is on. With double and triple
+    press on, a single press waits half a second for a second one.
   domain: automation
   source_url: https://github.com/elenium3/ha-triki/blob/main/blueprints/automation/triki/triki_light.yaml
   input:

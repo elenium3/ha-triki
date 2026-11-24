@@ -33,34 +33,44 @@
     "step": {
       "init": {
         "data": {
-          "sample_rate": "Sensor rate (Hz)",
-          "idle_timeout": "Slow stream after idle (s, 0 = never)",
-          "sleep_timeout": "Disconnect after idle (s, 0 = never)",
-          "knob_step": "Knob step (° per event)",
-          "invert_rotation": "Invert knob direction",
-          "wake_as_press": "Count the wake-up as a press",
           "knob": "Knob (rotate_cw / rotate_ccw)",
           "shake": "Shake",
           "tilt": "Tilt in the hand (tilt_right / tilt_left)",
           "motion_gestures": "Motion gestures (tap, throw, flip)",
-          "multi_press": "Double and triple press",
-          "multi_press_window": "Multi-press window",
-          "capture": "Record raw sessions to /config/triki_captures (debug)"
+          "multi_press": "Double and triple press"
         },
         "data_description": {
-          "sample_rate": "Higher means snappier gestures and faster battery drain. Above 104 Hz, BLE often can't keep up.",
-          "idle_timeout": "After this long with no motion or presses, the stream slows to 26 Hz but the link stays up, so presses still work. Any activity brings back the full rate.",
-          "sleep_timeout": "After this long with no activity, the link drops. The cap then advertises for about 3 minutes before it sleeps, and presses don't register until it has slept; a press in between restarts the 3 minutes (the Readiness sensor shows this). 0 keeps the cap awake around the clock, which drains a CR2032 in about a week; at 30 % battery or less, 0 acts as 300.",
-          "knob_step": "How far you turn the cap on the table for one rotate event. 30° gives 12 events per full turn; smaller steps can flood slow lights.",
-          "invert_rotation": "Swaps rotate_cw and rotate_ccw, for a cap used upside down or a dimmer that feels backwards.",
-          "wake_as_press": "On by default. Only a press wakes the cap, so the press that woke it arrives as press (with source: wake) right after wake. It's skipped when the cap hadn't really slept, for example after a Home Assistant restart or a dropped link, so nothing toggles by itself. Turn this off if your automations already use wake to catch the first press.",
           "shake": "Off by default. A few quick back-and-forth flicks of the wrist. The card's Check shows whether it also fires when you just pick the cap up.",
           "tilt": "Off by default. Hold the cap level, dot above the Z towards you (the yellow stripe on the card's model), and lean it right (tilt_right) or left (tilt_left) by 25° to 80°: one event, then another every 0.4 s while you hold the lean (repeat: true). Level it before the next lean. It's separate from the knob, so picking up the cap doesn't move a knob dimmer.",
           "knob": "Off by default. Turning the cap as it lies on the table sends rotate_cw / rotate_ccw, one event per knob step.",
           "motion_gestures": "Off by default. Tap, toss and flip, tuned on a single hardware session.",
-          "multi_press": "Off: a press is reported as soon as you let go. On: each press waits out the window below to tell single, double and triple apart.",
-          "multi_press_window": "The longest pause between letting go and pressing again that still counts as a double or triple press. Single presses are reported this long after you let go.",
-          "capture": "Each connection writes a .jsonl file with raw BLE notifications and detected events. Turn it off when you're done."
+          "multi_press": "Off: a press is reported as soon as you let go. On: each press waits out the window below to tell single, double and triple apart."
+        },
+        "sections": {
+          "advanced": {
+            "name": "Advanced",
+            "description": "Timing, link and debug. The defaults suit most caps; the card's Check suggests a change when one is needed.",
+            "data": {
+              "multi_press_window": "Multi-press window",
+              "knob_step": "Knob step (° per event)",
+              "invert_rotation": "Invert knob direction",
+              "wake_as_press": "Count the wake-up as a press",
+              "sample_rate": "Sensor rate (Hz)",
+              "idle_timeout": "Slow stream after idle (s, 0 = never)",
+              "sleep_timeout": "Disconnect after idle (s, 0 = never)",
+              "capture": "Record raw sessions to /config/triki_captures (debug)"
+            },
+            "data_description": {
+              "multi_press_window": "The longest pause between letting go and pressing again that still counts as a double or triple press. Single presses are reported this long after you let go.",
+              "knob_step": "How far you turn the cap on the table for one rotate event. 30° gives 12 events per full turn; smaller steps can flood slow lights.",
+              "invert_rotation": "Swaps rotate_cw and rotate_ccw, for a cap used upside down or a dimmer that feels backwards.",
+              "wake_as_press": "On by default. Only a press wakes the cap, so the press that woke it arrives as press (with source: wake) right after wake. It's skipped when the cap hadn't really slept, for example after a Home Assistant restart or a dropped link, so nothing toggles by itself. Turn this off if your automations already use wake to catch the first press.",
+              "sample_rate": "Higher means snappier gestures and faster battery drain. Above 104 Hz, BLE often can't keep up.",
+              "idle_timeout": "After this long with no motion or presses, the stream slows to 26 Hz but the link stays up, so presses still work. Any activity brings back the full rate.",
+              "sleep_timeout": "After this long with no activity, the link drops. The cap then advertises for about 3 minutes before it sleeps, and presses don't register until it has slept; a press in between restarts the 3 minutes (the Readiness sensor shows this). 0 keeps the cap awake around the clock, which drains a CR2032 in about a week; at 30 % battery or less, 0 acts as 300.",
+              "capture": "Each connection writes a .jsonl file with raw BLE notifications and detected events. Turn it off when you're done."
+            }
+          }
         }
       }
     }
@@ -162,7 +172,7 @@
     },
     "link_lossy": {
       "title": "{name} loses a lot of its stream",
-      "description": "Over the last {sessions} sessions in a row, {name} got less than 70 % of its motion frames through (last one: {pct} %, via {via}). On a link like this, gestures, the knob and tilt miss steps; presses suffer less.\n\nMove the cap or the receiver closer, add an ESPHome Bluetooth proxy near where you use the cap, or lower *Sensor rate* in the options (now {rate} Hz) to 26. The card's **Check** measures the link and suggests a rate.\n\nThis clears after a session in which 90 % or more gets through."
+      "description": "Over the last {sessions} sessions in a row, {name} got less than 70 % of its motion frames through (last one: {pct} %, via {via}). On a link like this, gestures, the knob and tilt miss steps; presses suffer less.\n\nMove the cap or the receiver closer, add an ESPHome Bluetooth proxy near where you use the cap, or lower *Sensor rate* to 26 (options, under *Advanced*; now {rate} Hz). The card's **Check** measures the link and suggests a rate.\n\nThis clears after a session in which 90 % or more gets through."
     }
   },
   "selector": {
@@ -174,6 +184,23 @@
         "shake": "Shake",
         "motion_gestures": "Flip, tap and toss (experimental)"
       }
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "wake": "Wake-up",
+      "press": "Press",
+      "double_press": "Double press",
+      "triple_press": "Triple press",
+      "long_press": "Long press",
+      "rotate_cw": "Knob clockwise",
+      "rotate_ccw": "Knob counter-clockwise",
+      "tilt_left": "Tilt left",
+      "tilt_right": "Tilt right",
+      "shake": "Shake",
+      "tap": "Tap",
+      "throw": "Toss",
+      "flip": "Flip"
     }
   }
 }

@@ -79,7 +79,8 @@ Gestures are picked when the cap is added; change them later in *Configure*.
 | Light remote: press toggles, the knob dims, long press sets full brightness | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Felenium3%2Fha-triki%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftriki%2Ftriki_light.yaml) |
 | An action for each gesture: press, double, triple and long press, knob, tilt, shake, flip | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Felenium3%2Fha-triki%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftriki%2Ftriki_actions.yaml) |
 
-Or write your own. Every gesture arrives on `event.<name>_action`:
+Or build one in the automation editor: *Add trigger → Device → your Triki*
+and pick the gesture. In YAML every gesture arrives on `event.<name>_action`:
 
 ```yaml
 automation:
@@ -162,6 +163,8 @@ and `type`.
 - Flip, tap and toss were tuned on a single session: expect misses.
 - With *Disconnect after idle* at 0 the battery reads low (it is measured
   under load).
+- After a Home Assistant restart the card's model does not know which way the
+  cap points until **Align direction**; the card says so.
 - The integration icon needs Home Assistant 2026.3 or newer.
 
 ## Credits

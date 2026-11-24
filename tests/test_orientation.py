@@ -242,3 +242,33 @@ def test_heading_survives_a_reconnect() -> None:
     o.reset()  # a plain reset still forgets it
     run(o, sample(), 1.0, t0=200.0)
     assert abs(o.euler[2]) < 1
+
+
+def test_the_heading_is_known_only_after_an_alignment() -> None:
+    """The card warns while the model's direction is a guess: from a start of
+    Home Assistant until Align direction (or the flat calibration), kept over a
+    reconnect, and over a link that streamed nothing."""
+    o = Orientation()
+    run(o, sample(), 1.0)
+    assert not o.heading_known  # a restart: the heading is wherever the sensor says
+    o.reset_heading()
+    assert o.heading_known
+    o.reset(keep_heading=True)
+    o.reset(keep_heading=True)  # a link that streamed nothing in between
+    assert o.heading_known
+    run(o, sample(), 1.0, t0=100.0)
+    assert o.heading_known
+    o.reset()
+    assert not o.heading_known
+
+
+def test_a_link_that_streamed_nothing_keeps_the_carried_heading() -> None:
+    o = Orientation()
+    t = run(o, sample(), 1.0)
+    t = run(o, sample(gz=90.0), 1.0, t0=t)
+    run(o, sample(), 1.0, t0=t)
+    before = o.euler[2]
+    o.reset(keep_heading=True)
+    o.reset(keep_heading=True)  # linked and dropped before the first frame
+    run(o, sample(), 1.0, t0=100.0)
+    assert o.euler[2] == pytest.approx(before, abs=1)

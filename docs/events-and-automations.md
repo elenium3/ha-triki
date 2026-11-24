@@ -448,12 +448,23 @@ a plain numeric state trigger is enough.
 
 ## Using the device trigger UI
 
-The event entity works with the standard *State* trigger in the automation
-editor. Pick the `event.<name>_action` entity, leave *to* empty, and add a
-template condition on `trigger.to_state.attributes.event_type` as in the
-examples above. The state of an event entity is the timestamp of the last event,
-which is why the trigger fires on every gesture even when two identical gestures
-follow each other.
+In the automation editor: *Add trigger → Device → your Triki*, then pick a
+gesture (*Press*, *Long press*, *Knob clockwise*…). The list shows the gestures
+turned on for the cap. Knob events carry `steps` in
+`trigger.event.data.steps`.
+
+```yaml
+triggers:
+  - trigger: device
+    domain: triki
+    device_id: 0123456789abcdef0123456789abcdef
+    type: press
+```
+
+Device triggers listen to the `triki_event` bus event, so a restart does not
+fire them. The State trigger on `event.<name>_action` used in the examples
+above works too; it needs the template condition on `event_type` and
+`not_from: unavailable`.
 
 ## Tips
 

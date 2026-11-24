@@ -48,6 +48,8 @@ All notable changes to this project are documented here. The format follows
 - Setup and option texts reworded in English, Polish and Russian. Some option
   names changed (the keys did not). The pitch and roll sensors are *Tilt
   forward-back* and *Tilt left-right*; entity ids stay `_pitch` and `_roll`.
+- *Configure* shows the gestures first; rate, timing, the knob step and
+  debug options fold away under *Advanced*.
 - The README starts with install, what the cap can do and the card.
 
 ### Added
@@ -61,7 +63,11 @@ All notable changes to this project are documented here. The format follows
     fails and offers the setting that fixes it.
   - **Calibrate** and **Align direction** match the model to the cap.
   - Every part can be hidden, from a visual editor. Several caps get tabs.
+  - After a Home Assistant restart it says the direction is unknown until
+    **Align direction**.
   - English, Polish and Russian, from the Home Assistant language.
+- **Device triggers**: in the automation editor, *Add trigger → Device →
+  Triki → Press* (or any gesture turned on), no template needed.
 - Two **blueprints** with one-click import: a light remote (press toggles, the
   knob dims, long press sets a brightness) and an action for each gesture.
 - Adding a cap asks which gestures to turn on.
