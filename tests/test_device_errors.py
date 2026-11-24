@@ -2,27 +2,33 @@
 
 import asyncio
 import logging
+import time
 from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from bleak.exc import BleakError
 from bleak_retry_connector import BleakNotFoundError, BleakOutOfConnectionSlotsError
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import async_capture_events
 
 from custom_components.triki import device as device_mod
-from custom_components.triki.const import BUS_EVENT
+from custom_components.triki.const import BUS_EVENT, IDLE_RATE
 from custom_components.triki.protocol import (
     BATTERY_LEVEL_UUID,
     CTRL_UUID,
+    DEFAULT_RATE,
     FIRMWARE_REV_UUID,
     HARDWARE_REV_UUID,
+    start_command,
+    stop_command,
 )
 
-from .conftest import BATTERY, CONNECTED, ESTABLISH, make_client, service_info, settle
+from .conftest import BATTERY, CONNECTED, ESTABLISH, connect, make_client, service_info, settle
+from .helpers import frame
 
 
 async def advertise(hass: HomeAssistant, entry, client=None, side_effect=None):
@@ -1087,3 +1093,80 @@ async def test_a_wake_soon_after_the_host_booted_is_a_press(hass: HomeAssistant,
     dev._last_heard = 40.0
     dev._heard(100.0)  # 60 s of silence, 100 s after boot
     assert dev._slept_until == 100.0
+
+
+async def test_a_session_after_the_idle_rate_retimes_the_detector(
+    hass: HomeAssistant, setup
+) -> None:
+    """2026-11-24 review: the detector kept the idle rate's 1/26 s step into the
+    next session at 52 Hz, so its clock ran twice as fast after every wake."""
+    dev = setup.runtime_data
+    client, notify = await connect(hass, setup)
+    notify(None, bytearray(frame() * 22))
+    dev._battery_refreshed = time.monotonic()  # no battery pause
+    dev._last_activity -= 100
+    dev._idle_check(None)
+    await settle(hass, dev)
+    assert dev.stream_rate == IDLE_RATE
+    dev._handle_disconnected(client)
+    await hass.async_block_till_done()
+    dev._last_attempt = 0.0
+    await connect(hass, setup)
+    assert dev._detector.dt == pytest.approx(1 / DEFAULT_RATE)
+
+
+async def test_a_waking_press_released_in_the_startup_discard_arrives(
+    hass: HomeAssistant, setup
+) -> None:
+    dev = setup.runtime_data
+    _, notify = await connect(hass, setup)
+    bus = async_capture_events(hass, BUS_EVENT)
+    dev._wake_press_pending = True  # as after a wake from real sleep
+    for i in range(5):  # still held as the stream starts, released 0.1 s later
+        notify(None, bytearray(frame(button=True, gx=0.1 * i)))
+    for i in range(40):
+        notify(None, bytearray(frame(gx=0.1 * i)))
+    await hass.async_block_till_done()
+    assert [e.data["type"] for e in bus] == ["press"]
+
+
+async def test_unload_survives_a_disconnect_timeout(hass: HomeAssistant, setup) -> None:
+    """BlueZ raises TimeoutError when the link does not go down within 10 s: the
+    unload failed and left the session's timers running."""
+    dev = setup.runtime_data
+    client, _ = await connect(hass, setup)
+    client.disconnect = AsyncMock(side_effect=TimeoutError)
+    assert await hass.config_entries.async_unload(setup.entry_id)
+    await hass.async_block_till_done()
+    assert setup.state is ConfigEntryState.NOT_LOADED
+    assert dev._unsub_idle is None and dev._unsub_battery is None
+    assert not dev.connected
+
+
+async def test_a_stream_that_does_not_restart_after_the_battery_check_drops_the_link(
+    hass: HomeAssistant, setup
+) -> None:
+    """The battery check stops the stream; if START then fails, no frame and so
+    no press would ever arrive over that link again."""
+    dev = setup.runtime_data
+    client, notify = await connect(hass, setup)
+    notify(None, bytearray(frame() * 22))
+    dev._battery_refreshed = time.monotonic()
+    dev._last_activity -= 100
+    dev._idle_check(None)
+    await settle(hass, dev)
+    assert dev.stream_rate == IDLE_RATE
+    dev._battery_refreshed = float("-inf")
+    orig = client.write_gatt_char.side_effect
+
+    async def flaky(uuid, data, response=False):
+        if data == start_command(IDLE_RATE):
+            raise BleakError("GATT error")
+        await orig(uuid, data, response=response)
+
+    client.write_gatt_char = AsyncMock(side_effect=flaky)
+    dev._battery_check(None)
+    await settle(hass, dev)
+    assert client.write_gatt_char.await_args_list[0].args[1] == stop_command()
+    assert dev._await_sleep  # dropped like an idle disconnect
+    assert not dev.connected

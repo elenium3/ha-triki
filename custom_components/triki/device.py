@@ -1091,6 +1091,8 @@ class TrikiDevice:
             )
         self._parser.reset()
         self._detector.reset()
+        # the last session may have ended at the idle rate; this one starts at full
+        self._detector.set_rate(self.options.rate)
         self._last_motion_t = 0.0
         t = time.monotonic()
         self._stale_notifs = self._dup_notifs = 0
@@ -1158,9 +1160,11 @@ class TrikiDevice:
                 _LOGGER.debug("%s: stop command failed: %s", self.name, err)
         try:
             await client.disconnect()
-        except BleakError as err:
-            _LOGGER.debug("%s: disconnect error: %s", self.name, err)
-        self._handle_disconnected()
+        except (BleakError, TimeoutError) as err:  # BlueZ gives up after 10 s
+            _LOGGER.debug("%s: disconnect error: %r", self.name, err)
+        finally:
+            # an unload must not leave timers of a dead session behind
+            self._handle_disconnected()
 
     def _on_disconnect(self, client: BleakClient | None) -> None:
         # bleak may call this from another thread on some backends
@@ -1592,9 +1596,11 @@ class TrikiDevice:
                 if client is None or not self.connected:
                     return
                 activity_before = self._last_activity
+                paused = False
                 try:
                     if refresh:
                         refresh = False
+                        paused = True
                         await self._async_pause_for_battery(client)
                         if self._client is not client:
                             return
@@ -1604,6 +1610,15 @@ class TrikiDevice:
                         )
                 except (BleakError, TimeoutError) as err:
                     _LOGGER.debug("%s: rate change to %s Hz failed: %s", self.name, rate, err)
+                    if paused and self._client is client:
+                        # the stream stays stopped after the battery pause: no
+                        # frame, so no press, would ever come over this link.
+                        # Let the token sleep; a press wakes it on a fresh one.
+                        _LOGGER.info(
+                            "%s: stream did not restart after the battery check, dropping the link",
+                            self.name,
+                        )
+                        self._sleep_now()
                     return
                 if self._client is not client:
                     return  # the link went away meanwhile

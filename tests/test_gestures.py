@@ -43,7 +43,29 @@ def test_static_is_quiet():
 def test_startup_discard():
     d = GestureDetector(RATE, startup_discard=20)
     assert feed(d, 20, az=5.0) == []  # noise ignored
-    assert d.t == 0.0
+    assert d.t == pytest.approx(20 / RATE)  # the button's clock runs meanwhile
+
+
+def test_press_inside_the_startup_discard_is_reported():
+    """A waking press still held when the stream starts is often released within
+    the discard window (2026-11-24 review: it was lost)."""
+    d = GestureDetector(RATE, startup_discard=20, multi_press=False)
+    out = feed(d, 5, button=True) + feed(d, 30)
+    assert [e.type for e in out] == ["press"]
+
+
+def test_flush_reports_only_enabled_gestures():
+    """Knob steps held back for the hold window came out on a link drop with the
+    knob off."""
+    d = GestureDetector(52, knob=False, shake=False, motion_gestures=False)
+    t, out = 0.0, []
+    for gz, n in ((0.0, 60), (150.0, 20)):  # at rest, then ~57 degrees about the vertical
+        for _ in range(n):
+            t += 1 / 52
+            out += d.update(Sample.from_frame(frame(gz=gz)), t)
+    assert not [e for e in out if e.type.startswith("rotate")]
+    assert d._knob_held, "the turn left steps held back"
+    assert not [e for e in d.flush() if e.type.startswith("rotate")]
 
 
 def test_single_press():

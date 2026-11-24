@@ -407,9 +407,11 @@ class GestureDetector:
         """Feed one sample; ``t`` is its arrival time on any monotonic clock."""
         out: list[Event] = []
         if self._skip > 0:
+            # the motion of the first frames is noise, the button is not: a press
+            # that woke the token is often released within this window
             self._skip -= 1
-            # keep the button edge state honest even while discarding
-            self.button = s.button
+            self.t += self.dt
+            self._button(s.button, out)
             return out
         prev_t = self.t
         if t is None:
@@ -435,25 +437,29 @@ class GestureDetector:
             self._turn_idle_since += gap - dt
         self._motion(s, out, dt, t)
         if out:
-            # all of it is still tracked (idle logic, tilt), only reporting is gated
-            allowed: set[str] = set()
-            if self.knob:
-                allowed |= KNOB_EVENTS
-            if self.shake:
-                allowed.add("shake")
-            if self.motion_gestures:
-                allowed |= EXPERIMENTAL_EVENTS
-            out[:] = [
-                e
-                for e in out
-                if e.type not in MOTION_EVENTS
-                or (self.tilt if e.type in TILT_EVENTS else e.type in allowed)
-            ]
+            out[:] = self._reported(out)
         return out
 
+    def _reported(self, events: list[Event]) -> list[Event]:
+        """The events whose gesture is turned on. All of them are still tracked
+        (idle logic, tilt), only reporting is gated."""
+        allowed: set[str] = set()
+        if self.knob:
+            allowed |= KNOB_EVENTS
+        if self.shake:
+            allowed.add("shake")
+        if self.motion_gestures:
+            allowed |= EXPERIMENTAL_EVENTS
+        return [
+            e
+            for e in events
+            if e.type not in MOTION_EVENTS
+            or (self.tilt if e.type in TILT_EVENTS else e.type in allowed)
+        ]
+
     def flush(self) -> list[Event]:
-        """Emit pending multi-press on disconnect."""
-        out: list[Event] = [e for _t, e in self._knob_held]
+        """Emit pending multi-press and held knob steps on disconnect."""
+        out: list[Event] = self._reported([e for _t, e in self._knob_held])
         self._knob_held.clear()
         if self._clicks:
             self._emit_clicks(out)
