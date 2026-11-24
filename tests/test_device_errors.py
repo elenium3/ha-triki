@@ -1077,3 +1077,14 @@ async def test_battery_pause_keeps_the_last_value_of_a_quiet_spell(
         await settle(hass, dev)
     assert hass.states.get(BATTERY).state == "82"
     assert not dev._battery_pause
+
+
+async def test_a_wake_soon_after_the_host_booted_is_a_press(hass: HomeAssistant, setup) -> None:
+    """Host monotonic time counts from boot. With Home Assistant up less than the
+    doze time after a boot (a power cut), the first wake lost its press: a token
+    never dropped was taken for one dropped at time 0."""
+    dev = setup.runtime_data
+    assert dev._last_drop == 0.0
+    dev._last_heard = 40.0
+    dev._heard(100.0)  # 60 s of silence, 100 s after boot
+    assert dev._slept_until == 100.0

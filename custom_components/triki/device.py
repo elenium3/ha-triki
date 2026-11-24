@@ -746,7 +746,10 @@ class TrikiDevice:
     def _heard(self, t: float) -> None:
         """An advert at ``t``: after a silence of _SLEEP_GAP_S it ended a sleep,
         unless the token cannot have slept yet (see _DOZE_MIN_S)."""
-        if t - self._last_heard >= _SLEEP_GAP_S and t - self._last_drop >= _DOZE_MIN_S:
+        # _last_drop is 0 until the first drop; host monotonic time starts at boot,
+        # so on a host up for less than _DOZE_MIN_S "0" must not read as a drop
+        dozing = self._last_drop and t - self._last_drop < _DOZE_MIN_S
+        if t - self._last_heard >= _SLEEP_GAP_S and not dozing:
             self._slept_until = t
         self._last_heard = max(self._last_heard, t)
 
