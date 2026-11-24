@@ -24,6 +24,11 @@ const BUTTONS = ["calibrate", "align", "led", "check"];
 // status chips; "state" also carries the chip of a check open elsewhere
 const CHIPS = ["state", "rate", "signal", "battery", "link"];
 
+/** The card's texts in the user's language (profile, then server), else English. */
+function cardStrings(hass) {
+  return STRINGS[(hass.locale?.language || hass.language || "en").slice(0, 2)] || STRINGS.en;
+}
+
 /** The card config with its defaults filled in. */
 export function cardConfig(config) {
   const c = { show_values: true, show_history: true, show_controls: true, show_model: true, show_status: true, show_gestures: true, ...config };
@@ -604,10 +609,13 @@ class TrikiCard extends HTMLElement {
   getGridOptions() { return { columns: 12, min_columns: 6, rows: "auto" }; }
 
   set hass(hass) {
-    const first = !this._hass;
     this._hass = hass;
-    if (first) this._t = STRINGS[(hass.locale?.language || hass.language || "en").slice(0, 2)] || STRINGS.en;
-    if (!this._built) this._build();
+    // the profile language can change without a page reload: follow it, but
+    // not in the middle of a check, which a rebuild would cut short
+    const t = cardStrings(hass);
+    const relang = this._t && t !== this._t && !this._chk;
+    if (!this._t || relang) this._t = t;
+    if (!this._built || relang) this._build();
     else this._applyAdmin();
     if (this.isConnected && !this._unsub && !this._subscribing) this._subscribe();
   }
@@ -1643,7 +1651,7 @@ class TrikiCardEditor extends HTMLElement {
   set hass(hass) { this._hass = hass; this._render(); }
   _render() {
     if (!this._hass || !this._config) return;
-    const T = STRINGS[(this._hass.locale?.language || this._hass.language || "en").slice(0, 2)] || STRINGS.en;
+    const T = cardStrings(this._hass);
     const e = T.editor;
     if (!this._form) {
       this._form = document.createElement("ha-form");
