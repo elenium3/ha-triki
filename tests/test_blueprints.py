@@ -126,3 +126,16 @@ async def test_the_readme_example_ignores_a_restart(hass: HomeAssistant) -> None
     assert len(toggle) == 1
     await _gesture(hass, 2, "press")
     assert len(toggle) == 2
+
+
+async def test_odd_states_do_not_break_them(hass: HomeAssistant, blueprints, caplog) -> None:
+    """The entity removed, and a light that is on but has no brightness: no
+    template error, and the knob leaves such a light alone."""
+    turn_on = async_mock_service(hass, "light", "turn_on")
+    await _setup(hass, "triki/triki_light.yaml", {"light": LIGHT})
+    hass.states.async_set(LIGHT, "on", {})
+    await _gesture(hass, 1, "rotate_cw", steps=1)
+    assert turn_on == []
+    hass.states.async_remove(EVENT)
+    await hass.async_block_till_done()
+    assert "Error" not in caplog.text, caplog.text

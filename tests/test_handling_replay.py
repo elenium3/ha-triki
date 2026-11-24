@@ -13,6 +13,7 @@ through an ESPHome proxy) of the owner doing two things:
 
 from __future__ import annotations
 
+import dataclasses
 import gzip
 import json
 import pathlib
@@ -23,7 +24,7 @@ from custom_components.triki.protocol import FrameParser, Sample
 FIXTURE = pathlib.Path(__file__).parent / "fixtures" / "handling-2026-11-23.jsonl.gz"
 
 
-def _knob_steps() -> dict[str, int]:
+def _knob_steps(scale: float = 1.0) -> dict[str, int]:
     det = gestures.GestureDetector(52, knob=True, shake=True, tilt=True)
     parser = FrameParser()
     steps = {"handling": 0, "turning": 0, "handling_tilts": 0}
@@ -33,7 +34,10 @@ def _knob_steps() -> dict[str, int]:
             if "hex" not in rec:
                 continue
             for frame in parser.push(bytes.fromhex(rec["hex"])):
-                for ev in det.update(Sample.from_frame(frame), rec["t"]):
+                s = Sample.from_frame(frame)
+                if scale != 1.0:
+                    s = dataclasses.replace(s, ax=s.ax * scale, ay=s.ay * scale, az=s.az * scale)
+                for ev in det.update(s, rec["t"]):
                     if ev.type in gestures.TILT_EVENTS and not ev.data["repeat"]:
                         if 5 <= rec["t"] <= 124:
                             steps["handling_tilts"] += 1
@@ -104,3 +108,13 @@ def test_a_pick_up_on_the_edge_leaves_no_knob_steps() -> None:
                     if ev.type in gestures.KNOB_EVENTS and 100 <= rec["t"] <= 135:
                         steps += ev.data["steps"]
     assert steps == 0
+
+
+def test_a_cap_that_reads_a_little_high_keeps_its_knob() -> None:
+    """The same session as read by a cap whose accelerometer is 8 % high (1.08 g
+    lying still). With the at-rest tolerance at 0.05 g the gyro offset was never
+    learned, the knob stayed silent after the first pick-up and all 35 turns on
+    the table were lost."""
+    plain, high = _knob_steps(), _knob_steps(1.08)
+    assert high["turning"] == plain["turning"], (plain, high)
+    assert high["handling"] <= plain["handling"], (plain, high)

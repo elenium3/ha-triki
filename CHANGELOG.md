@@ -135,6 +135,21 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The check's hint for leaning in the hand showed the dot edge lifting, the
+  same move as the tilt step; it now rolls the cap left and right, the move
+  that gives Tilt events.
+- A cap whose accelerometer reads a little off 1 g at rest (1.08 g, say) never
+  learned its gyro offset and, after the first pick-up, lost every knob turn.
+  The at-rest tolerance is now 0.1 g.
+- The card editor showed status chips, buttons and the gesture list unticked
+  when the card config left them at their default (all shown), so ticking one
+  chip hid the others.
+- The blueprints failed a template when the cap's entity was removed, and the
+  light remote set a light with no brightness to 8 % on a knob step.
+- Adding a cap no longer says the card's *Check* can turn gestures on: it
+  suggests other settings, not gestures. Two Polish suggestions now name the
+  option as the options page does.
+
 - The automation examples could fire on their own after a restart: the event
   entity comes back from unavailable with the last event. Their triggers now
   say `not_from: unavailable`.

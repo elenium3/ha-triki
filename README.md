@@ -70,8 +70,7 @@ Manual install, without HACS: [Installation](docs/installation.md).
 | Shake | a second of sharp shaking | `shake` | off |
 | Flip, tap, toss | experimental | `flip`, `tap`, `throw` | off |
 
-Gestures are picked when the cap is added; change them later in *Configure*,
-or let the card's **Check** do it.
+Gestures are picked when the cap is added; change them later in *Configure*.
 
 **No YAML needed:** import a blueprint and pick the cap.
 

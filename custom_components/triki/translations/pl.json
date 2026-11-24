@@ -16,7 +16,7 @@
       },
       "gestures": {
         "title": "Gesty",
-        "description": "Naciśnięcie i długie naciśnięcie już działają. Zaznacz, czego jeszcze użyjesz z {name}. Zmienisz to później w „Konfiguruj” albo podpowie to *Test* na karcie.",
+        "description": "Naciśnięcie i długie naciśnięcie już działają. Zaznacz, czego jeszcze użyjesz z {name}. Zmienisz to później w „Konfiguruj”.",
         "data": {
           "gestures": "Włącz też"
         }

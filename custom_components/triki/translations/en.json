@@ -16,7 +16,7 @@
       },
       "gestures": {
         "title": "Gestures",
-        "description": "Press and long press already work. Turn on anything else you'll use with {name}: you can change it later in *Configure*, or let the card's *Check* suggest it.",
+        "description": "Press and long press already work. Turn on anything else you'll use with {name}: you can change it later in *Configure*.",
         "data": {
           "gestures": "Also turn on"
         }

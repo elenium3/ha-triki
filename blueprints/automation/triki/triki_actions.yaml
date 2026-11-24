@@ -76,14 +76,15 @@ triggers:
     entity_id: !input triki
 
 variables:
-  event: "{{ trigger.to_state.attributes.event_type | default('') }}"
-  steps: "{{ trigger.to_state.attributes.steps | default(1) | int }}"
+  # to_state is none when the entity is removed
+  event: "{{ trigger.to_state.attributes.event_type | default('') if trigger.to_state else '' }}"
+  steps: "{{ trigger.to_state.attributes.steps | default(1) | int if trigger.to_state else 1 }}"
 
 # a new event has a new timestamp; coming back from unavailable (a restart or a
 # reload of the integration) brings back the last one, which is not a gesture
 conditions:
   - >-
-    {{ trigger.from_state is not none
+    {{ trigger.from_state is not none and trigger.to_state is not none
        and trigger.from_state.state != 'unavailable'
        and trigger.to_state.state not in ['unavailable', 'unknown']
        and trigger.to_state.state != trigger.from_state.state }}

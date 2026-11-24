@@ -141,7 +141,7 @@ KNOB_LIFT_COS = 0.5
 KNOB_LIFT_TOL_G = 0.2
 KNOB_LIFT_FRAMES = 3
 KNOB_REST_DPS = 10.0
-KNOB_REST_G = 0.05
+KNOB_REST_G = 0.1  # as BIAS_STILL_G: a cap may read a little off 1 g lying still
 KNOB_REST_S = 0.3
 # A gap longer than this between two frames counts as this long for the knob
 # angle: the rate in the gap is unknown. Good links show gaps of 115-155 ms,
@@ -166,7 +166,10 @@ FAST_STREAM_FACTOR = 1.5
 # 3.1 °/s off, every later frame on the table was too far from it to count, and
 # the card's model turned 141°/min until a restart. Lying on a table the gyro
 # spreads by 0.07-0.3 °/s over half a second (1-4 LSB), a hand by degrees.
-BIAS_STILL_G = 0.05  # |a| - 1 g
+# The |a| test only rules out motion; the gyro spread decides. Accelerometers
+# of this class read some tens of mg off at rest; at 0.05 g a cap reading
+# 1.08 g never learned its offset and lost every knob turn after a pick-up.
+BIAS_STILL_G = 0.1  # |a| - 1 g
 BIAS_SETTLE_S = 0.5  # the window that must be still before it is learned from
 BIAS_SPREAD_DPS = 0.5  # per axis, max - min over the window
 BIAS_RESEED_DPS = 0.5  # a still window this far from the estimate replaces it
@@ -752,6 +755,7 @@ class GestureDetector:
             self._turn_acc = 0.0  # a press twists the token: not a turn
         elif self.t < self._knob_mute_until or self._knob_lifted:
             self._turn_acc = 0.0
+            self._turn_run = 0  # back on, a turn confirms from scratch
         elif abs(a - 1.0) > KNOB_LIFT_G:
             pass  # being swung: this frame says nothing about turning, keep the rest
         elif self.gravity is not None and abs(self.gravity[2]) < KNOB_LEVEL_COS:

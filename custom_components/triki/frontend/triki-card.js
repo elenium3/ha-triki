@@ -23,6 +23,18 @@ const asset = (name) => `${BASE}${name}${VERSION ? `?v=${VERSION}` : ""}`;
 const BUTTONS = ["calibrate", "align", "led", "check"];
 // status chips; "state" also carries the chip of a check open elsewhere
 const CHIPS = ["state", "rate", "signal", "battery", "link"];
+
+/** The card config with its defaults filled in. */
+export function cardConfig(config) {
+  const c = { show_values: true, show_history: true, show_controls: true, show_model: true, show_status: true, show_gestures: true, ...config };
+  // show_controls: false is the old way to hide every button and the help
+  c.buttons = Array.isArray(c.buttons) ? c.buttons : (c.show_controls ? [...BUTTONS] : []);
+  c.show_help ??= !!c.show_controls;
+  // show_status: false is the old way to hide every chip
+  c.chips = Array.isArray(c.chips) ? c.chips : (c.show_status === false ? [] : [...CHIPS]);
+  return c;
+}
+
 // the gesture list: [item, events that light it, option that turns it on]
 const GESTURES = [
   ["press", ["press", "single_press"], null], ["double_press", ["double_press"], "multi_press"],
@@ -281,9 +293,9 @@ const STRINGS = {
       sug: { title: "Proponowane zmiany", apply: "Zapisz w opcjach", err: "Nie zapisano: {e}",
         note: "Zapisze się w opcjach integracji; połączenie na chwilę się zerwie i wróci.",
         applied: "Zapisano. Kapsel połączy się z nowymi ustawieniami, a jeśli śpi, to przy najbliższym naciśnięciu.",
-        invert_rotation: "Obroty wyszły w odwrotną stronę: zamień kierunek.",
+        invert_rotation: "Obroty wyszły w odwrotną stronę: przełącz „Odwróć kierunek pokrętła”.",
         sample_rate: "Ginie {loss}% ramek: obniż częstotliwość czujników z {from} do {value} Hz.",
-        multi_press_window: "Twoje podwójne naciśnięcie doszło jako dwa pojedyncze: dopuść {value} s przerwy między nimi (teraz {from} s).",
+        multi_press_window: "Twoje podwójne naciśnięcie doszło jako dwa pojedyncze: ustaw „Czas na podwójne/potrójne naciśnięcie” na {value} s (teraz {from} s).",
         shake: "Potrząśnięcie zadziałało samo ×{count}: wyłącz je.",
         tilt: "Przechył w dłoni zadziałał sam ×{count}: wyłącz go." },
       values: { rest: "{rate} Hz z {asked}, utrata {loss_pct}%, szum {noise_dps}°/s, przez {via}", turn: "{steps} kroków na {angle}°", drift: "{drift_deg_min}°/min", handle: "Podniesień: {count}.", shake: "{count} z {tries}", sleep: "zasypiał {doze_s} s" },
@@ -584,13 +596,7 @@ class TrikiCard extends HTMLElement {
   static getConfigElement() { return document.createElement("triki-card-editor"); }
 
   setConfig(config) {
-    const c = { show_values: true, show_history: true, show_controls: true, show_model: true, show_status: true, show_gestures: true, ...config };
-    // show_controls: false is the old way to hide every button and the help
-    c.buttons = Array.isArray(c.buttons) ? c.buttons : (c.show_controls ? [...BUTTONS] : []);
-    c.show_help ??= !!c.show_controls;
-    // show_status: false is the old way to hide every chip
-    c.chips = Array.isArray(c.chips) ? c.chips : (c.show_status === false ? [] : [...CHIPS]);
-    this._config = c;
+    this._config = cardConfig(config);
     if (this._built) this._build();
   }
 
@@ -1470,10 +1476,10 @@ class TrikiCard extends HTMLElement {
     } else {
       const m = ghostMotion(v.ghost.type, sec);
       if (!m) return null;
-      // tilts about the dot edge's sideways axis, leans about the cap's own
-      // left-right axis (as the tilt gesture reads it)
+      // tilts lift the dot edge (about the sideways axis); leans roll the cap
+      // about its own dot axis, sensor y, which is what the tilt gesture reads
       const side = new T.Vector3().crossVectors(h, up).normalize();
-      const lr = new T.Vector3(1, 0, 0).applyQuaternion(q0);
+      const lr = new T.Vector3(0, 1, 0).applyQuaternion(q0);
       r = new T.Quaternion().setFromAxisAngle(side, m.tilt || 0)
         .multiply(new T.Quaternion().setFromAxisAngle(lr, m.lean || 0));
       this._ghost.position.z = m.lift || 0;
@@ -1649,7 +1655,10 @@ class TrikiCardEditor extends HTMLElement {
     this._form.computeLabel = (sc) => (sc.name === "device_id" ? "Triki" : e[sc.name] || sc.name);
     this._form.computeHelper = (sc) => (sc.name === "buttons" ? e.admin : undefined);
     this._form.hass = this._hass;
-    this._form.data = this._config;
+    // the card's defaults filled in: an unset list means all of it, and the
+    // form must show it ticked, or ticking one item hides the rest
+    const { show_controls, show_status, ...data } = cardConfig(this._config);
+    this._form.data = data;
     // top to bottom as on the card
     const opts = (ids, label) => ids.map((value) => ({ value, label: label(value) }));
     this._form.schema = [

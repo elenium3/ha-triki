@@ -13,7 +13,7 @@ device-independent automations.
 | `press` | `count: 1`; `source: wake` for the press that woke the token | Button released (immediately, or after the multi-press window if that option is on). |
 | `double_press`, `triple_press` | `count` | Multi-press option on. |
 | `long_press` | | Button held for 0.8 s. Reported while still held; the release does not produce a `press`. |
-| `rotate_cw`, `rotate_ccw` | `steps`, `degrees`, `speed` | Turned around the vertical axis by at least one knob step, flat on a surface or held within 40° of level. Not while the token is being picked up or handled: when less than 65 % of its turning over the last 0.5 s is about the vertical, the knob does not count. Several steps can arrive in one event after a fast turn. Muted while the button is down and for 0.8 s after release, and for 0.5 s after a jolt, a shake or free fall. |
+| `rotate_cw`, `rotate_ccw` | `steps`, `degrees`, `speed` | Turned around the vertical axis by at least one knob step, flat on a surface or held within 40° of level. Once the token goes edge-on (picked up off the table, say), the knob is off until it lies still again. Not while the token is being picked up or handled: when less than 65 % of its turning over the last 0.5 s is about the vertical, the knob does not count. Several steps can arrive in one event after a fast turn. Muted while the button is down and for 0.8 s after release, and for 0.5 s after a jolt, a shake or free fall. |
 | `tilt_right`, `tilt_left` | `repeat` | *Tilt in the hand* option: the token held level and leaned right or left by more than 25°; one event with `repeat: false`, then one every 0.4 s with `repeat: true` while it stays leaned. |
 | `shake` | | Several quick back-and-forth swings. One event per episode. |
 | `tap` | | A jolt on a token that is at rest: a finger tap on the table, a light knock. Reported once the token is still again (up to 0.4 s). Motion gestures option. |
@@ -28,7 +28,7 @@ and a Raspberry Pi 5 adapter):
 | Gesture | Status |
 |---|---|
 | wake, press, long press, double and triple press | Reliable. |
-| rotate | Reliable flat on a surface or held level. On the 29 Oct 2026 session a brisk back-and-forth spin on the table reported 85 % of the turned angle, between the fingers 65–70 % (the rest is the remainder dropped at every reversal and pause). A press twists the token in the hand; those false rotations are filtered. Picking the token up and turning it in the same move still counts as a turn. |
+| rotate | Reliable flat on a surface or held level. On the 29 Oct 2026 session a brisk back-and-forth spin on the table reported 85 % of the turned angle, between the fingers 65–70 % (the rest is the remainder dropped at every reversal and pause). A press twists the token in the hand; those false rotations are filtered. A token that went edge-on on the way up does not turn the knob until it lies still again. |
 | shake | Confirmed: 4 of 4 through a proxy, one event per shake about a second after it starts, no false taps or rotations while swinging. Timed on the frames' arrival clock, so lost frames and the 26 Hz idle rate only delay it. |
 | tap | Confirmed on the table: 4 of 5 finger taps. Not detected when the token is knocked against something while being moved in the hand (by design: it must be at rest before the jolt). |
 | throw | Confirmed: 3 tosses and a drop gave 5 events, a catch can count twice. |
