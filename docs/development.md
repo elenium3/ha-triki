@@ -46,6 +46,7 @@ tests/             pytest-homeassistant-custom-component, mocked bleak client
 tools/
   triki_probe.py   standalone probe: scan, info, LED, record, guided capture
   replay.py        run a capture through the parser and gesture detector
+blueprints/automation/triki/   automation blueprints (light remote, action per gesture)
 ```
 
 `protocol.py` and `gestures.py` deliberately have no Home Assistant imports so
@@ -89,6 +90,12 @@ next to the events that were recorded live.
 - `test_idle.py`: idle rate switch, activity during a rate write, sleep
   disconnect.
 - `test_config_flow.py`, `test_diagnostics.py`.
+- `test_blueprints.py`: both blueprints and the README's example automation
+  run in Home Assistant, including a restart (unavailable and back).
+- `test_handling_replay.py`, `test_session_replay.py`: recorded sessions in
+  `tests/fixtures` run through the detector.
+- `tests/js/*.test.mjs` (`node --test`): the card's strings, angles, hints and
+  config defaults.
 
 `tests/conftest.py` provides `setup` (a loaded entry for a sleeping token) and
 `connect()` (one fresh advertisement, a mocked client, the notify callback).

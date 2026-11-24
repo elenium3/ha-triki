@@ -6,213 +6,100 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+Compared with 0.2.5. Upgrading from 0.3.0b1: tilt now sends `tilt_right` /
+`tilt_left` (b1 sent `rotate_cw` / `rotate_ccw` with `source: tilt`), and some
+option names changed (see Changed).
+
 ### Added
 
-- Two automation blueprints with one-click import: a light remote (press
-  toggles, the knob dims, long press sets full brightness) and an action for
-  each gesture.
-
-- Adding a cap asks which gestures to turn on (knob, double and triple press,
-  tilt, shake, flip/tap/toss) instead of leaving them all off until someone
-  finds *Configure*.
-
-- The live card's help explains the LED and Check buttons too, and only the
-  buttons that are shown. The card editor is translated (English, Russian,
-  Polish) and lists the parts in the order they sit on the card.
-
-- The live card lists what the cap can do (`show_gestures`): tap a gesture to
-  read how to make it, each lights up when it fires, and the ones turned off in
-  the options are struck through.
-
-- The guided check shows every move it asks for on the model: the faint hint
-  cap now also picks itself up, leans in the hand, presses, shakes, knocks and
-  is tossed, next to the tilt, turn and flip it showed, and it plays before
-  Start too.
-
-- The card's parts can be hidden one by one: `show_model`, `chips` (a list of
-  state, rate, signal, battery, and a new *link* chip: the share of frames
-  received), `buttons` (a list of calibrate, align, led, check) and `show_help`, next to
-  `show_values` and `show_history`. `show_controls: false` still hides every
-  button and the help, `show_status: false` every chip.
-- The card's check has new steps: **Pick up and put down** (gestures that fire
-  while the cap is picked up are reported as false), **Sleep and wake**
-  (optional: drops the link as after idling, follows the doze and checks that
-  a press wakes the cap). Shake now asks for three shakes and reports the
-  misses, the lean for three each way.
-- **Readiness** sensor: whether a press reaches Home Assistant now.
-  *Connected*; *Dozing off: presses not seen* for about 3 minutes after an
-  idle disconnect; *Asleep: a press wakes it*; *Not responding*. The card
-  counts the dozing minutes down. A press while dozing starts them over, and
-  the token's adverts do not change with it (checked on hardware), so the
-  press itself cannot be caught.
-- **Link quality** sensor: the share of motion frames that arrived in the last
-  session. Three lossy sessions in a row (under 70 %) raise a repair issue
-  with what to do; a clean one clears it.
 - **Live 3D card**, `custom:triki-card`, served and registered by the
   integration: nothing to install, search for *Triki live 3D* when adding a
   card. See docs/live-card.md.
-  - A 3D model of the token follows it: roll, pitch and yaw, gyro and
-    accelerometer readings with a 10 s graph, button, battery, signal, stream
-    rate and a label for each gesture.
-    Orientation is computed in the integration (Madgwick filter) and goes
-    over a websocket subscription (`triki/subscribe`), not into entity states.
-  - The default model is our own, built from calipered dimensions, with
-    photo textures; Flopsstuff's textured model (MIT) is `model: glb`.
-  - Calibration: lay the token on the table with the dot above the Z away
-    from you, and the model levels itself and points the same way. The logo
-    angle on the metal side is matched once by eye; both are stored per token.
-  - **Check** suggests settings when its results point to one (both turns the
-    other way round, heavy frame loss, a double press that came as two, a
-    gesture that fires by itself) and saves them with **Apply**.
-  - **Check** (admins only): a guided walk through lying still (stream rate,
-    lost frames, noise and the receiver the link goes through), level, tilt,
-    knob turns each way, the presses, turning over and the gestures that are
-    turned on. Each step has an instruction, a timer and live numbers, and
-    ends with the likely cause when it fails ("19 % of frames lost, move it
-    closer to the receiver"). The report folds out for an issue.
-  - With several tokens, tabs: *Auto* follows the awake one, or pin one.
-  - `show_controls: false` hides the buttons and the help, for a wall tablet.
+  - A 3D model that follows the cap, gyro and accelerometer readings with a
+    10 s graph, the button, battery, signal, link and stream rate. Orientation
+    is computed in the integration (Madgwick filter) and sent over a websocket
+    subscription (`triki/subscribe`), not through entity states.
+  - A list of the gestures: each lights up when it fires, tap one to read how
+    to make it, the ones turned off in the options are struck through.
+  - **Calibrate** levels the model and matches the logo once per cap;
+    **Align direction** points the model the way the cap lies.
+  - **Check** (admins only) walks through lying still (frame loss, noise, the
+    receiver in use), tilt, knob turns, presses, flipping, picking up, the
+    enabled gestures and, optionally, sleep and wake. The model shows each
+    move to make. A failed step names the likely cause ("19 % of frames lost,
+    move it closer to the receiver"), and settings the results point to can be
+    saved with one tap.
+  - Every part can be hidden on its own (`show_model`, `chips`, `buttons`,
+    `show_gestures`, `show_help`, `show_values`, `show_history`), from a
+    translated visual editor. Several caps get tabs.
   - English, Russian and Polish, picked from the Home Assistant language.
-- `sensor.<name>_face_up`: which side is up (`cap_up`, `pcb_up` or `edge`), set
-  once the token has lain still for 0.3 s and kept while it sleeps.
-- `speed` (°/s) in `rotate_cw` / `rotate_ccw` events, so a fast turn can do
-  more than a slow one.
-- *Tilt in the hand* option, off by default: hold the token level and lean it
-  right or left past 25° for `tilt_right` / `tilt_left`, one event and then
-  one every 0.4 s while it stays leaned (`repeat: true`). Checked on hardware.
-  Its own events, not the knob's (0.3.0b1 sent `rotate_cw` / `rotate_ccw`
-  with `source: tilt`): picking the token up leans it, and a dimmer on the
-  knob moved.
-- Russian translation of the integration (setup, options, repairs, entity
-  names).
+- **Two blueprints** with one-click import: a light remote (press toggles, the
+  knob dims, long press sets a brightness) and an action for each gesture.
+- Adding a cap asks which gestures to turn on.
+- *Tilt in the hand* option, off by default: hold the cap level and lean it
+  right or left past 25° (up to 80°) for `tilt_right` / `tilt_left`, repeated
+  every 0.4 s while it stays leaned (`repeat: true`).
+- **Readiness** sensor: whether a press reaches Home Assistant now
+  (*Connected*, *Dozing off* for about 3 minutes after an idle disconnect,
+  when presses are missed, *Asleep*, *Not responding*).
+- **Link quality** sensor: the share of motion frames that arrived in the last
+  session. Three lossy sessions in a row (under 70 %) raise a repair issue
+  with what to do.
+- `sensor.<name>_face_up`: `cap_up`, `pcb_up` or `edge`, once the cap lies
+  still.
+- `speed` (°/s) in knob events, so a fast turn can do more than a slow one.
+- Russian translation of the integration.
 - Diagnostics: `measured_rate`, `gyro_bias`, `link_via` (the receiver the
-  link actually went through; the advert's source was reported before) and
-  `shakes`, the 1.5 s of stream before each of the last three shakes.
+  link went through) and the stream before each of the last three shakes.
 
 ### Changed
 
-- Every text of the card, the setup and the options reworded in English,
-  Russian and Polish: shorter, plainer. Some option names changed (the keys did
-  not): *Sensor rate*, *Slow stream after idle*, *Invert knob direction*, *Count
-  the wake-up as a press*, *Knob*, *Multi-press window*.
-- The README leads with install, what the cap can do and the card; the
-  battery notes are shorter and the entity table folds away.
-- The knob no longer turns when the token is picked up. Picking it up turns it
-  mostly about other axes than the vertical; while that is so the knob does
-  not count. In a labelled run, ten pick-ups made 2 knob steps instead of 24,
-  and turns on the table kept 35 of 37 steps.
-- The press that wakes the token arrives as `press` (with `source: wake`) right
-  after `wake`: *Count the wake-up as a press* is on by default and existing installs
-  are switched on once. Only the button wakes the token, so a wake from sleep is
-  a press; it is left out when the token had not really slept (after a Home
-  Assistant restart or a dropped link). An automation that used `wake` to catch
-  the first press now gets a `press` as well: turn the option off or drop the
-  `wake` trigger.
-- The pitch and roll sensors are called *Tilt forward-back* and *Tilt
-  left-right*, the names the card uses. Entity ids stay `_pitch` and `_roll`.
-- One motion, one gesture: knob steps are held 0.3 s and dropped if the motion
-  turns out to be a shake, a jolt or a fall. A shake used to fire two knob
-  steps before it was recognised.
-- The knob ignores turns with the token tilted more than 40° from level (was
-  60°): knocking it edge-on against the table no longer turns it.
-- Slow knob turns are counted: the knob follows rotation from 10 °/s (was
-  15 °/s) and keeps a partial turn through 1 s pauses (was 0.6 s). A slow hand
-  turn of one revolution used to report 8-10 of its 12 steps, now 11.
-- Knob turns are integrated over the frames' arrival times instead of one
-  sample period per frame: with half the frames lost the knob used to report
-  half the steps.
-- The gyro's zero offset is learned while the token lies still and subtracted
-  from knob turns and the card's 3D model; it is kept across reconnects.
-  "Still" means the readings spread by under 0.5 °/s over half a second, so a
-  steady hand does not count, and an offset learned wrongly is replaced the
-  next time the token lies on the table.
-- For 30 s after Home Assistant starts, a token heard only through a local
-  adapter waits for the Bluetooth proxies instead of connecting at once: the
-  link used to go through the Pi's adapter at −85 dBm before the proxies had
-  reported the token.
-- Firmware that streams faster than requested no longer speeds up gesture
-  timing (multi-press window, long press).
+- The knob:
+  - It no longer turns while the cap is picked up or handled. Ten pick-ups
+    made 2 knob steps instead of 24, and turns on the table kept 35 of 37.
+    After the cap goes edge-on it stays off until it lies still again.
+  - Slow turns are counted: one slow revolution reports 11 of its 12 steps
+    (was 8-10), and frames lost on a weak link no longer cost steps.
+  - It ignores turns with the cap more than 40° from level (was 60°), and a
+    shake, a jolt or a fall no longer adds steps before it is recognised.
+  - The gyro's zero offset is learned while the cap lies still, so the knob
+    and the card's model do not drift.
+- The press that wakes the cap arrives as `press` (`source: wake`) right after
+  `wake`: *Count the wake-up as a press* is on by default and existing installs
+  are switched on once. It counts only after real sleep, not after a restart or
+  a dropped link. An automation that used `wake` to catch the first press now
+  gets a `press` as well: turn the option off or drop the `wake` trigger.
+- Texts of the setup and options reworded in English, Russian and Polish. New
+  option names (the keys stay): *Sensor rate*, *Slow stream after idle*,
+  *Invert knob direction*, *Count the wake-up as a press*, *Knob*,
+  *Multi-press window*. The pitch and roll sensors are *Tilt forward-back* and
+  *Tilt left-right*; entity ids stay `_pitch` and `_roll`.
+- For 30 s after Home Assistant starts, a cap heard only through a local
+  adapter waits for the Bluetooth proxies instead of linking up through a
+  distant adapter at once.
+- Firmware that streams faster than asked no longer speeds up gesture timing.
+- The README leads with install, what the cap can do and the card.
 
 ### Fixed
 
-- The check's hint for leaning in the hand showed the dot edge lifting, the
-  same move as the tilt step; it now rolls the cap left and right, the move
-  that gives Tilt events.
-- A cap whose accelerometer reads a little off 1 g at rest (1.08 g, say) never
-  learned its gyro offset and, after the first pick-up, lost every knob turn.
-  The at-rest tolerance is now 0.1 g.
-- The card editor showed status chips, buttons and the gesture list unticked
-  when the card config left them at their default (all shown), so ticking one
-  chip hid the others.
-- The blueprints failed a template when the cap's entity was removed, and the
-  light remote set a light with no brightness to 8 % on a knob step.
-- Adding a cap no longer says the card's *Check* can turn gestures on: it
-  suggests other settings, not gestures. Two Polish suggestions now name the
-  option as the options page does.
-
-- The automation examples could fire on their own after a restart: the event
-  entity comes back from unavailable with the last event. Their triggers now
-  say `not_from: unavailable`.
-
-- The live card on a phone: the model's view no longer grows past a card
-  narrower than 416 px (its right side, with the Button light, was cut off),
-  the angle labels wrap instead of running into the Button light, and the
-  buttons go to two rows when one does not fit (Russian needs ~530 px).
-
-- The live card's left-right angle is read from the side that is up: a cap
-  lying flat metal side up showed ±180°, now 0°. The *Tilt left-right* sensor
-  and the card's `euler` keep their values.
-- A wake is a press only after real sleep. A silence sooner than ~3 minutes
-  after a dropped link is adverts Home Assistant missed (a weak link, or the
-  cap carried out of range and back): it no longer makes a press nobody
-  pressed, and an idle-dropped cap is no longer reconnected while it dozes.
-- The card's texts, checked by a fresh reader against the code: only the
-  button wakes the cap (not a shake), the knob steps need two quarter turns
-  (not a full turn), the tilt step needs about 1 cm (not 2-3), the lean step
-  says how far; a pick-up counts once the cap lies still on the table again,
-  not while it is held; the knob steps with the knob off say so up front and
-  pass on the model alone; *Apply* is *Save to options* and says that the link
-  drops. Russian texts use «Вы» and treat the cap as «она» throughout.
-- Shake needs a jolt of 3 g or more: every shake on hardware reached 6-17 g,
-  the gentlest included, while the fast wrist swings of a pick-up that fired
-  shake reached 1-2 g. In 233 everyday captures shake fired 23 times instead
-  of 33.
-- The knob: a pick-up that stands the cap on its edge leaves the knob silent
-  until the cap lies still again; the wobble in the hand made steps (3 in one
-  pick-up of a check). Turns on the table, slow and fast, keep every step.
-- Tilt in the hand: a cap that went over its edge since it was last level (a
-  pick-up often turns it nearly over and back) leans only after it is level
-  again. Both false leans of a check's pick-up step were so; in 233 everyday
-  captures false leans fell from 16 to 10, with every wanted lean kept.
-- Tilt in the hand counts leans up to 80° (was 60°): asked for more than 25°,
-  people lean to 70-85°, and half the leans of a check went unseen.
-- The check: opened while the cap dozes after its own sleep step, it shows the
-  doze countdown instead of asking for a press that cannot wake it yet; while
-  any other check is open, *Readiness* says a press wakes the cap, as it does.
-- The check lets the cap go once the summary shows: a card left open on it (in
-  a background tab, renewing late) kept starting and lapsing the check, and
-  presses did not reach automations meanwhile.
-- The check: closing the tab ends the check at once (the sleep step held it
-  for 7 minutes); the multi-press window suggestion also comes when the double
-  press made it on a retry.
-- The card said *Dozing off* until the next wake-up, long after the token had
-  fallen asleep.
-- Saving the options right after an idle disconnect no longer links up to the
-  dozing token for another session.
-- Battery: a stream pause now reports its highest level, once. The token can
-  send a low series (21-27 %) alongside the real one (82-94 %) during the
-  pause; each value went to the sensor and the last one counted as the level
-  at rest, so a pause ending on a low value could have turned on the battery
-  saver and raised the low-battery notice on a healthy cell.
+- Shake fired on fast wrist swings while the cap was picked up. It now needs a
+  jolt of 3 g or more: real shakes reach 6-17 g, the swings 1-2 g.
+- The automation examples could fire on their own after a restart, when the
+  event entity comes back from unavailable with the last event. Their
+  triggers now say `not_from: unavailable`.
+- Battery: a stream pause could end on a false low reading (21-27 % next to a
+  real 82-94 %), turning on the battery saver and the replace-the-cell notice
+  on a healthy cell. A pause now reports its highest level, once.
 - Knob: a link that holds the stream back for a second or two and then
   delivers it at once no longer drops a partial turn.
-- A token in its firmware-update bootloader (advertising as `TrikiDfu…`) is
-  no longer offered as a new device.
-- The LED switch keeps its last known state across Home Assistant restarts. It
-  read unknown until the token next woke, which could take hours.
-- Docs: the token wakes only on a button press, not on motion.
-- Docs: the IMU axes in `docs/protocol.md`. +z points out of the green PCB (Ż)
-  side, not the metal side. The status byte section says what is known.
+- Saving the options right after an idle disconnect no longer links up to the
+  dozing cap for another session.
+- A cap in its firmware-update bootloader (`TrikiDfu…`) is no longer offered
+  as a new device.
+- The LED switch keeps its last known state across restarts instead of
+  reading unknown until the cap wakes.
+- Docs: the cap wakes only on a button press, not on motion; the IMU axes in
+  `docs/protocol.md` (+z points out of the green side).
 
 ## [0.2.5] - 2026-11-14
 

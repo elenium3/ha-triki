@@ -52,6 +52,19 @@ data:
 pauses left out. On hardware a slow hand turn reads 25-40, a normal one 40-150,
 a flick of the wrist several hundred.
 
+## Blueprints
+
+Two blueprints cover the usual cases without YAML. Import one, then create an
+automation from it and pick the cap's Action entity.
+
+| Blueprint | What it does | |
+|---|---|---|
+| Light remote | Press toggles a light, the knob dims it (never below 1 %, so it does not switch off), long press sets a brightness (100 % by default). The step per knob notch is an input. | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Felenium3%2Fha-triki%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftriki%2Ftriki_light.yaml) |
+| An action for each gesture | One action field per gesture: press, double, triple and long press, both knob directions, tilt right and left, shake, flip. Empty fields do nothing. In knob actions `{{ steps }}` is the number of notches. | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Felenium3%2Fha-triki%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftriki%2Ftriki_actions.yaml) |
+
+Both ignore the event entity coming back from unavailable after a restart.
+The source is in [`blueprints/automation/triki`](../blueprints/automation/triki).
+
 ## Example: button toggles a light, knob dims it, long press for full warm white
 
 This is the setup the integration was developed with. It is split into three
