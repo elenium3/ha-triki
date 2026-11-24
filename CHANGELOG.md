@@ -50,7 +50,8 @@ option names changed (see Changed).
 - `speed` (°/s) in knob events, so a fast turn can do more than a slow one.
 - Russian translation of the integration.
 - Diagnostics: `measured_rate`, `gyro_bias`, `link_via` (the receiver the
-  link went through) and the stream before each of the last three shakes.
+  link went through) and the stream before each of the last three shakes. The
+  debug log notes a shake-like swing that was too soft to count.
 
 ### Changed
 
