@@ -20,7 +20,7 @@ type: custom:triki-card
 device_id: 0123456789abcdef0123456789abcdef  # optional with a single token
 title: Triki                                  # optional, defaults to the token's name
 show_model: true                              # the 3D model and its angles
-show_status: true                             # chips: state, rate, signal, battery
+chips: [state, rate, signal, battery, link]   # which status chips; [] hides them
 show_values: true                             # gyro and accelerometer bars
 show_history: true                            # 10 s gyro graph
 buttons: [calibrate, align, led, check]       # which buttons; [] hides the row
@@ -33,7 +33,7 @@ Every part can be hidden on its own. A card with only the LED switch:
 ```yaml
 type: custom:triki-card
 show_model: false
-show_status: false
+chips: []
 show_values: false
 show_history: false
 buttons: [led]
@@ -42,7 +42,10 @@ show_help: false
 
 Without the model, a check or a calibration still shows it while it runs: their
 hints are drawn on it. Calibrate and Check appear for admins only. The older
-`show_controls: false` still works and hides every button and the help.
+`show_controls: false` still works and hides every button and the help, and
+`show_status: false` every chip. The `link` chip is the share of frames that
+arrived in the session (the *Link quality* sensor, while linked the session so
+far).
 
 The token has to be awake for the model to move: press its button. While it
 sleeps the card shows the last state greyed out.

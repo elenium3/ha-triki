@@ -21,6 +21,8 @@ const asset = (name) => `${BASE}${name}${VERSION ? `?v=${VERSION}` : ""}`;
 
 // The card's buttons, as named in its `buttons` option.
 const BUTTONS = ["calibrate", "align", "led", "check"];
+// status chips; "state" also carries the chip of a check open elsewhere
+const CHIPS = ["state", "rate", "signal", "battery", "link"];
 
 const STRINGS = {
   en: {
@@ -32,7 +34,7 @@ const STRINGS = {
     help: { mark: "The yellow stripe on the model marks the edge with the dot above the letter Z (circled in the photo). It shows which way the model is turned.", cal: "<b>Calibrate</b> once per cap. The cap lies on the table, dot away from you: the model learns what level looks like for this cap, then you match the logo. It is saved for good.", align: "<b>Align direction</b> is needed from time to time. The cap senses tilt by itself, from gravity, but not which way it is turned: it has no compass. The gyroscope counts the turn and slowly drifts, and a Home Assistant restart loses it. When the stripe on the model is at a different edge than the dot on the cap, lay the cap dot away from you and press this button. The calibration stays." },
     cal: { find: "Find the dot above the letter Z on the green side (circled in the photo). On the model that edge has the yellow stripe.", flat: "Lay the cap on the table, either side up, with that edge away from you, let go and press Done.", heading: "Lay the cap on the table with that edge away from you and press Done: the stripe on the model moves to the far edge too.", turned: "Direction aligned", logo: "Now the logo (once per cap: it is crimped on at any angle). Lay the cap green side up with the Z upright, dot at the top, then turn it over across its right edge. Turn the logo below with the slider until it looks like the one on your cap.", resin: "Green side", metal: "After turning over", next: "Done", cancel: "Cancel", skip: "Skip", saved: "Calibrated",
       err: { moving: "It is moving: hold still for a second", not_flat: "It is not lying flat", asleep: "The cap is asleep: wake it first", no_data: "No data yet: wake the cap" } },
-    button: "Button", rate: "Hz", history: "Last 10 s", nodevice: "No Triki token found",
+    button: "Button", rate: "Hz", linkq: "Frames received in the session", history: "Last 10 s", nodevice: "No Triki token found",
     check: { title: "Check", open: "Check",
       steps: { rest: "Lying still", flat: "Starting position", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", handle: "Pick up and put down", lean: "Lean in the hand", press: "Button", flip: "Turn over", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift", sleep: "Sleep and wake" },
       text: {
@@ -120,7 +122,7 @@ const STRINGS = {
     cal: { find: "Найдите на зелёной стороне точку над буквой Z (на фото обведена). На модели этот край отмечен жёлтой полоской.", flat: "Положите крышку на стол любой стороной вверх так, чтобы этот край был от вас, отпустите и нажмите «Готово».", heading: "Положите крышку на стол этим краем от себя и нажмите «Готово»: полоска на модели тоже уйдёт на дальний край.", turned: "Направление выровнено", logo: "Теперь логотип (один раз для каждой крышки: металл обжат под любым углом). Положите крышку зелёной стороной вверх, буквой Z ровно, точкой сверху, и переверните через правый край. Поверните логотип ползунком, чтобы он выглядел как на крышке.", resin: "Зелёная сторона", metal: "После переворота", next: "Готово", cancel: "Отмена", skip: "Пропустить", saved: "Откалибровано",
       err: { moving: "Крышка двигается: подержите её секунду неподвижно", not_flat: "Крышка лежит не ровно", asleep: "Крышка спит: сначала разбудите её", no_data: "Нет данных: разбудите крышку" } },
     reset: "Выровнять направление",
-    led: "Диод", button: "Кнопка", rate: "Гц", history: "Последние 10 с",
+    led: "Диод", button: "Кнопка", rate: "Гц", linkq: "Дошло кадров за сеанс", history: "Последние 10 с",
     check: { title: "Проверка", open: "Проверка",
       steps: { rest: "Покой", flat: "Исходное положение", tilt: "Наклон", turn_cw: "Крутилка по часовой", turn_ccw: "Крутилка против часовой", handle: "Взять и положить", lean: "Наклон в руке", press: "Кнопка", flip: "Переворот", tap: "Касание", shake: "Встряхивание", throw: "Бросок", drift: "Уход направления", sleep: "Сон и пробуждение" },
       text: {
@@ -210,7 +212,7 @@ const STRINGS = {
     calibrate: "Kalibracja",
     cal: { find: "Znajdź po zielonej stronie kropkę nad literą Z (zakreśloną na zdjęciu). Na modelu ta krawędź ma żółty pasek.", flat: "Połóż kapsel na stole dowolną stroną do góry tak, żeby ta krawędź była od ciebie, puść i naciśnij Gotowe.", heading: "Połóż kapsel na stole tą krawędzią od siebie i naciśnij Gotowe: pasek na modelu też przejdzie na daleką krawędź.", turned: "Kierunek wyrównany", logo: "Teraz logo (raz na kapsel: metal jest zaciśnięty pod dowolnym kątem). Połóż kapsel zieloną stroną do góry, literą Z prosto, kropką u góry, i odwróć go przez prawą krawędź. Obróć logo suwakiem, aż będzie wyglądać jak na kapslu.", resin: "Zielona strona", metal: "Po odwróceniu", next: "Gotowe", cancel: "Anuluj", skip: "Pomiń", saved: "Skalibrowano",
       err: { moving: "Kapsel się rusza: przytrzymaj chwilę nieruchomo", not_flat: "Kapsel nie leży płasko", asleep: "Kapsel śpi: najpierw go obudź", no_data: "Brak danych: obudź kapsel" } },
-    reset: "Wyrównaj kierunek", led: "Dioda", button: "Przycisk", rate: "Hz", history: "Ostatnie 10 s",
+    reset: "Wyrównaj kierunek", led: "Dioda", button: "Przycisk", rate: "Hz", linkq: "Odebrane ramki w sesji", history: "Ostatnie 10 s",
     check: { title: "Test", open: "Test",
       steps: { rest: "Spoczynek", flat: "Pozycja wyjściowa", tilt: "Przechył", turn_cw: "Pokrętło w prawo", turn_ccw: "Pokrętło w lewo", handle: "Podnieś i odłóż", lean: "Przechył w dłoni", press: "Przycisk", flip: "Odwrócenie", tap: "Stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", drift: "Dryf kierunku", sleep: "Sen i wybudzenie" },
       text: {
@@ -453,7 +455,7 @@ const CSS = `
   .nomodel:not(.checking):not(.calibrating) .stage { display: none; }
   .wide.nomodel:not(.checking):not(.calibrating) .body { display: block; }
   .wide.nomodel:not(.checking):not(.calibrating) .side { border-left: none; }
-  .nostatus .head .chip { display: none !important; }
+  .head .chip[data-off] { display: none !important; }
   .actions [data-off] { display: none !important; }
   .checkpanel small.of { color: var(--secondary-text-color); font-size: .8em; text-transform: uppercase; letter-spacing: .04em; }
   .checkpanel h3 { margin: 0; font-size: 1.2em; font-weight: 500; }
@@ -495,6 +497,8 @@ class TrikiCard extends HTMLElement {
     // show_controls: false is the old way to hide every button and the help
     c.buttons = Array.isArray(c.buttons) ? c.buttons : (c.show_controls ? [...BUTTONS] : []);
     c.show_help ??= !!c.show_controls;
+    // show_status: false is the old way to hide every chip
+    c.chips = Array.isArray(c.chips) ? c.chips : (c.show_status === false ? [] : [...CHIPS]);
     this._config = c;
     if (this._built) this._build();
   }
@@ -538,11 +542,12 @@ class TrikiCard extends HTMLElement {
       <ha-card>
         <div class="head">
           <div class="name" id="name">${c.title || "Triki"}</div>
-          <div class="chip" id="state"><div class="dot"></div><span id="stateText">${t.asleep}</span></div>
-          <div class="chip" id="rateChip" hidden><ha-icon icon="mdi:sine-wave" style="--mdc-icon-size:14px"></ha-icon><span id="rate"></span></div>
-          <div class="chip" id="rssiChip" hidden><ha-icon icon="mdi:bluetooth" style="--mdc-icon-size:14px"></ha-icon><span id="rssi"></span></div>
-          <div class="chip check" id="checkChip" hidden><ha-icon icon="mdi:clipboard-check-outline" style="--mdc-icon-size:14px"></ha-icon><span>${t.check.other}</span></div>
-          <div class="chip" id="battChip" hidden><ha-icon id="battIcon" icon="mdi:battery" style="--mdc-icon-size:14px"></ha-icon><span id="batt"></span></div>
+          <div class="chip" id="state" data-chip="state"><div class="dot"></div><span id="stateText">${t.asleep}</span></div>
+          <div class="chip" id="rateChip" data-chip="rate" hidden><ha-icon icon="mdi:sine-wave" style="--mdc-icon-size:14px"></ha-icon><span id="rate"></span></div>
+          <div class="chip" id="rssiChip" data-chip="signal" hidden><ha-icon icon="mdi:bluetooth" style="--mdc-icon-size:14px"></ha-icon><span id="rssi"></span></div>
+          <div class="chip check" id="checkChip" data-chip="state" hidden><ha-icon icon="mdi:clipboard-check-outline" style="--mdc-icon-size:14px"></ha-icon><span>${t.check.other}</span></div>
+          <div class="chip" id="battChip" data-chip="battery" hidden><ha-icon id="battIcon" icon="mdi:battery" style="--mdc-icon-size:14px"></ha-icon><span id="batt"></span></div>
+          <div class="chip" id="linkChip" data-chip="link" title="${t.linkq}" hidden><ha-icon icon="mdi:transfer" style="--mdc-icon-size:14px"></ha-icon><span id="link"></span></div>
         </div>
         <div class="tabs" id="tabs" hidden></div>
         <div class="body">
@@ -592,13 +597,15 @@ class TrikiCard extends HTMLElement {
     const $ = (id) => this.shadowRoot.getElementById(id);
     const card = this.shadowRoot.querySelector("ha-card");
     card.classList.toggle("nomodel", c.show_model === false);
-    card.classList.toggle("nostatus", c.show_status === false);
+    for (const chip of card.querySelectorAll(".head [data-chip]")) {
+      chip.toggleAttribute("data-off", !c.chips.includes(chip.dataset.chip));
+    }
     this._wideRo?.disconnect();
     this._wideRo = new ResizeObserver(() => card.classList.toggle("wide", this.clientWidth >= 760));
     this._wideRo.observe(this);
     this._el = {
       name: $("name"), state: $("state"), stateText: $("stateText"), rate: $("rate"), rateChip: $("rateChip"),
-      rssi: $("rssi"), rssiChip: $("rssiChip"), batt: $("batt"), battChip: $("battChip"), battIcon: $("battIcon"),
+      rssi: $("rssi"), rssiChip: $("rssiChip"), link: $("link"), linkChip: $("linkChip"), batt: $("batt"), battChip: $("battChip"), battIcon: $("battIcon"),
       stage: $("stage"), gl: $("gl"), roll: $("roll"), pitch: $("pitch"), yaw: $("yaw"), btnInd: $("btnInd"),
       toast: $("toast"), tabs: $("tabs"), sleepText: $("sleepText"), hist: $("hist"), reset: $("reset"), led: $("led"),
       cal: $("cal"), wizard: $("wizard"), wizText: $("wizText"), wizFind: $("wizFind"), wizFindText: $("wizFindText"), wizErr: $("wizErr"),
@@ -775,6 +782,8 @@ class TrikiCard extends HTMLElement {
     if (live) el.rate.textContent = `${Math.round(s.measured_rate ?? s.rate ?? 0)} ${t.rate}`;
     el.rssiChip.hidden = s.rssi == null;
     if (s.rssi != null) el.rssi.textContent = `${s.rssi} dBm`;
+    el.linkChip.hidden = s.link_quality == null;
+    if (s.link_quality != null) el.link.textContent = `${Math.round(s.link_quality)}%`;
     el.battChip.hidden = s.battery == null;
     if (s.battery != null) {
       el.batt.textContent = `${s.battery}%`;
@@ -1471,7 +1480,7 @@ class TrikiCardEditor extends HTMLElement {
       this._form.computeLabel = (s) => ({
         device_id: "Triki", title: "Title", show_values: "Gyro and accelerometer bars",
         show_history: "Gyro history", show_controls: "Buttons and help (old switch: use the two below)", model: "3D model",
-        show_model: "3D model and angles", show_status: "Status chips (state, rate, signal, battery)",
+        show_model: "3D model and angles", chips: "Status chips",
         buttons: "Buttons", show_help: "Help under the buttons",
       })[s.name] || s.name;
       this._form.addEventListener("value-changed", (ev) => {
@@ -1487,7 +1496,10 @@ class TrikiCardEditor extends HTMLElement {
       { name: "show_values", selector: { boolean: {} } },
       { name: "show_history", selector: { boolean: {} } },
       { name: "show_model", selector: { boolean: {} } },
-      { name: "show_status", selector: { boolean: {} } },
+      { name: "chips", selector: { select: { multiple: true, mode: "list", options: [
+        { value: "state", label: "State" }, { value: "rate", label: "Rate" },
+        { value: "signal", label: "Signal (dBm)" }, { value: "battery", label: "Battery" },
+        { value: "link", label: "Frames received, %" }] } } },
       { name: "buttons", selector: { select: { multiple: true, mode: "list", options: [
         { value: "calibrate", label: "Calibrate" }, { value: "align", label: "Align direction" },
         { value: "led", label: "LED" }, { value: "check", label: "Check" }] } } },

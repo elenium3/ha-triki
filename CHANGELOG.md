@@ -7,10 +7,12 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- The card's parts can be hidden one by one: `show_model`, `show_status`,
-  `buttons` (a list of calibrate, align, led, check) and `show_help`, next to
+
+- The card's parts can be hidden one by one: `show_model`, `chips` (a list of
+  state, rate, signal, battery, and a new *link* chip: the share of frames
+  received), `buttons` (a list of calibrate, align, led, check) and `show_help`, next to
   `show_values` and `show_history`. `show_controls: false` still hides every
-  button and the help.
+  button and the help, `show_status: false` every chip.
 - The card's check has new steps: **Pick up and put down** (gestures that fire
   while the cap is picked up are reported as false), **Sleep and wake**
   (optional: drops the link as after idling, follows the doze and checks that

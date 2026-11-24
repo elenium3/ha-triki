@@ -255,3 +255,13 @@ async def test_subscription_hears_the_reload(hass: HomeAssistant, setup, hass_ws
     while (msg := await ws.receive_json())["event"]["type"] != "reload":
         pass
     assert msg["id"] == 1
+
+
+async def test_status_carries_the_link_quality(hass: HomeAssistant, setup) -> None:
+    """The card's link chip: the last session while asleep."""
+    from custom_components.triki.websocket import status
+
+    dev = setup.runtime_data
+    assert status(dev)["link_quality"] is None
+    dev.link_quality.last_pct = 0.0
+    assert status(dev)["link_quality"] == 0.0

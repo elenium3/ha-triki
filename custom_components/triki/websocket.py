@@ -58,6 +58,11 @@ def _find(hass: HomeAssistant, device_id: str | None) -> TrikiDevice | None:
     return next((d for d in devices if d.device_id == device_id), None)
 
 
+def _link_pct(dev: TrikiDevice) -> float | None:
+    now = dev.link_quality.pct if dev.connected else None
+    return now if now is not None else dev.link_quality.last_pct
+
+
 def status(dev: TrikiDevice) -> dict[str, Any]:
     return {
         "name": dev.name,
@@ -72,6 +77,8 @@ def status(dev: TrikiDevice) -> dict[str, Any]:
         "logo_angle": dev.logo_angle,
         "battery": dev.battery,
         "rssi": dev.rssi,
+        # the session so far while linked, else the last one (the sensor's value)
+        "link_quality": _link_pct(dev),
         "rate": dev.stream_rate if dev.connected else None,
         "measured_rate": dev.measured_rate,
         "button": dev.button,
