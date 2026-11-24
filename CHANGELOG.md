@@ -115,6 +115,10 @@ All notable changes to this project are documented here. The format follows
   not while it is held; the knob steps with the knob off say so up front and
   pass on the model alone; *Apply* is *Save to options* and says that the link
   drops. Russian texts use «Вы» and treat the cap as «она» throughout.
+- Shake needs a jolt of 3 g or more: every shake on hardware reached 6-17 g,
+  the gentlest included, while the fast wrist swings of a pick-up that fired
+  shake reached 1-2 g. In 233 everyday captures shake fired 23 times instead
+  of 33.
 - The knob: a pick-up that stands the cap on its edge leaves the knob silent
   until the cap lies still again; the wobble in the hand made steps (3 in one
   pick-up of a check). Turns on the table, slow and fast, keep every step.

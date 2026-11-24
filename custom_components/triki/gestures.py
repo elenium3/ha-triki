@@ -63,6 +63,10 @@ SHAKE_ACTIVE_FRACTION = 0.6
 SHAKE_REVERSALS = 2
 SHAKE_MIN_FRAMES = 5  # fewer frames in the window say nothing
 SHAKE_QUIET_S = 0.6  # no active frame this long ends a shake episode
+# A shake has a jolt: every shake on hardware reached 6-17 g (|a| - 1 g), the
+# gentlest of the 2026-11-23 check included, while the wrist swings of a pick-up
+# that fired shake reached 1.0 and 2.1.
+SHAKE_JOLT_G = 3.0
 FLIP_STABLE_S = 0.3
 # Which face is up, from the accelerometer z while the token lies still (+z points
 # out of the green PCB, -z out of the metal cap). Between the bands the last face
@@ -323,7 +327,7 @@ class GestureDetector:
         # free fall
         self._ff_since: float | None = None
         # shake: (t, active, sign of the dominant gyro axis) per frame in the window
-        self._shake_frames: list[tuple[float, bool, int]] = []
+        self._shake_frames: list[tuple[float, bool, int, float]] = []
         self._shake_latched = False
         self._last_active_t = 0.0
         self._last: dict[str, float] = {}
@@ -694,7 +698,7 @@ class GestureDetector:
             active = False  # turning, not swinging
         sign = (1 if rates[dominant] > 0 else -1) if active else 0
         frames = self._shake_frames
-        frames.append((self.t, active, sign))
+        frames.append((self.t, active, sign, abs(a - 1.0)))
         while frames and self.t - frames[0][0] > SHAKE_WINDOW_S:
             frames.pop(0)
         if active:
@@ -710,7 +714,7 @@ class GestureDetector:
         n_active = sum(1 for f in episode if f[1])
         reversals = 0
         last_sign = 0
-        for _t, _act, sg in episode:
+        for _t, _act, sg, _j in episode:
             if sg and last_sign and sg != last_sign:
                 reversals += 1
             if sg:
@@ -720,6 +724,7 @@ class GestureDetector:
             and len(episode) >= SHAKE_MIN_FRAMES
             and n_active >= SHAKE_ACTIVE_FRACTION * len(episode)
             and reversals >= SHAKE_REVERSALS
+            and max(f[3] for f in episode) >= SHAKE_JOLT_G
         )
         if shaking and not self._shake_latched:
             # one event per episode: a 2 s shake must not fire two or three times
