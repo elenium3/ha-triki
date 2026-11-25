@@ -10,7 +10,9 @@ a short label for each gesture.
 
 Nothing needs installing: the integration serves the card and loads it into the
 frontend itself once a token is added. If the card is not in the list right
-after that, or after an update, reload the browser page once.
+after that, or after an update, reload the browser page once. A page that was
+open during an update keeps the old card; the card notices and asks for the
+reload itself.
 
 ## Adding it
 
@@ -156,6 +158,10 @@ while the button is held. `model: glb` uses Flopsstuff's textured model.
 
 When the entry reloads (options saved), each subscription gets a `reload` event
 and ends; subscribe again to follow the new device object.
+
+`status` carries `card`, the version of the card files the integration serves
+(the `?v=` of the card's URL); a card that loaded another version shows its
+reload notice.
 
 `motion` carries `quaternion` (w, x, y, z, sensor frame, +z out of the logo
 side), `euler` (roll, pitch, yaw in degrees), `gyro` (°/s, offset removed),

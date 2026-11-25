@@ -274,3 +274,10 @@ async def test_status_says_whether_the_heading_is_known(hass: HomeAssistant, set
     assert status(dev)["heading_known"] is False  # a fresh start
     dev.reset_heading()
     assert status(dev)["heading_known"] is True
+
+
+async def test_status_carries_the_version_of_the_card_files(hass: HomeAssistant, setup) -> None:
+    """An open page compares it with the ?v= of the card it loaded."""
+    from custom_components.triki.websocket import status
+
+    assert status(setup.runtime_data)["card"] == triki._card_hash()

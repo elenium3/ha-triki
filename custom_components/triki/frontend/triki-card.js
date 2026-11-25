@@ -64,7 +64,7 @@ const STRINGS = {
     auto: "Auto", asleep: "Asleep", dozing: "Dozing off",
     dozeHint: "Dropped after idle. Presses won't register for ~{n} s more, and each one restarts the 3-minute wait: put the cap down and leave it",
     dozeLate: "Dropped after idle. Presses won't register until it falls asleep, and each one restarts the 3-minute wait: put the cap down and leave it", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
-    wake: "Press the cap to wake it", heading: "Direction unknown after a restart: lay the cap dot away from you and press Align direction.", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
+    wake: "Press the cap to wake it", stale: "The card was updated. Reload the page.", heading: "Direction unknown after a restart: lay the cap dot away from you and press Align direction.", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
     roll: "Forward-back", pitch: "Left-right", yaw: "Turn", reset: "Align direction", led: "LED", calibrate: "Calibrate",
     editor: { title: "Title", model: "Model style", show_model: "3D model and angles", chips: "Status chips", show_values: "Gyro and accelerometer bars",
       show_history: "Last 10 s graph", show_gestures: "Gesture list", buttons: "Buttons", show_help: "Help under the buttons",
@@ -161,7 +161,7 @@ const STRINGS = {
     auto: "Авто", asleep: "Спит", dozing: "Засыпает",
     dozeHint: "Связь отключена после простоя. Ещё ~{n} с нажатия не дойдут, а каждое запускает 3 минуты заново: положите крышку и подождите",
     dozeLate: "Связь отключена после простоя. Пока крышка не уснёт, нажатия не дойдут, а каждое запускает 3 минуты заново: положите её и подождите", connected: "Подключена", streaming: "Данные идут", unresponsive: "Не отвечает",
-    wake: "Нажмите на крышку, чтобы её разбудить", heading: "После перезапуска направление неизвестно: положите крышку точкой от себя и нажмите «Выровнять направление».", gyro: "Гироскоп, °/с",
+    wake: "Нажмите на крышку, чтобы её разбудить", stale: "Карточка обновилась. Обновите страницу.", heading: "После перезапуска направление неизвестно: положите крышку точкой от себя и нажмите «Выровнять направление».", gyro: "Гироскоп, °/с",
     accel: "Акселерометр, g", roll: "Вперёд-назад", pitch: "Влево-вправо", yaw: "Поворот", calibrate: "Калибровка",
     editor: { title: "Заголовок", model: "Вид модели", show_model: "3D-модель и углы", chips: "Плашки состояния", show_values: "Полоски гироскопа и акселерометра",
       show_history: "График за последние 10 с", show_gestures: "Список жестов", buttons: "Кнопки", show_help: "Подсказки под кнопками",
@@ -261,7 +261,7 @@ const STRINGS = {
     auto: "Auto", asleep: "Śpi", dozing: "Zasypia",
     dozeHint: "Rozłączony po bezczynności. Przez ~{n} s naciśnięcia nie dotrą, a każde odlicza 3 minuty od nowa: odłóż kapsel i poczekaj",
     dozeLate: "Rozłączony po bezczynności. Dopóki nie zaśnie, naciśnięcia nie dotrą, a każde odlicza 3 minuty od nowa: odłóż kapsel i poczekaj", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
-    wake: "Naciśnij kapsel, żeby go obudzić", heading: "Po restarcie kierunek jest nieznany: połóż kapsel kropką od siebie i naciśnij „Wyrównaj kierunek”.", gyro: "Żyroskop, °/s",
+    wake: "Naciśnij kapsel, żeby go obudzić", stale: "Karta została zaktualizowana. Odśwież stronę.", heading: "Po restarcie kierunek jest nieznany: połóż kapsel kropką od siebie i naciśnij „Wyrównaj kierunek”.", gyro: "Żyroskop, °/s",
     accel: "Akcelerometr, g", roll: "Przód-tył", pitch: "Lewo-prawo", yaw: "Obrót wokół osi",
     editor: { title: "Tytuł", model: "Wygląd modelu", show_model: "Model 3D i kąty", chips: "Plakietki stanu", show_values: "Paski żyroskopu i akcelerometru",
       show_history: "Wykres ostatnich 10 s", show_gestures: "Lista gestów", buttons: "Przyciski", show_help: "Pomoc pod przyciskami",
@@ -481,6 +481,8 @@ const CSS = `
   .headhint { position: absolute; left: 0; right: 0; bottom: 0; padding: 0 24px 14px; text-align: center;
     color: var(--warning-color, #ffa600); font-size: .9em; pointer-events: none; }
   .checking .headhint { display: none; }
+  .stale { margin: 0 16px 8px; padding: 6px 10px; border-radius: 8px; text-align: center; cursor: pointer;
+    font-size: .9em; color: var(--warning-color, #ffa600); border: 1px solid currentColor; }
   .asleep canvas.gl { opacity: .45; filter: grayscale(.7); }
   .values { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; padding: 8px 16px 4px; }
   .values h4 { margin: 4px 0 2px; font-size: .78em; font-weight: 500; color: var(--secondary-text-color); }
@@ -689,6 +691,7 @@ class TrikiCard extends HTMLElement {
           <div class="chip" id="linkChip" data-chip="link" title="${t.linkq}" hidden><ha-icon icon="mdi:transfer" style="--mdc-icon-size:14px"></ha-icon><span id="link"></span></div>
         </div>
         <div class="tabs" id="tabs" hidden></div>
+        <div class="stale" id="stale" role="button" tabindex="0" hidden>${t.stale}</div>
         <div class="body">
         <div class="stage asleep" id="stage">
           <canvas class="gl" id="gl"></canvas>
@@ -750,7 +753,7 @@ class TrikiCard extends HTMLElement {
       name: $("name"), state: $("state"), stateText: $("stateText"), rate: $("rate"), rateChip: $("rateChip"),
       rssi: $("rssi"), rssiChip: $("rssiChip"), link: $("link"), linkChip: $("linkChip"), batt: $("batt"), battChip: $("battChip"), battIcon: $("battIcon"),
       stage: $("stage"), gl: $("gl"), roll: $("roll"), pitch: $("pitch"), yaw: $("yaw"), btnInd: $("btnInd"),
-      toast: $("toast"), tabs: $("tabs"), sleepText: $("sleepText"), headHint: $("headHint"), hist: $("hist"), reset: $("reset"), led: $("led"),
+      toast: $("toast"), tabs: $("tabs"), sleepText: $("sleepText"), headHint: $("headHint"), stale: $("stale"), hist: $("hist"), reset: $("reset"), led: $("led"),
       cal: $("cal"), wizard: $("wizard"), wizText: $("wizText"), wizFind: $("wizFind"), wizFindText: $("wizFindText"), wizErr: $("wizErr"),
       wizNext: $("wizNext"), wizCancel: $("wizCancel"),
       wizLogo: $("wizLogo"), wizSlider: $("wizSlider"), wizMetal: $("wizMetal"), wizAngle: $("wizAngle"),
@@ -767,6 +770,8 @@ class TrikiCard extends HTMLElement {
     }
     this._el.name.textContent = c.title || "Triki"; // text, not markup
     this._el.reset.addEventListener("click", () => this._wizard("heading"));
+    this._el.stale.addEventListener("click", () => location.reload());
+    this._el.stale.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") location.reload(); });
     this._el.led.addEventListener("click", () => this._toggleLed());
     this._el.cal.addEventListener("click", () => this._wizard("flat"));
     this._el.check.addEventListener("click", () => this._checkOpen());
@@ -987,6 +992,9 @@ class TrikiCard extends HTMLElement {
     if (dozing) this._showDoze();
     else el.sleepText.textContent = t.wake;
     el.stage.classList.toggle("asleep", !live);
+    // An open page keeps the card it loaded; after an update with a restart the
+    // integration serves a newer one, and this one may not know its messages.
+    el.stale.hidden = !(VERSION && s.card && s.card !== VERSION);
     // only with a way to fix it on the card: the Align direction button
     el.headHint.hidden = !(live && s.heading_known === false && (this._config?.buttons || BUTTONS).includes("align"));
     el.rateChip.hidden = !live;

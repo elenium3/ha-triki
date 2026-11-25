@@ -68,6 +68,8 @@ async def async_setup(hass: HomeAssistant, _config: ConfigType) -> bool:
     # The content hash in the URL changes after an update with a restart; a frontend-only
     # update between restarts reaches the browser through "no-cache" (see the view).
     card_hash = await hass.async_add_executor_job(_card_hash)
+    # sent with every status: a card loaded before an update sees it is stale
+    hass.data.setdefault(DOMAIN, {})["card"] = card_hash
     hass.http.register_view(TrikiFrontendView())
     if "frontend" in hass.config.components:
         add_extra_js_url(hass, f"{FRONTEND_URL}/triki-card.js?v={card_hash}")

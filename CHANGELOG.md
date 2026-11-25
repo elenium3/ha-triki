@@ -11,6 +11,8 @@ All notable changes to this project are documented here. The format follows
 - Docs: a Polish README, and a reference page about the cap itself (what it
   is, the battery, connecting, using it without the app) in English, Polish
   and Russian at <https://elenium3.github.io/ha-triki/>.
+- The live card says when it is older than the integration (a page left open
+  during an update keeps the old card) and reloads the page on a click.
 
 ### Fixed
 
