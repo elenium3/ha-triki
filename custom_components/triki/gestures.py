@@ -8,7 +8,8 @@ Angles (the knob) are integrated over that clock too, not over the nominal
 sample period, so lost frames do not lose degrees.
 
 Event types produced:
-  press, double_press, triple_press, long_press   - built-in button
+  single_press, multi_press (data: press_count),  - built-in button, Home
+  long_press_start, long_press_end                  Assistant's standard names
   rotate_cw, rotate_ccw                           - knob-style turn around the
                                                     vertical axis (data: steps, degrees)
   shake, tap, throw, flip                         - motion gestures
@@ -25,6 +26,14 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
+from .const import (
+    ATTR_PRESS_COUNT,
+    EVENT_LONG_PRESS_END,
+    EVENT_LONG_PRESS_START,
+    EVENT_MULTI_PRESS,
+    EVENT_SINGLE_PRESS,
+    MULTI_PRESS_MAX,
+)
 from .protocol import Sample
 
 _LOGGER = logging.getLogger(__name__)
@@ -458,9 +467,16 @@ class GestureDetector:
         ]
 
     def flush(self) -> list[Event]:
-        """Emit pending multi-press and held knob steps on disconnect."""
+        """Emit pending multi-press and held knob steps on disconnect.
+
+        A long press cut off by the disconnect ends here too: an automation that
+        dims while the button is held must not run on for ever.
+        """
         out: list[Event] = self._reported([e for _t, e in self._knob_held])
         self._knob_held.clear()
+        if self._long_fired:
+            self._long_fired = False
+            out.append(Event(EVENT_LONG_PRESS_END, {}))
         if self._clicks:
             self._emit_clicks(out)
         return out
@@ -556,8 +572,11 @@ class GestureDetector:
 
     # ----------------------------------------------------------------- button
     def _emit_clicks(self, out: list[Event]) -> None:
-        kind = {1: "press", 2: "double_press"}.get(self._clicks, "triple_press")
-        out.append(Event(kind, {"count": self._clicks}))
+        if self._clicks == 1:
+            out.append(Event(EVENT_SINGLE_PRESS, {}))
+        else:
+            count = min(self._clicks, MULTI_PRESS_MAX)
+            out.append(Event(EVENT_MULTI_PRESS, {ATTR_PRESS_COUNT: count}))
         self._clicks = 0
 
     def _button(self, pressed: bool, out: list[Event]) -> None:
@@ -568,15 +587,17 @@ class GestureDetector:
             if not self._long_fired and self.t - self._down_t >= LONG_PRESS_S:
                 self._long_fired = True
                 self._clicks = 0
-                out.append(Event("long_press", {}))
+                out.append(Event(EVENT_LONG_PRESS_START, {}))
         elif not pressed and self.button:
             self._release_t = self.t
-            if not self._long_fired:
-                if self.multi_press:
-                    self._clicks += 1
-                    self._last_release_t = self.t
-                else:
-                    out.append(Event("press", {"count": 1}))
+            if self._long_fired:
+                self._long_fired = False
+                out.append(Event(EVENT_LONG_PRESS_END, {}))
+            elif self.multi_press:
+                self._clicks += 1
+                self._last_release_t = self.t
+            else:
+                out.append(Event(EVENT_SINGLE_PRESS, {}))
         elif self._clicks and self.t - self._last_release_t > self.multi_press_window:
             self._emit_clicks(out)
         self.button = pressed

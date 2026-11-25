@@ -40,9 +40,19 @@ export function cardConfig(config) {
   return c;
 }
 
+// The integration sends Home Assistant's standard button event types. The card
+// and the check name a gesture by what the hand did, so a double and a triple
+// press are two gestures although both arrive as multi_press.
+function gestureOf(event, data) {
+  if (event === "single_press") return "press";
+  if (event === "multi_press") return (data?.press_count || 2) >= 3 ? "triple_press" : "double_press";
+  if (event === "long_press_start") return "long_press";
+  return event;
+}
+
 // the gesture list: [item, events that light it, option that turns it on]
 const GESTURES = [
-  ["press", ["press", "single_press"], null], ["double_press", ["double_press"], "multi_press"],
+  ["press", ["press"], null], ["double_press", ["double_press"], "multi_press"],
   ["triple_press", ["triple_press"], "multi_press"], ["long_press", ["long_press"], null],
   ["knob", ["rotate_cw", "rotate_ccw"], "knob"], ["tilt", ["tilt_left", "tilt_right"], "tilt"],
   ["shake", ["shake"], "shake"], ["flip", ["flip"], "motion_gestures"],
@@ -55,7 +65,7 @@ const STRINGS = {
     dozeHint: "Dropped after idle. Presses won't register for ~{n} s more, and each one restarts the 3-minute wait: put the cap down and leave it",
     dozeLate: "Dropped after idle. Presses won't register until it falls asleep, and each one restarts the 3-minute wait: put the cap down and leave it", connected: "Connected", streaming: "Live", unresponsive: "Not responding",
     wake: "Press the cap to wake it", heading: "Direction unknown after a restart: lay the cap dot away from you and press Align direction.", gyro: "Gyroscope, °/s", accel: "Accelerometer, g",
-    roll: "Left-right", pitch: "Forward-back", yaw: "Turn", reset: "Align direction", led: "LED", calibrate: "Calibrate",
+    roll: "Forward-back", pitch: "Left-right", yaw: "Turn", reset: "Align direction", led: "LED", calibrate: "Calibrate",
     editor: { title: "Title", model: "Model style", show_model: "3D model and angles", chips: "Status chips", show_values: "Gyro and accelerometer bars",
       show_history: "Last 10 s graph", show_gestures: "Gesture list", buttons: "Buttons", show_help: "Help under the buttons",
       show_controls: "Buttons and help (legacy)", admin: "Only admins see Calibrate and Check.",
@@ -69,7 +79,7 @@ const STRINGS = {
       knob: "Knob ↻ ↺", tilt: "Tilt ← →", how: { press: "Press the whole cap.", double_press: "Two quick presses.", triple_press: "Three quick presses.",
         long_press: "Press and hold.", knob: "Turn it flat on the table, like a knob.", tilt: "Hold it in your hand and lean it right or left.",
         shake: "Shake it sharply a few times.", flip: "Flip it onto the other side.", tap: "Tap the table next to it with a finger.", throw: "Toss it up and catch it." } },
-    button: "Button", rate: "Hz", linkq: "Frames received this session", history: "Last 10 s", nodevice: "No Triki cap found",
+    button: "Button", rate: "Hz", linkq: "Frames received this session", history: "Last 10 s", nodevice: "No Triki cap found. Add one in Settings → Devices & services.",
     check: { title: "Check", open: "Check",
       steps: { rest: "Lying still", flat: "Starting position", tilt: "Tilt", turn_cw: "Knob clockwise", turn_ccw: "Knob counter-clockwise", handle: "Pick up and put down", lean: "Lean in the hand", press: "Button", flip: "Flip", tap: "Tap", shake: "Shake", throw: "Toss", drift: "Direction drift", sleep: "Sleep and wake" },
       text: {
@@ -142,8 +152,8 @@ const STRINGS = {
         extra: "Unexpected events: {extra}.",
       } },
     gestures: {
-      press: "Press", single_press: "Press", double_press: "Double press", triple_press: "Triple press",
-      long_press: "Long press", tap: "Tap", double_tap: "Double tap", shake: "Shake",
+      press: "Press", double_press: "Double press", triple_press: "Triple press",
+      long_press: "Long press", long_press_end: "Released", tap: "Tap", double_tap: "Double tap", shake: "Shake",
       throw: "Toss", flip: "Flip", rotate_cw: "Knob ↻", rotate_ccw: "Knob ↺", tilt_left: "Tilt ←", tilt_right: "Tilt →", wake: "Woke up", motion: "Motion",
     },
   },
@@ -152,7 +162,7 @@ const STRINGS = {
     dozeHint: "Связь отключена после простоя. Ещё ~{n} с нажатия не дойдут, а каждое запускает 3 минуты заново: положите крышку и подождите",
     dozeLate: "Связь отключена после простоя. Пока крышка не уснёт, нажатия не дойдут, а каждое запускает 3 минуты заново: положите её и подождите", connected: "Подключена", streaming: "Данные идут", unresponsive: "Не отвечает",
     wake: "Нажмите на крышку, чтобы её разбудить", heading: "После перезапуска направление неизвестно: положите крышку точкой от себя и нажмите «Выровнять направление».", gyro: "Гироскоп, °/с",
-    accel: "Акселерометр, g", roll: "Влево-вправо", pitch: "Вперёд-назад", yaw: "Поворот", calibrate: "Калибровка",
+    accel: "Акселерометр, g", roll: "Вперёд-назад", pitch: "Влево-вправо", yaw: "Поворот", calibrate: "Калибровка",
     editor: { title: "Заголовок", model: "Вид модели", show_model: "3D-модель и углы", chips: "Плашки состояния", show_values: "Полоски гироскопа и акселерометра",
       show_history: "График за последние 10 с", show_gestures: "Список жестов", buttons: "Кнопки", show_help: "Подсказки под кнопками",
       show_controls: "Кнопки и подсказки (старый переключатель)", admin: "«Калибровка» и «Проверка» видны только администраторам.",
@@ -239,10 +249,10 @@ const STRINGS = {
         no_wake_press: "Крышка проснулась, но события нажатия не было.",
         extra: "Сработало лишнее: {extra}.",
       } },
-    nodevice: "Крышка Triki не найдена",
+    nodevice: "Крышка Triki не найдена. Добавьте её: Настройки → Устройства и службы.",
     gestures: {
-      press: "Нажатие", single_press: "Нажатие", double_press: "Двойное нажатие", triple_press: "Тройное нажатие",
-      long_press: "Долгое нажатие", tap: "Стук", double_tap: "Двойной стук", shake: "Встряхивание",
+      press: "Нажатие", double_press: "Двойное нажатие", triple_press: "Тройное нажатие",
+      long_press: "Долгое нажатие", long_press_end: "Отпущено", tap: "Стук", double_tap: "Двойной стук", shake: "Встряхивание",
       throw: "Бросок", flip: "Переворот", rotate_cw: "Крутилка ↻", rotate_ccw: "Крутилка ↺", tilt_left: "Наклон ←", tilt_right: "Наклон →", wake: "Проснулась",
       motion: "Движение",
     },
@@ -252,7 +262,7 @@ const STRINGS = {
     dozeHint: "Rozłączony po bezczynności. Przez ~{n} s naciśnięcia nie dotrą, a każde odlicza 3 minuty od nowa: odłóż kapsel i poczekaj",
     dozeLate: "Rozłączony po bezczynności. Dopóki nie zaśnie, naciśnięcia nie dotrą, a każde odlicza 3 minuty od nowa: odłóż kapsel i poczekaj", connected: "Połączony", streaming: "Na żywo", unresponsive: "Nie odpowiada",
     wake: "Naciśnij kapsel, żeby go obudzić", heading: "Po restarcie kierunek jest nieznany: połóż kapsel kropką od siebie i naciśnij „Wyrównaj kierunek”.", gyro: "Żyroskop, °/s",
-    accel: "Akcelerometr, g", roll: "Lewo-prawo", pitch: "Przód-tył", yaw: "Obrót wokół osi",
+    accel: "Akcelerometr, g", roll: "Przód-tył", pitch: "Lewo-prawo", yaw: "Obrót wokół osi",
     editor: { title: "Tytuł", model: "Wygląd modelu", show_model: "Model 3D i kąty", chips: "Plakietki stanu", show_values: "Paski żyroskopu i akcelerometru",
       show_history: "Wykres ostatnich 10 s", show_gestures: "Lista gestów", buttons: "Przyciski", show_help: "Pomoc pod przyciskami",
       show_controls: "Przyciski i pomoc (stary przełącznik)", admin: "Przyciski Kalibruj i Test widzą tylko administratorzy.",
@@ -339,10 +349,10 @@ const STRINGS = {
         no_wake_press: "Obudził się, ale budzące naciśnięcie nie doszło jako „Naciśnięcie”.",
         extra: "Zadziałało coś nieproszonego: {extra}.",
       } },
-    nodevice: "Nie znaleziono kapsla Triki",
+    nodevice: "Nie znaleziono kapsla Triki. Dodaj go w sekcji Ustawienia → Urządzenia oraz usługi.",
     gestures: {
-      press: "Naciśnięcie", single_press: "Naciśnięcie", double_press: "Podwójne naciśnięcie",
-      triple_press: "Potrójne naciśnięcie", long_press: "Długie naciśnięcie", tap: "Stuknięcie",
+      press: "Naciśnięcie", double_press: "Podwójne naciśnięcie",
+      triple_press: "Potrójne naciśnięcie", long_press: "Długie naciśnięcie", long_press_end: "Zwolniono", tap: "Stuknięcie",
       double_tap: "Podwójne stuknięcie", shake: "Potrząśnięcie", throw: "Podrzut", flip: "Odwrócenie",
       rotate_cw: "Pokrętło ↻", rotate_ccw: "Pokrętło ↺", tilt_left: "Przechył ←", tilt_right: "Przechył →", wake: "Pobudka", motion: "Ruch",
     },
@@ -797,8 +807,19 @@ class TrikiCard extends HTMLElement {
         if (!ids.length) { this._lost(); return; }
         names = Object.fromEntries(devices.map((d) => [d.device_id, d.name]));
       }
+      // Home Assistant sends the first status in the same frame as the answer to
+      // the subscribe call, so it gets here before the lines below have run: the
+      // newest status of each cap waits until they have. Messages of a subscribe
+      // that was dropped meanwhile are not ours any more.
+      const early = new Map();
+      let ready = false;
+      const deliver = (id, msg) => {
+        if (gen !== this._subGen) return;
+        if (ready || msg.type === "reload") this._onMessage(id, msg);
+        else if (msg.type === "status") early.set(id, msg);
+      };
       const results = await Promise.allSettled(ids.map((id) => this._hass.connection.subscribeMessage(
-        (msg) => this._onMessage(id, msg), { type: "triki/subscribe", device_id: id })));
+        (msg) => deliver(id, msg), { type: "triki/subscribe", device_id: id })));
       unsubs = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
       if (stale()) { drop(); return; }
       const failed = results.find((r) => r.status === "rejected");
@@ -817,6 +838,8 @@ class TrikiCard extends HTMLElement {
       this._reloadSince = null;
       if (this._empty) { this._empty = false; this._build(); }
       this._renderTabs();
+      ready = true;
+      for (const [id, msg] of early) this._onMessage(id, msg);
     } catch (err) {
       drop();
       if (stale()) return;
@@ -918,6 +941,7 @@ class TrikiCard extends HTMLElement {
 
   _onMessage(id, msg) {
     if (msg.type === "reload") { this._resubscribeSoon(); return; }
+    if (msg.type === "event") msg = { ...msg, event: gestureOf(msg.event, msg.data) };
     if (msg.type === "status") {
       const was = this._isLive(this._statuses[id]);
       this._statuses[id] = msg;
@@ -986,7 +1010,7 @@ class TrikiCard extends HTMLElement {
     }
   }
 
-  // Left-right from the side that is up: the integration measures it from the
+  // Forward-back from the side that is up: the integration measures it from the
   // green side, so a cap lying metal up read ±180°. Past 100° the other side
   // counts as up, and back below 80° (no flicker on the edge).
   _faceRoll(roll) {

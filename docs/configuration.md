@@ -15,13 +15,13 @@ folded, and start at their defaults.
 | Disconnect after idle | 300 s | After this long without activity the link is dropped so the token can sleep. 0 = keep the link as long as the token holds it; that empties a CR2032 in about a week, and while the battery is at 30 % or less 0 acts as 300 s. See the caveats below. |
 | Knob step | 30° | Degrees of rotation around the vertical axis per `rotate_cw` / `rotate_ccw` event. Smaller steps mean more events per turn. |
 | Invert knob direction | off | Swap cw and ccw if they read backwards on your unit. |
-| Count the wake-up as a press | on | Only the button wakes the token, so the press that woke it is reported as `press` with `source: wake`, right after `wake`. It is left out when the token had not really slept (no advertisement for 15 s before it), for example after a Home Assistant restart or a dropped link, so nothing toggles by itself. If the button is still held when the stream starts, the stream reports that press itself. Turn it off if your automations already use `wake` to catch the first press. |
+| Count the wake-up as a press | on | Only the button wakes the token, so the press that woke it is reported as `single_press` with `source: wake`, right after `wake`. It is left out when the token had not really slept (no advertisement for 15 s before it), for example after a Home Assistant restart or a dropped link, so nothing toggles by itself. If the button is still held when the stream starts, the stream reports that press itself. Turn it off if your automations already use `wake` to catch the first press. |
 | Knob | off | Enable `rotate_cw` / `rotate_ccw`. |
 | Shake | off | Enable `shake`. Confirmed through a proxy; see [Events](events-and-automations.md#gesture-status). |
 | Tilt in the hand | off | Hold the token level, with the yellow stripe of the card's model towards you, and lean it right or left by more than 25°: one `tilt_right` or `tilt_left`, then one every 0.4 s while it stays leaned (`repeat: true`). These are not knob events, so picking the token up does not move a dimmer on the knob. Bring it back within 10° of level before the next lean. |
 | Motion gestures | off | Enable `tap`, `throw`, `flip`. Tuned on one hardware session; see [Events](events-and-automations.md#gesture-status). |
-| Double and triple press | off | Off: `press` is reported the moment the button is released. On: single presses are delayed by the window below so that `double_press` and `triple_press` can be told apart. |
-| Multi-press window | 0.5 s | Longest pause between releasing and pressing again that still counts as a multi-press. 0.3 s is a good compromise between a quick single press and a comfortable double press. |
+| Double and triple press | off | Off: `single_press` is reported the moment the button is released. On: single presses are delayed by the window below so that a double or triple press (`multi_press` with `press_count`) can be told apart. |
+| Multi-press window | 0.5 s | Longest pause between releasing and pressing again that still counts as a multi-press. From 0.2 to 1.5 s: shorter makes a single press quicker, longer makes a double press easier. The card's **Check** measures your double press and offers a value. |
 | Record raw sessions | off | Write every session to `<config>/triki_captures/*.jsonl`: raw notifications, detected events, rate switches. For debugging and for tuning gestures with `tools/replay.py`. Turn it off when done. A file stops at 50 MB; a new link starts a new file. |
 
 ## Idle and sleep: how the link behaves
@@ -89,16 +89,17 @@ token locked up: treat a low figure on a held link as a real warning.
 
 | Entity | Category | Notes |
 |---|---|---|
-| `event.<name>_action` | | Every gesture. Attributes: `event_type`, plus `steps`, `degrees` and `speed` for rotation, `count` for presses, `source: wake` for synthetic presses, `repeat` for *Tilt in the hand*. |
+| `event.<name>_action` | | Every gesture. Attributes: `event_type`, plus `steps`, `degrees` and `speed` for rotation, `position` for rotation, `press_count` for a double or triple press, `source: wake` for the press that woke the token, `repeat` for *Tilt in the hand*. |
 | `binary_sensor.<name>_button` | | Live button state. Off while the token sleeps. |
 | `binary_sensor.<name>_connected` | diagnostic | Link state. |
+| `number.<name>_knob_position` | | Where the knob stands, 0 to 100 %: one full turn covers the range, it stops at the ends and is kept across restarts. Settable, so an automation can put a lamp's brightness in. Exists while the knob is on. |
 | `switch.<name>_led` | Configuration | The green LED, as on and off buttons: the token cannot report it, so the state is what Home Assistant set during the current link and unknown after it. Can only be changed while linked. |
 | `sensor.<name>_battery` | diagnostic | The token measures its battery only while it is not streaming, so the integration stops the stream for a few seconds while the token is idle (first at the idle-rate switch, then at most every 30 min) and takes the value the token pushes. Values the token reports on its own while streaming are taken under load and ignored. The first value after setup is read at the connect and is low (taken under load) until the first pause. Restored across restarts. |
 | `sensor.<name>_readiness` | | Whether a press reaches Home Assistant now: `connected`; `dozing` for about 3 minutes after an idle disconnect, while presses are not seen and each one starts the 3 minutes over; `asleep`, a press wakes it; `not_responding`, the link dropped by itself and the token has been silent since. |
 | `sensor.<name>_link_quality` | diagnostic | Motion frames that arrived in the last session, % of those the token streamed (rate switches included). Sessions with less than 20 s of stream are not counted. Restored across restarts. |
 | `sensor.<name>_signal_strength` | diagnostic, disabled | Signal of the last advertisement as seen by the scanner that received it. |
 | `sensor.<name>_face_up` | | Which side is up: `cap_up` (metal), `pcb_up` (green board) or `edge`. Set once the token has lain still for 0.3 s; between flat and on edge (z 0.5-0.8 g) the last value stays. Published at most once per second, restored across restarts and kept while the token sleeps. |
-| `sensor.<name>_pitch`, `_roll` | disabled | *Tilt forward-back* and *Tilt left-right*: tilt in degrees from the gravity estimate, published at most once per second. |
+| `sensor.<name>_tilt_left_right`, `_tilt_forward_back` | disabled | The lean to the side and the lift of the dot edge, in degrees from the gravity estimate, published at most once per second. *Tilt forward-back* reads about ±180° while the token lies metal side up. On installs made before 0.3.0 the entity ids are `_pitch` (left-right) and `_roll` (forward-back). |
 
 Disabled entities can be enabled from the entity settings. They are off by
 default because they update often and fill the recorder.

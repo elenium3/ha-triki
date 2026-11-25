@@ -4,7 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from homeassistant.components.event import EventEntity, EventEntityDescription
+from homeassistant.components.event import (
+    EventDeviceClass,
+    EventEntity,
+    EventEntityDescription,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
@@ -17,6 +21,7 @@ PARALLEL_UPDATES = 0  # push only
 DESCRIPTION = EventEntityDescription(
     key="action",
     translation_key="action",
+    device_class=EventDeviceClass.BUTTON,
     event_types=EVENT_TYPES,
 )
 

@@ -25,7 +25,9 @@
     "abort": {
       "already_configured": "Ten kapsel jest już dodany",
       "already_in_progress": "Ten kapsel jest już w trakcie dodawania",
-      "no_devices_found": "Nie widać żadnego obudzonego Triki. Naciśnij kapsel i spróbuj jeszcze raz.",
+      "no_devices_found": "Nie widać żadnego obudzonego kapsla Triki. Naciśnij kapsel i spróbuj jeszcze raz. Jeśli na telefonie w pobliżu jest otwarta aplikacja Żappka, najpierw ją zamknij: kapsel przyjmuje tylko jedno połączenie naraz.",
+      "no_connectable_receiver": "Home Assistant nie ma odbiornika Bluetooth, który mógłby połączyć się z kapslem. Dodaj adapter Bluetooth albo ESPHome Bluetooth proxy z aktywnymi połączeniami i spróbuj jeszcze raz.",
+      "heard_not_connectable": "Kapsel Triki jest w zasięgu, ale słyszy go tylko odbiornik, który nie potrafi się łączyć. Umieść w pobliżu kapsla adapter Bluetooth albo ESPHome Bluetooth proxy z aktywnymi połączeniami (active: true).",
       "not_supported": "To urządzenie nie jest obsługiwane"
     }
   },
@@ -77,7 +79,7 @@
   },
   "exceptions": {
     "asleep": {
-      "message": "{name} śpi: najpierw naciśnij kapsel, żeby go obudzić."
+      "message": "{name} nie jest połączony. Naciśnij kapsel, żeby go obudzić; jeśli zasypia po rozłączeniu z powodu bezczynności, najpierw odczekaj około 3 minut."
     },
     "led_write_failed": {
       "message": "Nie udało się ustawić diody: {error}"
@@ -91,10 +93,10 @@
           "event_type": {
             "state": {
               "wake": "Pobudka",
-              "press": "Naciśnięcie",
-              "double_press": "Podwójne naciśnięcie",
-              "triple_press": "Potrójne naciśnięcie",
-              "long_press": "Długie naciśnięcie",
+              "single_press": "Naciśnięcie",
+              "multi_press": "Podwójne lub potrójne naciśnięcie",
+              "long_press_start": "Długie naciśnięcie",
+              "long_press_end": "Zwolnienie po długim naciśnięciu",
               "rotate_cw": "Pokrętło w prawo",
               "rotate_ccw": "Pokrętło w lewo",
               "tilt_left": "Przechył w lewo",
@@ -106,6 +108,11 @@
             }
           }
         }
+      }
+    },
+    "number": {
+      "knob_position": {
+        "name": "Pozycja pokrętła"
       }
     },
     "binary_sensor": {
@@ -143,10 +150,10 @@
         }
       },
       "pitch": {
-        "name": "Przechył przód-tył"
+        "name": "Przechył lewo-prawo"
       },
       "roll": {
-        "name": "Przechył lewo-prawo"
+        "name": "Przechył przód-tył"
       }
     }
   },
@@ -189,10 +196,11 @@
   "device_automation": {
     "trigger_type": {
       "wake": "Pobudka",
-      "press": "Naciśnięcie",
+      "single_press": "Naciśnięcie",
       "double_press": "Podwójne naciśnięcie",
       "triple_press": "Potrójne naciśnięcie",
-      "long_press": "Długie naciśnięcie",
+      "long_press_start": "Długie naciśnięcie",
+      "long_press_end": "Zwolnienie po długim naciśnięciu",
       "rotate_cw": "Pokrętło w prawo",
       "rotate_ccw": "Pokrętło w lewo",
       "tilt_left": "Przechył w lewo",

@@ -8,7 +8,22 @@ All notable changes to this project are documented here. The format follows
 
 **Before you update:**
 
-- The press that wakes the cap now also arrives as `press` (*Count the
+- **The button events have new names**, Home Assistant's standard ones.
+  Automations that check `event_type` need the new name, or they stop
+  running without an error:
+
+  | Was | Now |
+  |---|---|
+  | `press` | `single_press` |
+  | `double_press` | `multi_press` with `press_count: 2` |
+  | `triple_press` | `multi_press` with `press_count: 3` |
+  | `long_press` | `long_press_start` |
+  | (new) | `long_press_end`, when the cap is let go |
+
+  The `count` field is gone. The blueprints and the device triggers of the
+  betas follow the new names (*Press* is `single_press`, *Long press* is
+  `long_press_start`): re-pick them in an automation made with a beta.
+- The press that wakes the cap now also arrives as `single_press` (*Count the
   wake-up as a press* is turned on once for existing installs). An automation
   that catches the first press through `wake` will run twice: drop the `wake`
   trigger or turn the option off.
@@ -19,6 +34,26 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The card's *Left-right* and *Forward-back* angles and the names of the two
+  tilt sensors were swapped: a lean to the side showed as forward-back. The
+  values and the entity ids did not change. (fixed after 0.3.0b2)
+- *Add integration* with no cap to offer now says why: no Bluetooth receiver
+  that can connect, or a cap heard only by a listen-only receiver (a proxy
+  without active connections, a Shelly). Before, it always asked to press the
+  cap. (fixed after 0.3.0b2)
+- A cap that is awake but cannot be linked three times in a row is now a
+  warning in the log, once per outage; it was hidden at the default log level.
+  (fixed after 0.3.0b2)
+- The live card threw an error when a cap's first status reached it before its
+  subscription was set up, which is how Home Assistant sends it. A card opened
+  that way could stay without status updates until the integration was
+  reloaded. (fixed after 0.3.0b2)
+- The LED error for a cap that is not connected no longer says to press it
+  while it dozes. The empty card says where to add a cap. (fixed after 0.3.0b2)
+- Docs: the examples say to put in your cap's entity id
+  (`event.triki_<number>_action`); first check, the tilt sensor ids, the
+  multi-press window and the diagnostics fields match the code.
+  (fixed after 0.3.0b2)
 - After a session that had slowed to the idle rate, the next wake timed
   gestures twice too fast for its first seconds: a short press could come out
   as a long press. (fixed after 0.3.0b2)
@@ -68,13 +103,20 @@ All notable changes to this project are documented here. The format follows
   adapter waits for the Bluetooth proxies before linking up.
 - Setup and option texts reworded in English, Polish and Russian. Some option
   names changed (the keys did not). The pitch and roll sensors are *Tilt
-  forward-back* and *Tilt left-right*; entity ids stay `_pitch` and `_roll`.
+  left-right* and *Tilt forward-back*; on an existing install the entity ids
+  stay `_pitch` and `_roll`.
 - *Configure* shows the gestures first; rate, timing, the knob step and
   debug options fold away under *Advanced*.
 - The README starts with install, what the cap can do and the card.
 
 ### Added
 
+- **`long_press_end`**: the release after a long press, also sent when the
+  link drops while the cap is held, so "hold to dim" has an end.
+- **Knob position**: `number.<name>_knob_position`, 0 to 100 %, and the same
+  value as `position` in every knob event. One full turn covers the range.
+  Settable, kept across restarts, there while the knob is on.
+- The *Action* entity has the button device class.
 - **Live 3D card** (*Triki live 3D*), served by the integration, nothing to
   install. See docs/live-card.md.
   - The cap in 3D, its sensors, and a list of gestures that light up as they

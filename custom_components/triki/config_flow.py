@@ -14,6 +14,7 @@ from homeassistant import data_entry_flow
 from homeassistant.components.bluetooth import (
     BluetoothServiceInfoBleak,
     async_discovered_service_info,
+    async_scanner_count,
 )
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -104,6 +105,16 @@ class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
             description_placeholders={"name": self._discovery.name},
         )
 
+    def _why_nothing_found(self, current: set[str | None]) -> str:
+        """Pressing the cap again helps only when a receiver could link to it."""
+        if async_scanner_count(self.hass, connectable=True) == 0:
+            return "no_connectable_receiver"
+        for info in async_discovered_service_info(self.hass, connectable=False):
+            if info.address not in current and _is_triki(info):
+                # no connectable receiver heard it, or it would be in the list
+                return "heard_not_connectable"
+        return "no_devices_found"
+
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
             address = user_input[CONF_ADDRESS]
@@ -118,7 +129,7 @@ class TrikiConfigFlow(ConfigFlow, domain=DOMAIN):
                 continue
             self._found[info.address] = info.name
         if not self._found:
-            return self.async_abort(reason="no_devices_found")
+            return self.async_abort(reason=self._why_nothing_found(current))
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(

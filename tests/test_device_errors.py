@@ -560,9 +560,9 @@ async def _wake_from_sleep(hass: HomeAssistant, setup, *, button: bool = False, 
 async def test_a_wake_from_sleep_is_a_press(hass: HomeAssistant, setup) -> None:
     """Only the button wakes the token: after a real sleep the wake is a press."""
     bus = await _wake_from_sleep(hass, setup)
-    assert [e.data["type"] for e in bus] == ["wake", "press"]
+    assert [e.data["type"] for e in bus] == ["wake", "single_press"]
     assert bus[1].data["source"] == "wake"
-    assert bus[1].data["count"] == 1
+    assert bus[1].data["source"] == "wake"
 
 
 async def test_no_press_without_a_silence_first(hass: HomeAssistant, setup) -> None:
@@ -588,7 +588,7 @@ async def test_no_press_on_a_reconnect_without_sleep(hass: HomeAssistant, setup)
     await advertise(hass, setup, client)
     _stream(client)(None, bytearray(frame()))
     await hass.async_block_till_done()
-    assert [e.data["type"] for e in bus] == ["wake", "press", "wake"]
+    assert [e.data["type"] for e in bus] == ["wake", "single_press", "wake"]
 
 
 async def _drop_and_return(hass: HomeAssistant, setup, *, ago: float, heard: float) -> None:
@@ -614,14 +614,14 @@ async def test_no_press_after_a_silence_too_soon_to_be_sleep(hass: HomeAssistant
     weak), so nobody pressed it."""
     bus = await _wake_from_sleep(hass, setup)
     await _drop_and_return(hass, setup, ago=60, heard=0)
-    assert [e.data["type"] for e in bus] == ["wake", "press", "wake"]
+    assert [e.data["type"] for e in bus] == ["wake", "single_press", "wake"]
 
 
 async def test_a_wake_after_the_doze_is_a_press(hass: HomeAssistant, setup) -> None:
     """Heard into the end of the doze, then silence: it slept, the wake is a press."""
     bus = await _wake_from_sleep(hass, setup)
     await _drop_and_return(hass, setup, ago=300, heard=170)
-    assert [e.data["type"] for e in bus] == ["wake", "press", "wake", "press"]
+    assert [e.data["type"] for e in bus] == ["wake", "single_press", "wake", "single_press"]
 
 
 async def test_no_extra_press_while_the_waking_press_is_held(hass: HomeAssistant, setup) -> None:
@@ -1127,7 +1127,7 @@ async def test_a_waking_press_released_in_the_startup_discard_arrives(
     for i in range(40):
         notify(None, bytearray(frame(gx=0.1 * i)))
     await hass.async_block_till_done()
-    assert [e.data["type"] for e in bus] == ["press"]
+    assert [e.data["type"] for e in bus] == ["single_press"]
 
 
 async def test_unload_survives_a_disconnect_timeout(hass: HomeAssistant, setup) -> None:

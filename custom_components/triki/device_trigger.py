@@ -20,10 +20,13 @@ from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.trigger import TriggerActionType, TriggerInfo
 from homeassistant.helpers.typing import ConfigType
 
-from .const import BUS_EVENT, DOMAIN, EVENT_TYPES
+from .const import ATTR_PRESS_COUNT, BUS_EVENT, DOMAIN, EVENT_MULTI_PRESS, TRIGGER_TYPES
 from .models import TrikiOptions
 
-TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend({vol.Required(CONF_TYPE): vol.In(EVENT_TYPES)})
+TRIGGER_SCHEMA = DEVICE_TRIGGER_BASE_SCHEMA.extend({vol.Required(CONF_TYPE): vol.In(TRIGGER_TYPES)})
+
+# a trigger that is one count of the multi_press event
+_PRESS_COUNT = {"double_press": 2, "triple_press": 3}
 
 # gestures offered only while their option is on; the rest are always there
 _BY_OPTION = {
@@ -61,9 +64,15 @@ async def async_get_triggers(hass: HomeAssistant, device_id: str) -> list[dict[s
         return []
     return [
         {CONF_PLATFORM: "device", CONF_DOMAIN: DOMAIN, CONF_DEVICE_ID: device_id, CONF_TYPE: kind}
-        for kind in EVENT_TYPES
+        for kind in TRIGGER_TYPES
         if kind not in _BY_OPTION or getattr(opts, _BY_OPTION[kind])
     ]
+
+
+def _bus_match(kind: str) -> dict[str, Any]:
+    if kind in _PRESS_COUNT:
+        return {CONF_TYPE: EVENT_MULTI_PRESS, ATTR_PRESS_COUNT: _PRESS_COUNT[kind]}
+    return {CONF_TYPE: kind}
 
 
 async def async_attach_trigger(
@@ -79,7 +88,7 @@ async def async_attach_trigger(
             event_trigger.CONF_EVENT_TYPE: BUS_EVENT,
             event_trigger.CONF_EVENT_DATA: {
                 CONF_DEVICE_ID: config[CONF_DEVICE_ID],
-                CONF_TYPE: config[CONF_TYPE],
+                **_bus_match(config[CONF_TYPE]),
             },
         }
     )

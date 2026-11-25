@@ -1,5 +1,6 @@
 from unittest.mock import patch
 
+import pytest
 from homeassistant import config_entries
 from homeassistant.const import CONF_ADDRESS
 from homeassistant.core import HomeAssistant
@@ -12,6 +13,14 @@ from custom_components.triki.protocol import DEFAULT_RATE
 from .conftest import ADDRESS, NAME, service_info
 
 SETUP = "custom_components.triki.async_setup_entry"
+SCANNERS = "custom_components.triki.config_flow.async_scanner_count"
+
+
+@pytest.fixture(autouse=True)
+def a_receiver_that_can_connect():
+    """The test environment has no Bluetooth adapter; most flows assume one."""
+    with patch(SCANNERS, return_value=1):
+        yield
 
 
 async def test_bluetooth_discovery(hass: HomeAssistant, mock_bluetooth) -> None:
@@ -61,6 +70,38 @@ async def test_user_no_devices(hass: HomeAssistant, mock_bluetooth) -> None:
         )
     assert result["type"] is FlowResultType.ABORT
     assert result["reason"] == "no_devices_found"
+
+
+async def test_user_no_receiver_that_can_connect(hass: HomeAssistant, mock_bluetooth) -> None:
+    """Pressing the cap again would not help: say what is missing."""
+    with (
+        patch(SCANNERS, return_value=0),
+        patch(
+            "custom_components.triki.config_flow.async_discovered_service_info",
+            return_value=[],
+        ),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "no_connectable_receiver"
+
+
+async def test_user_heard_only_by_a_listening_receiver(hass: HomeAssistant, mock_bluetooth) -> None:
+    """A passive proxy or a Shelly hears the cap but cannot link to it."""
+
+    def heard(_hass, connectable=True):
+        return [] if connectable else [service_info()]
+
+    with (
+        patch("custom_components.triki.config_flow.async_discovered_service_info", heard),
+    ):
+        result = await hass.config_entries.flow.async_init(
+            DOMAIN, context={"source": config_entries.SOURCE_USER}
+        )
+    assert result["type"] is FlowResultType.ABORT
+    assert result["reason"] == "heard_not_connectable"
 
 
 async def test_user_pick(hass: HomeAssistant, mock_bluetooth) -> None:

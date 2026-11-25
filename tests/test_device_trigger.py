@@ -22,7 +22,7 @@ def _types(triggers) -> set[str]:
 async def test_the_list_follows_the_options(hass: HomeAssistant, setup) -> None:
     dev = setup.runtime_data
     triggers = await async_get_device_automations(hass, DeviceAutomationType.TRIGGER, dev.device_id)
-    assert _types(triggers) == {"wake", "press", "long_press"}
+    assert _types(triggers) == {"wake", "single_press", "long_press_start", "long_press_end"}
     assert all(t["device_id"] == dev.device_id for t in triggers)
 
     hass.config_entries.async_update_entry(
@@ -32,8 +32,9 @@ async def test_the_list_follows_the_options(hass: HomeAssistant, setup) -> None:
     triggers = await async_get_device_automations(hass, DeviceAutomationType.TRIGGER, dev.device_id)
     assert _types(triggers) == {
         "wake",
-        "press",
-        "long_press",
+        "single_press",
+        "long_press_start",
+        "long_press_end",
         "rotate_cw",
         "rotate_ccw",
         "tilt_left",
@@ -53,20 +54,24 @@ async def test_a_trigger_fires_on_its_gesture_only(hass: HomeAssistant, setup) -
                     "platform": "device",
                     "domain": DOMAIN,
                     "device_id": dev.device_id,
-                    "type": "press",
+                    "type": "single_press",
                 },
                 "actions": {
                     "action": "test.pressed",
-                    "data": {"count": "{{ trigger.event.data.count }}"},
+                    "data": {"source": "{{ trigger.event.data.source }}"},
                 },
             }
         },
     )
-    hass.bus.async_fire(BUS_EVENT, {"device_id": dev.device_id, "type": "long_press"})
-    hass.bus.async_fire(BUS_EVENT, {"device_id": "another cap", "type": "press", "count": 1})
-    hass.bus.async_fire(BUS_EVENT, {"device_id": dev.device_id, "type": "press", "count": 1})
+    hass.bus.async_fire(BUS_EVENT, {"device_id": dev.device_id, "type": "long_press_start"})
+    hass.bus.async_fire(
+        BUS_EVENT, {"device_id": "another cap", "type": "single_press", "source": "wake"}
+    )
+    hass.bus.async_fire(
+        BUS_EVENT, {"device_id": dev.device_id, "type": "single_press", "source": "wake"}
+    )
     await hass.async_block_till_done()
-    assert [c.data["count"] for c in calls] == [1]
+    assert [c.data["source"] for c in calls] == ["wake"]
 
 
 async def test_a_gesture_from_the_device_reaches_the_trigger(hass: HomeAssistant, setup) -> None:
@@ -82,12 +87,41 @@ async def test_a_gesture_from_the_device_reaches_the_trigger(hass: HomeAssistant
                     "platform": "device",
                     "domain": DOMAIN,
                     "device_id": dev.device_id,
-                    "type": "press",
+                    "type": "single_press",
                 },
                 "actions": {"action": "test.pressed"},
             }
         },
     )
-    dev._emit("press", {"count": 1})
+    dev._emit("single_press", {})
     await hass.async_block_till_done()
     assert len(calls) == 1
+
+
+async def test_double_and_triple_press_are_separate_triggers(hass: HomeAssistant, setup) -> None:
+    """Both arrive as multi_press; the trigger picks its count."""
+    calls = async_mock_service(hass, "test", "pressed")
+    dev = setup.runtime_data
+    assert await async_setup_component(
+        hass,
+        automation.DOMAIN,
+        {
+            automation.DOMAIN: [
+                {
+                    "triggers": {
+                        "platform": "device",
+                        "domain": DOMAIN,
+                        "device_id": dev.device_id,
+                        "type": kind,
+                    },
+                    "actions": {"action": "test.pressed", "data": {"kind": kind}},
+                }
+                for kind in ("double_press", "triple_press")
+            ]
+        },
+    )
+    dev._emit("single_press", {})
+    dev._emit("multi_press", {"press_count": 3})
+    dev._emit("multi_press", {"press_count": 2})
+    await hass.async_block_till_done()
+    assert [c.data["kind"] for c in calls] == ["triple_press", "double_press"]

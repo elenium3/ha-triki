@@ -42,8 +42,8 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers import typing as ha_typing
 from homeassistant.helpers.event import async_call_later, async_track_time_interval
-from homeassistant.helpers.typing import UNDEFINED
 from homeassistant.util import dt as dt_util
 
 from .capture import Capture
@@ -55,13 +55,14 @@ from .const import (
     BUS_EVENT,
     DEFAULT_SLEEP_TIMEOUT,
     DOMAIN,
+    EVENT_SINGLE_PRESS,
     IDLE_RATE,
     ISSUE_BATTERY_LOW,
     ISSUE_LINK_LOSSY,
     ISSUE_NOT_RESPONDING,
     TILT_PUBLISH_INTERVAL,
 )
-from .gestures import GestureDetector
+from .gestures import KNOB_EVENTS, GestureDetector
 from .linkquality import LinkQuality
 from .models import TrikiOptions
 from .orientation import CalibrationError, Orientation
@@ -80,6 +81,12 @@ from .protocol import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+# "leave this field alone" for the device registry. Home Assistant 2026.12
+# renames the sentinel and warns about the old name; older cores have only that.
+Undefined: Any = getattr(ha_typing, "Undefined", None)
+if Undefined is None:
+    Undefined = ha_typing.UNDEFINED
 
 # An advertisement older than this is a replay from the cache, not a wake-up.
 _FRESH_ADV_S = 10.0
@@ -141,8 +148,9 @@ _WAKE_PRESS_MAX_S = 10.0
 _LED_WRITE_TIMEOUT_S = 5.0
 _LED_WRITE_RETRIES = 3
 _LED_WRITE_RETRY_DELAY_S = 0.3
-# This many connect failures in a row for an awake token is worth one line at
-# info level (the entities only show "asleep", which looks normal).
+# This many connect failures in a row for an awake token is worth one warning
+# per outage: the entities only show "asleep", which looks normal, and the
+# default log level hides anything below a warning.
 _UNREACHABLE_AFTER = 3
 # Battery: the token re-measures only while the stream is stopped and then pushes
 # the value by notification (6 s after STOP on the test unit). The value read
@@ -323,6 +331,8 @@ class TrikiDevice:
         # what Home Assistant last set during the current link, else unknown: the
         # token's CTRL reads back ff whatever the LED does (firmware 3.2.1-A)
         self.led_on: bool | None = None
+        # where the knob stands, 0-100: moved by turns, set by the number entity
+        self.knob_position = 50.0
         self.battery: int | None = None
         # the last level measured during a stream pause in this process; the
         # restored and connect-time values may be loaded figures
@@ -639,6 +649,13 @@ class TrikiDevice:
     @callback
     def _emit(self, kind: str, data: dict[str, Any] | None = None) -> None:
         data = data or {}
+        if kind in KNOB_EVENTS and not self.checking:
+            # a full turn covers the whole range; clockwise is up
+            turn = data.get("degrees", 0) / 360 * 100
+            self.knob_position = min(
+                100.0, max(0.0, self.knob_position + (turn if kind == "rotate_cw" else -turn))
+            )
+            data = {**data, "position": round(self.knob_position)}
         _LOGGER.debug("%s: event %s %s", self.name, kind, data)
         if self._capture:
             self._capture.write({"event": kind, "data": data})
@@ -1014,9 +1031,9 @@ class TrikiDevice:
         _LOGGER.debug("%s: %s: %s", self.name, what, err)
         if self._fail_streak == _UNREACHABLE_AFTER and not self._unreachable_logged:
             self._unreachable_logged = True
-            _LOGGER.info(
-                "%s: %d connect attempts in a row failed (last: %s); "
-                "it is seen but cannot be linked, check the receiver placement",
+            _LOGGER.warning(
+                "%s: %d connect attempts in a row failed (last: %s); it is seen but "
+                "cannot be linked: the receiver is too far or has no free connection slot",
                 self.name,
                 self._fail_streak,
                 err,
@@ -1141,8 +1158,8 @@ class TrikiDevice:
         # a failed read must not wipe a value stored by an earlier session
         dev_reg.async_update_device(
             self.device_id,
-            sw_version=self.firmware if self.firmware is not None else UNDEFINED,
-            hw_version=self.hardware if self.hardware is not None else UNDEFINED,
+            sw_version=self.firmware if self.firmware is not None else Undefined,
+            hw_version=self.hardware if self.hardware is not None else Undefined,
         )
 
     async def async_disconnect(self) -> None:
@@ -1354,7 +1371,7 @@ class TrikiDevice:
             if self._wake_press_pending:
                 self._wake_press_pending = False
                 if not sample.button:
-                    self._emit("press", {"count": 1, "source": "wake"})
+                    self._emit(EVENT_SINGLE_PRESS, {"source": "wake"})
                     active = True
             # frames of one notification arrived together: spread them one
             # sample period apart, ending at the arrival time

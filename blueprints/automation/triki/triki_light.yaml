@@ -67,12 +67,12 @@ conditions:
 
 actions:
   - choose:
-      - conditions: "{{ event == 'press' }}"
+      - conditions: "{{ event == 'single_press' }}"
         sequence:
           - action: light.toggle
             target:
               entity_id: !input light
-      - conditions: "{{ event == 'long_press' }}"
+      - conditions: "{{ event == 'long_press_start' }}"
         sequence:
           - action: light.turn_on
             target:

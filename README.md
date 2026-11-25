@@ -48,7 +48,8 @@ a scene. It sleeps when left alone and wakes on a press.
    and tick the gestures you want besides press and long press.
 3. Add the **Triki live 3D** card to a dashboard and press **Check** on it (as an admin). It
    walks you through the button, the knob and the gestures in a few minutes and
-   offers the option changes your cap needs in one tap.
+   offers the option changes your cap needs in one tap. If the card is not in
+   the list, reload the page.
 
 You need a Bluetooth receiver near the cap. An ESP32 running
 [ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy.html)
@@ -62,9 +63,9 @@ Manual install, without HACS: [Installation](docs/installation.md).
 
 | Gesture | How | Event | Out of the box |
 |---|---|---|---|
-| Press | press the cap | `press` | on |
-| Long press | press and hold | `long_press` | on |
-| Double, triple press | two or three quick presses | `double_press`, `triple_press` | off: it delays a single press by half a second |
+| Press | press the cap | `single_press` | on |
+| Long press | press and hold, let go | `long_press_start`, `long_press_end` | on |
+| Double, triple press | two or three quick presses | `multi_press` with `press_count` 2 or 3 | off: it delays a single press by half a second |
 | Knob | turn it flat on the table | `rotate_cw`, `rotate_ccw` | off |
 | Tilt | hold it level, lean right or left | `tilt_right`, `tilt_left` | off |
 | Shake | a second of sharp shaking | `shake` | off |
@@ -79,8 +80,15 @@ Gestures are picked when the cap is added; change them later in *Configure*.
 | Light remote: press toggles, the knob dims, long press sets full brightness | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Felenium3%2Fha-triki%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftriki%2Ftriki_light.yaml) |
 | An action for each gesture: press, double, triple and long press, knob, tilt, shake, flip | [![Import](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Felenium3%2Fha-triki%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftriki%2Ftriki_actions.yaml) |
 
+If a press does nothing, look at the card or the *Readiness* sensor: *Dozing
+off* means the cap went idle and misses presses for about 3 minutes. Wait
+rather than press again.
+
 Or build one in the automation editor: *Add trigger → Device → your Triki*
-and pick the gesture. In YAML every gesture arrives on `event.<name>_action`:
+and pick the gesture. In YAML every gesture arrives on `event.<name>_action`.
+The name carries the cap's number, for example
+`event.triki_4190656753_action`: put your cap's entity in place of
+`event.triki_action` below.
 
 ```yaml
 automation:
@@ -90,7 +98,7 @@ automation:
         entity_id: event.triki_action
         not_from: unavailable  # a restart restores the last event
     conditions:
-      - "{{ trigger.to_state.attributes.event_type == 'press' }}"
+      - "{{ trigger.to_state.attributes.event_type == 'single_press' }}"
     actions:
       - action: light.toggle
         target:
@@ -122,15 +130,16 @@ button? Switch the rest off in the card's settings. [Live 3D card](docs/live-car
 
 | Entity | Notes |
 |---|---|
-| `event.<name>_action` | `wake`, `press`, `double_press`, `triple_press` (`count`), `long_press`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`, `speed`), `tilt_left` / `tilt_right` (`repeat`), `shake`, `tap`, `throw`, `flip` |
+| `event.<name>_action` | `wake`, `single_press`, `multi_press` (`press_count`), `long_press_start`, `long_press_end`, `rotate_cw` / `rotate_ccw` (`steps`, `degrees`, `speed`, `position`), `tilt_left` / `tilt_right` (`repeat`), `shake`, `tap`, `throw`, `flip` |
 | `binary_sensor.<name>_button` | live button state, off while asleep |
 | `binary_sensor.<name>_connected` | diagnostic |
+| `number.<name>_knob_position` | where the knob stands, 0-100 %; settable; exists while the knob is on |
 | `switch.<name>_led` | the green LED, on and off buttons: the cap can't report it; changeable only while connected |
 | `sensor.<name>_battery` | measured while idle, at most every 30 min |
 | `sensor.<name>_readiness` | whether a press gets through now: `connected`, `dozing` (about 3 min after an idle disconnect, presses are missed), `asleep` (a press wakes it), `not_responding` |
 | `sensor.<name>_link_quality` | % of motion frames that arrived in the last session; a repair notice after three lossy sessions in a row |
 | `sensor.<name>_face_up` | `cap_up`, `pcb_up` or `edge`, once the cap lies still |
-| `sensor.<name>_signal_strength`, `_pitch`, `_roll` | disabled by default |
+| `sensor.<name>_signal_strength`, `_tilt_left_right`, `_tilt_forward_back` | disabled by default (the tilt sensors are `_pitch` and `_roll` on installs made before 0.3.0) |
 
 Every gesture also fires `triki_event` on the bus, with `device_id`, `address`
 and `type`.
