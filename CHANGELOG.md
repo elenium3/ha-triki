@@ -44,6 +44,10 @@ All notable changes to this project are documented here. The format follows
 - A cap that is awake but cannot be linked three times in a row is now a
   warning in the log, once per outage; it was hidden at the default log level.
   (fixed after 0.3.0b2)
+- The live card threw an error when a cap's first status reached it before its
+  subscription was set up, which is how Home Assistant sends it. A card opened
+  that way could stay without status updates until the integration was
+  reloaded. (fixed after 0.3.0b2)
 - The LED error for a cap that is not connected no longer says to press it
   while it dozes. The empty card says where to add a cap. (fixed after 0.3.0b2)
 - Docs: the examples say to put in your cap's entity id

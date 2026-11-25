@@ -49,9 +49,9 @@ function makeHass({ devices = () => [{ device_id: "a", name: "A" }], subscribe =
       if (m.type === "triki/devices") { log.devices++; return devices(log.devices); }
       return null;
     },
-    async subscribeMessage(_cb, m) {
+    async subscribeMessage(cb, m) {
       log.subscribe.push(m.device_id);
-      await subscribe(m.device_id, log.subscribe.length);
+      await subscribe(m.device_id, log.subscribe.length, cb);
       return () => { log.unsub.push(m.device_id); return Promise.resolve(); };
     },
   };
@@ -103,6 +103,34 @@ test("one cap failing drops the others' subscriptions instead of piling them up"
   assert.deepEqual(log.subscribe, ["a", "b"]);
   assert.deepEqual(log.unsub, ["a"]);
   assert.equal(c._unsub, undefined);
+});
+
+test("a status that comes before the subscribe call returns is shown, not thrown on", async () => {
+  // Home Assistant sends the result and the first status in one frame, so the
+  // callback runs before the code that awaits the subscription does
+  const thrown = [];
+  const status = (id) => ({ type: "status", device_id: id, name: id, connected: id === "b", streaming: id === "b" });
+  const { hass } = makeHass({
+    devices: () => [{ device_id: "a" }, { device_id: "b" }],
+    subscribe: async (id, _n, cb) => { try { cb(status(id)); } catch (err) { thrown.push(err); } },
+  });
+  const c = card();
+  c.hass = hass(); await flush();
+  assert.deepEqual(thrown, []);
+  assert.ok(c._unsub, "subscribed");
+  assert.equal(c._statuses.a.name, "a");
+  assert.equal(c._statuses.b.connected, true);
+  assert.equal(c._deviceId, "b", "the early status of the awake cap is followed");
+});
+
+test("early messages of a subscribe that was dropped meanwhile are ignored", async () => {
+  let early;
+  const { hass } = makeHass({ subscribe: async (_id, _n, cb) => { early = cb; } });
+  const c = card();
+  c.hass = hass(); await flush();
+  c.disconnectedCallback();
+  assert.doesNotThrow(() => early({ type: "status", device_id: "a", connected: true, streaming: true }));
+  assert.equal(c._statuses.a, undefined);
 });
 
 test("a card removed while subscribing drops the subscription it gets", async () => {

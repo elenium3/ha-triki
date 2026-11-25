@@ -807,8 +807,19 @@ class TrikiCard extends HTMLElement {
         if (!ids.length) { this._lost(); return; }
         names = Object.fromEntries(devices.map((d) => [d.device_id, d.name]));
       }
+      // Home Assistant sends the first status in the same frame as the answer to
+      // the subscribe call, so it gets here before the lines below have run: the
+      // newest status of each cap waits until they have. Messages of a subscribe
+      // that was dropped meanwhile are not ours any more.
+      const early = new Map();
+      let ready = false;
+      const deliver = (id, msg) => {
+        if (gen !== this._subGen) return;
+        if (ready || msg.type === "reload") this._onMessage(id, msg);
+        else if (msg.type === "status") early.set(id, msg);
+      };
       const results = await Promise.allSettled(ids.map((id) => this._hass.connection.subscribeMessage(
-        (msg) => this._onMessage(id, msg), { type: "triki/subscribe", device_id: id })));
+        (msg) => deliver(id, msg), { type: "triki/subscribe", device_id: id })));
       unsubs = results.filter((r) => r.status === "fulfilled").map((r) => r.value);
       if (stale()) { drop(); return; }
       const failed = results.find((r) => r.status === "rejected");
@@ -827,6 +838,8 @@ class TrikiCard extends HTMLElement {
       this._reloadSince = null;
       if (this._empty) { this._empty = false; this._build(); }
       this._renderTabs();
+      ready = true;
+      for (const [id, msg] of early) this._onMessage(id, msg);
     } catch (err) {
       drop();
       if (stale()) return;
