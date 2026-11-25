@@ -622,6 +622,9 @@ def main() -> None:
         shutil.copy(HERE / "src" / f, OUT / "assets" / f)
     for f in (HERE / "src").glob("*.png"):
         shutil.copy(f, OUT / "assets" / f.name)
+    # ownership proofs for the search consoles: served from the page's root as they are
+    for f in (HERE / "verify").iterdir():
+        shutil.copy(f, OUT / f.name)
     urls = "".join(
         f"<url><loc>{BASE}{p}</loc>"
         + "".join(f'<xhtml:link rel="alternate" hreflang="{k}" href="{BASE}{v}"/>' for k, v in LANGS.items())
