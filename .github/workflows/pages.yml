@@ -1,0 +1,58 @@
+name: Pages
+
+# The reference page about the cap (en, pl, ru), built by site/build.py and
+# served at https://elenium3.github.io/ha-triki/. It shows the integration's
+# own card, so a change to the card rebuilds it.
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - custom_components/triki/frontend/**
+      - docs/images/**
+      - .github/workflows/pages.yml
+  pull_request:
+    paths:
+      - site/**
+      - custom_components/triki/frontend/**
+      - docs/images/**
+      - .github/workflows/pages.yml
+  workflow_dispatch:
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.14"
+      - run: python site/build.py
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/_site
+
+  deploy:
+    # a pull request only proves that the page still builds
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

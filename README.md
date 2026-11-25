@@ -10,6 +10,14 @@
 </p>
 
 <p align="center">
+  <a href="README.pl.md">Polski</a> ·
+  About the cap itself (battery, connecting, using it without the app):
+  <a href="https://elenium3.github.io/ha-triki/">English</a>,
+  <a href="https://elenium3.github.io/ha-triki/pl/">polski</a>,
+  <a href="https://elenium3.github.io/ha-triki/ru/">русский</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/elenium3/ha-triki/actions/workflows/ci.yml"><img src="https://github.com/elenium3/ha-triki/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/elenium3/ha-triki/releases"><img src="https://img.shields.io/github/v/release/elenium3/ha-triki?include_prereleases" alt="Release"></a>
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-default-41BDF5.svg" alt="HACS default"></a>

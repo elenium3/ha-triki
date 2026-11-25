@@ -47,6 +47,9 @@ tools/
   triki_probe.py   standalone probe: scan, info, LED, record, guided capture
   replay.py        run a capture through the parser and gesture detector
 blueprints/automation/triki/   automation blueprints (light remote, action per gesture)
+site/
+  build.py         the reference page about the cap: template and texts (en, pl, ru)
+  src/             its styles, scripts, images and the recording the card replays
 ```
 
 `protocol.py` and `gestures.py` deliberately have no Home Assistant imports so
@@ -107,6 +110,21 @@ next to the events that were recorded live.
 2. Tag `vX.Y.Z` and publish a GitHub release with that section as the notes
    (`gh release create vX.Y.Z --notes-file …`). The release workflow stamps the
    version into `manifest.json` and attaches `triki.zip` for HACS.
+
+## The reference page
+
+<https://elenium3.github.io/ha-triki/> is built from `site/` by the *Pages*
+workflow on every push to `main` that touches the page, the card or
+`docs/images/`. It shows the integration's own card replaying a recording, so
+the card files are copied in at build time. To look at it locally:
+
+```
+python3 site/build.py
+python3 -m http.server -d site/_site 8000
+```
+
+The Polish and Russian texts are written for their readers, not translated
+line by line; keep the three languages to the same sections.
 
 ## Branch protection
 
