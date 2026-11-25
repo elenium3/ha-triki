@@ -31,6 +31,11 @@ catalog yet), add `https://github.com/elenium3/ha-triki` as a
 [custom repository](https://www.hacs.xyz/docs/faq/custom_repositories/) of type
 *Integration*.
 
+Another integration,
+[triki_unofficial](https://github.com/orionas97/triki_unofficial), uses the
+same domain `triki` and the same folder `custom_components/triki`. Only one of
+the two can be installed: remove the other one first.
+
 ## Manual
 
 Copy `custom_components/triki` into the `custom_components` folder of your

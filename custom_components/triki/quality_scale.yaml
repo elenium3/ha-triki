@@ -16,9 +16,13 @@ rules:
   docs-actions:
     status: exempt
     comment: No actions.
+  docs-conditions:
+    status: exempt
+    comment: No conditions.
   docs-high-level-description: done
   docs-installation-instructions: done
   docs-removal-instructions: done
+  docs-triggers: done
   entity-event-setup: done
   entity-unique-id: done
   has-entity-name: done

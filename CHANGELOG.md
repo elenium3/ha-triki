@@ -12,6 +12,18 @@ All notable changes to this project are documented here. The format follows
   is, the battery, connecting, using it without the app) in English, Polish
   and Russian at <https://elenium3.github.io/ha-triki/>.
 
+### Fixed
+
+- An error in the live card while it handles a message is now logged and
+  stays in the card. Before, it reached Home Assistant's socket code, which
+  then dropped the rest of that batch of messages, other integrations' ones
+  included.
+- Docs: the button is on P0.25 and the LED on P0.28, not "P0.28 and P0.30";
+  the fields of the stream start command (accelerometer range, gyroscope
+  range, rate) are described; which firmware the integration was tested on;
+  a note that `triki_unofficial` uses the same domain and cannot be installed
+  next to this one.
+
 ## [0.3.0] - 2026-11-25
 
 **Before you update:**

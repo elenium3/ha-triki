@@ -123,6 +123,26 @@ test("a status that comes before the subscribe call returns is shown, not thrown
   assert.equal(c._deviceId, "b", "the early status of the awake cap is followed");
 });
 
+test("an error while handling a message does not reach Home Assistant's socket loop", async () => {
+  // its loop handles a frame of several messages; an exception from one callback
+  // would drop the rest of the frame
+  let push;
+  const { hass } = makeHass({ subscribe: async (_id, _n, cb) => { push = cb; } });
+  const c = card();
+  c.hass = hass(); await flush();
+  const logged = [];
+  const error = console.error;
+  console.error = (...a) => logged.push(a);
+  c._showStatus = () => { throw new Error("boom"); };
+  try {
+    assert.doesNotThrow(() => push({ type: "status", device_id: "a", connected: true, streaming: true }));
+  } finally {
+    console.error = error;
+  }
+  assert.equal(logged.length, 1);
+  assert.match(String(logged[0][1]), /boom/);
+});
+
 test("early messages of a subscribe that was dropped meanwhile are ignored", async () => {
   let early;
   const { hass } = makeHass({ subscribe: async (_id, _n, cb) => { early = cb; } });

@@ -67,9 +67,14 @@ Images in this section are linked from
 </p>
 
 In words: LSM6DSL on I²C (SDA P0.05, SCL P0.06, interrupts P0.09 and P0.10),
-SPI NOR on P0.12 to P0.20, LED and button on P0.28 and P0.30, 32 MHz crystal
-on XC1/XC2, PCB antenna on ANT. SWD is on the pads next to the chip but
-readout protection is on, so it only serves a full erase.
+SPI NOR on P0.14 to P0.20, the button on P0.25 and the LED on P0.28 (both
+active low), 32 MHz crystal on XC1/XC2, PCB antenna on ANT. SWD is on the pads
+next to the chip but readout protection is on, so it only serves a full erase.
+
+The button, LED and NOR pins above are the ones
+[find-my-triki](https://github.com/alex-so-3/find-my-triki/blob/main/docs/flashing.md)
+lists as checked on a real Triki. It notes that the traced schematic above
+differs in places: P0.04, and the NOR's SCK and MOSI swapped.
 
 Also: a KiCad schematic in [DISKIMG/Triki-PCB](https://github.com/DISKIMG/Triki-PCB)
 (no license) and Flopsstuff's
@@ -149,6 +154,15 @@ Advertised name `Triki NNNNNNNNNN` (the ten-digit number is printed in the app
 when pairing), Bluetooth address of the random static type, manufacturer data
 with company id `0xFF00`. Device Information reports firmware and hardware
 revisions; the integration shows them on the device page.
+
+## Supported hardware and firmware
+
+One model exists, CAP001. The integration was developed and tested on two caps
+with firmware **3.2.1-A**. A 3.2.1-B package is reported by
+[Piwencjusz](https://github.com/Piwencjusz/zabka-triki-hardware/blob/main/FIRMWARE_OTA.md)
+and has not been tested here. If your cap shows another version on its device
+page and something does not work, say so in the
+[bug report](troubleshooting.md#reporting).
 
 ## Related projects
 
