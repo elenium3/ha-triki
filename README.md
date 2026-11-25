@@ -143,6 +143,7 @@ button? Switch the rest off in the card's settings. [Live 3D card](docs/live-car
 | `binary_sensor.<name>_connected` | diagnostic |
 | `number.<name>_knob_position` | where the knob stands, 0-100 %; settable; exists while the knob is on |
 | `switch.<name>_led` | the green LED, on and off buttons: the cap can't report it; changeable only while connected |
+| `button.<name>_identify` | blinks the LED three times to show which cap this is; works only while the cap is connected |
 | `sensor.<name>_battery` | measured while idle, at most every 30 min |
 | `sensor.<name>_readiness` | whether a press gets through now: `connected`, `dozing` (about 3 min after an idle disconnect, presses are missed), `asleep` (a press wakes it), `not_responding` |
 | `sensor.<name>_link_quality` | % of motion frames that arrived in the last session; a repair notice after three lossy sessions in a row |

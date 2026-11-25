@@ -148,6 +148,10 @@ _WAKE_PRESS_MAX_S = 10.0
 _LED_WRITE_TIMEOUT_S = 5.0
 _LED_WRITE_RETRIES = 3
 _LED_WRITE_RETRY_DELAY_S = 0.3
+# Identify: enough blinks to catch the eye, short enough to cost the cell nothing
+_IDENTIFY_BLINKS = 3
+_IDENTIFY_ON_S = 0.3
+_IDENTIFY_OFF_S = 0.3
 # This many connect failures in a row for an awake token is worth one warning
 # per outage: the entities only show "asleep", which looks normal, and the
 # default log level hides anything below a warning.
@@ -331,6 +335,7 @@ class TrikiDevice:
         # what Home Assistant last set during the current link, else unknown: the
         # token's CTRL reads back ff whatever the LED does (firmware 3.2.1-A)
         self.led_on: bool | None = None
+        self._identify_lock = asyncio.Lock()  # one blink at a time
         # where the knob stands, 0-100: moved by turns, set by the number entity
         self.knob_position = 50.0
         self.battery: int | None = None
@@ -1685,6 +1690,34 @@ class TrikiDevice:
 
     # ------------------------------------------------------------ commands
     async def async_set_led(self, on: bool) -> None:
+        await self._write_led(on)
+        self.led_on = on
+        self._last_activity = time.monotonic()
+        self._notify()
+
+    async def async_identify(self) -> None:
+        """Blink the LED so a person can tell which cap this is.
+
+        The LED ends as Home Assistant last set it (off when that is not known),
+        and the LED switch does not flicker meanwhile. A press during a blink
+        is ignored.
+        """
+        if self._identify_lock.locked():
+            return
+        async with self._identify_lock:
+            lit = self.led_on is True
+            for blink in range(_IDENTIFY_BLINKS):
+                if blink:
+                    await asyncio.sleep(_IDENTIFY_OFF_S)
+                await self._write_led(not lit)
+                await asyncio.sleep(_IDENTIFY_ON_S)
+                await self._write_led(lit)
+        self._last_activity = time.monotonic()
+        if self.led_on is None:
+            self.led_on = False  # known now: the last write turned it off
+            self._notify()
+
+    async def _write_led(self, on: bool) -> None:
         client = self._client
         if not self.connected or client is None:
             # a sleeping token is a device state, not bad input from the caller
@@ -1714,6 +1747,3 @@ class TrikiDevice:
                 self.stats.led_write_retries += 1
                 _LOGGER.debug("%s: LED write %d failed (%s), retrying", self.name, attempt, err)
                 await asyncio.sleep(_LED_WRITE_RETRY_DELAY_S)
-        self.led_on = on
-        self._last_activity = time.monotonic()
-        self._notify()
