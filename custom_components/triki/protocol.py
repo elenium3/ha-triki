@@ -59,7 +59,12 @@ def stop_command() -> bytes:
 
 
 def start_command(rate_hz: int = DEFAULT_RATE) -> bytes:
-    """8-byte IMU start command; bytes 5-6 are the sample rate (uint16 LE)."""
+    """8-byte IMU start command.
+
+    After the opcode come three uint16 LE fields: accelerometer range in g
+    (16), gyroscope range in deg/s (2000) and the sample rate. Only the rate
+    is changed here; the parser's scale factors assume those two ranges.
+    """
     if rate_hz not in SUPPORTED_RATES:
         raise ValueError(f"unsupported rate {rate_hz}, use one of {SUPPORTED_RATES}")
     cmd = bytearray(_START_BASE)

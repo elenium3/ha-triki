@@ -813,10 +813,17 @@ class TrikiCard extends HTMLElement {
       // that was dropped meanwhile are not ours any more.
       const early = new Map();
       let ready = false;
+      // An error must stay here: Home Assistant's socket code handles a frame of
+      // several messages in one loop, and an exception from a callback drops the
+      // rest of the frame, other integrations' messages included.
       const deliver = (id, msg) => {
         if (gen !== this._subGen) return;
-        if (ready || msg.type === "reload") this._onMessage(id, msg);
-        else if (msg.type === "status") early.set(id, msg);
+        try {
+          if (ready || msg.type === "reload") this._onMessage(id, msg);
+          else if (msg.type === "status") early.set(id, msg);
+        } catch (err) {
+          console.error("triki-card: message dropped", err);
+        }
       };
       const results = await Promise.allSettled(ids.map((id) => this._hass.connection.subscribeMessage(
         (msg) => deliver(id, msg), { type: "triki/subscribe", device_id: id })));

@@ -27,7 +27,16 @@ from custom_components.triki.protocol import (
     stop_command,
 )
 
-from .conftest import BATTERY, CONNECTED, ESTABLISH, connect, make_client, service_info, settle
+from .conftest import (
+    BATTERY,
+    CONNECTED,
+    ESTABLISH,
+    EVENT,
+    connect,
+    make_client,
+    service_info,
+    settle,
+)
 from .helpers import frame
 
 
@@ -1170,3 +1179,23 @@ async def test_a_stream_that_does_not_restart_after_the_battery_check_drops_the_
     assert client.write_gatt_char.await_args_list[0].args[1] == stop_command()
     assert dev._await_sleep  # dropped like an idle disconnect
     assert not dev.connected
+
+
+async def test_link_drop_while_held_ends_the_long_press(hass: HomeAssistant, setup) -> None:
+    """A hold-to-dim automation gets its end even when the link dies mid-hold."""
+    dev = setup.runtime_data
+    _client, notify = await connect(hass, setup)
+    events = async_capture_events(hass, BUS_EVENT)
+    for i in range(40):  # past the startup discard; each frame differs, a repeat is dropped
+        notify(None, bytearray(frame(gx=0.1 * i)))
+    for i in range(70):  # held for about 1.3 s at 52 Hz
+        notify(None, bytearray(frame(button=True, gx=0.1 * i)))
+    await hass.async_block_till_done()
+    assert [e.data["type"] for e in events] == ["long_press_start"]
+
+    dev._handle_disconnected()  # the link is gone, the button never came up
+    await hass.async_block_till_done()
+    assert [e.data["type"] for e in events] == ["long_press_start", "long_press_end"]
+    state = hass.states.get(EVENT)
+    assert state is not None
+    assert state.attributes["event_type"] == "long_press_end"

@@ -41,7 +41,7 @@ of 4 s through an L2CAP connection parameter update right after connecting.
 
 | Command | Bytes | Notes |
 |---|---|---|
-| Start IMU stream | `20 10 00 D0 07 <rate u16 LE> 03` | Rate in Hz: 26, 52, 104, 208 (LSM6DSL output data rates; Flopsstuff reports 416 accepted too, this integration offers up to 208). 12.5 is rejected. Bytes `D0 07` and `03` are not decoded. The token acknowledges with a notification `21 00 00 00 00`; `21 01 …` was seen once when it refused to stream. |
+| Start IMU stream | `20 10 00 D0 07 <rate u16 LE> 03` | Three uint16 LE fields after the opcode, as decoded by [TrikiScope](https://github.com/Maku-hub/TrikiScope): accelerometer range in g (`10 00` = 16), gyroscope range in °/s (`D0 07` = 2000), rate in Hz. This integration always sends 16 g and 2000 °/s; other ranges are untested here. Rate: 26, 52, 104, 208 (LSM6DSL output data rates; Flopsstuff reports 416 accepted too, this integration offers up to 208). 12.5 is rejected. The last byte `03` is not decoded. The token acknowledges with a notification `21 00 00 00 00`; `21 01 …` was seen once when it refused to stream. |
 | Stop IMU stream | `20 00 00 00 00 00 00` | Seen in an HCI snoop of the Żappka app before it disconnects ([TrikiEmu](https://github.com/Maku-hub/TrikiEmu)). Flopsstuff's guide says there is no stop opcode and the stream ends on disconnect; both are consistent with what this integration sees. |
 | LED on / off | write `01` / `00` to CTRL | Reading CTRL returns `ff` whatever the LED shows (firmware 3.2.1-A, checked 2026-11-24 with the LED off), so the LED's state cannot be read back. |
 
