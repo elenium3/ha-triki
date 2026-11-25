@@ -38,7 +38,8 @@ globalThis.window = globalThis;
 globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 console.warn = () => {}; // "subscribe failed" is expected here
 
-await import("../../custom_components/triki/frontend/triki-card.js");
+// as Home Assistant loads it: the version of the card files is in the URL
+await import("../../custom_components/triki/frontend/triki-card.js?v=abc123");
 const Card = defs["triki-card"];
 const flush = async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setImmediate(r)); };
 
@@ -121,6 +122,20 @@ test("a status that comes before the subscribe call returns is shown, not thrown
   assert.equal(c._statuses.a.name, "a");
   assert.equal(c._statuses.b.connected, true);
   assert.equal(c._deviceId, "b", "the early status of the awake cap is followed");
+});
+
+test("a card older than the integration's files asks for a page reload", async () => {
+  let push;
+  const { hass } = makeHass({ subscribe: async (_id, _n, cb) => { push = cb; } });
+  const c = card();
+  c.hass = hass(); await flush();
+  const status = (card) => ({ type: "status", device_id: "a", connected: false, streaming: false, card });
+  push(status("abc123"));
+  assert.equal(c._el.stale.hidden, true, "the same version");
+  push(status("def456"));
+  assert.equal(c._el.stale.hidden, false, "the integration serves newer files");
+  push(status(undefined));
+  assert.equal(c._el.stale.hidden, true, "an integration that does not say");
 });
 
 test("an error while handling a message does not reach Home Assistant's socket loop", async () => {

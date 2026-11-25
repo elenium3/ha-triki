@@ -88,6 +88,8 @@ def status(dev: TrikiDevice) -> dict[str, Any]:
         "via": dev.link_source_name,
         "checking": dev.checking,
         "heading_known": dev.heading_known,
+        # the version of the card files this integration serves
+        "card": dev.hass.data.get(DOMAIN, {}).get("card"),
         "options": {
             "knob": dev.options.knob,
             "knob_step": dev.options.knob_step,
