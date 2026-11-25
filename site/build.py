@@ -504,7 +504,7 @@ def head(lang: str, t: dict, path: str, root: str, *, index: bool = True) -> str
     og_locale = {"en": "en_US", "pl": "pl_PL", "ru": "ru_RU"}[lang]
     ld = [
         {"@context": "https://schema.org", "@type": "TechArticle", "headline": t["h1"], "description": t["desc"],
-         "inLanguage": lang, "url": url, "about": {"@type": "Product", "name": "Żabka Triki", "model": "CAP001"}},
+         "inLanguage": lang, "url": url, "about": {"@type": "Thing", "name": "Żabka Triki"}},
         {"@context": "https://schema.org", "@type": "FAQPage", "inLanguage": lang, "mainEntity": [
             {"@type": "Question", "name": q, "acceptedAnswer": {"@type": "Answer", "text": ans}}
             for q, ans in t["faq"]]},
