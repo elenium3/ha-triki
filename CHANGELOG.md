@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-25
+
 **Before you update:**
 
 - **The button events have new names**, Home Assistant's standard ones.
@@ -370,7 +372,8 @@ and a Raspberry Pi 5 built-in adapter.
 - Duplicate BlueZ notifications counted as separate frames.
 - Wake reported again on a quick resume after a weak-signal drop.
 
-[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.2.5...HEAD
+[Unreleased]: https://github.com/elenium3/ha-triki/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/elenium3/ha-triki/compare/v0.2.5...v0.3.0
 [0.2.5]: https://github.com/elenium3/ha-triki/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/elenium3/ha-triki/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/elenium3/ha-triki/compare/v0.2.2...v0.2.3
